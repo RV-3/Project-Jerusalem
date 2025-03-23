@@ -22,11 +22,12 @@ export default function AdminBlockCalendar() {
   }, [])
 
   const handleBlock = async (info) => {
-    const startStr = info.startStr
-    const endStr = info.endStr
-    const alreadyBlocked = blocks.some(
-      (b) => b.start === startStr && b.end === endStr
+    const alreadyBlocked = blocks.find(
+      (block) =>
+        new Date(block.start).getTime() === new Date(info.start).getTime() &&
+        new Date(block.end).getTime() === new Date(info.end).getTime()
     )
+
     if (alreadyBlocked) {
       alert('Already blocked!')
       return
@@ -34,39 +35,52 @@ export default function AdminBlockCalendar() {
 
     const res = await client.create({
       _type: 'blocked',
-      start: startStr,
-      end: endStr
+      start: info.startStr,
+      end: info.endStr
     })
     setBlocks([...blocks, res])
   }
 
   const handleUnblock = async (info) => {
-    const block = blocks.find(
-      (b) => b.start === info.startStr && b.end === info.endStr
+    const toDelete = blocks.find(
+      (block) =>
+        new Date(block.start).getTime() === new Date(info.start).getTime() &&
+        new Date(block.end).getTime() === new Date(info.end).getTime()
     )
-    if (!block) return alert('Block not found.')
 
-    await client.delete(block._id)
-    setBlocks(blocks.filter((b) => b._id !== block._id))
+    if (!toDelete) {
+      alert('No matching blocked slot found')
+      return
+    }
+
+    await client.delete(toDelete._id)
+    setBlocks(blocks.filter((block) => block._id !== toDelete._id))
+  }
+
+  const isBlockedSlot = (info) => {
+    return blocks.some(
+      (block) =>
+        new Date(block.start).getTime() === new Date(info.start).getTime() &&
+        new Date(block.end).getTime() === new Date(info.end).getTime()
+    )
   }
 
   return (
     <div>
-      <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        Admin Panel - Block/Unblock Time Slots
-      </h2>
+      <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Admin Panel - Block/Unblock Slots</h2>
       <FullCalendar
         plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
         selectable={true}
         select={(info) => {
-          const isAlreadyBlocked = blocks.some(
-            (b) => b.start === info.startStr && b.end === info.endStr
-          )
-          if (isAlreadyBlocked) {
-            if (window.confirm('Unblock this slot?')) handleUnblock(info)
+          if (isBlockedSlot(info)) {
+            if (window.confirm('Unblock this slot?')) {
+              handleUnblock(info)
+            }
           } else {
-            if (window.confirm('Block this slot?')) handleBlock(info)
+            if (window.confirm('Block this slot?')) {
+              handleBlock(info)
+            }
           }
         }}
         events={blocks.map((block) => ({
