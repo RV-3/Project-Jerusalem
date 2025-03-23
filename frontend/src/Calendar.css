@@ -1,0 +1,5 @@
+/* Gray out past days */
+.fc-day-past {
+  background-color: #f3f3f3 !important;
+  opacity: 0.6;
+}
