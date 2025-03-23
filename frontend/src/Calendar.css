@@ -1,10 +1,10 @@
 /* Gray out past days */
 .fc-day-past {
-  background-color: #f3f3f3 !important;
-  opacity: 0.6;
+  background-color: #cc4444 !important;
+  opacity: 0.0;
 }
 
 .fc-day-blocked {
-  background-color: #ffdddd !important;
-  opacity: 0.6;
+  background-color: #cc4444 !important;
+  opacity: 0.0;
 }

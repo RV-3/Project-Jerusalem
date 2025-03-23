@@ -17,60 +17,62 @@ export default function AdminBlockCalendar() {
 
   useEffect(() => {
     client
-      .fetch(`*[_type == "blocked"]{_id, date}`)
+      .fetch(`*[_type == "blocked"]{_id, start, end}`)
       .then((data) => setBlocks(data))
   }, [])
 
   const handleBlock = async (info) => {
-    const dateStr = info.startStr.split('T')[0]
-    if (blocks.find((block) => block.date === dateStr)) {
+    const startStr = info.startStr
+    const endStr = info.endStr
+    const alreadyBlocked = blocks.some(
+      (b) => b.start === startStr && b.end === endStr
+    )
+    if (alreadyBlocked) {
       alert('Already blocked!')
       return
     }
 
     const res = await client.create({
       _type: 'blocked',
-      date: dateStr
+      start: startStr,
+      end: endStr
     })
     setBlocks([...blocks, res])
   }
 
-  const handleUnblock = async (dateStr) => {
-    const blockDoc = blocks.find((block) => block.date === dateStr)
-    if (!blockDoc) return alert('Block not found for this day.')
+  const handleUnblock = async (info) => {
+    const block = blocks.find(
+      (b) => b.start === info.startStr && b.end === info.endStr
+    )
+    if (!block) return alert('Block not found.')
 
-    await client.delete(blockDoc._id)
-    setBlocks(blocks.filter((block) => block._id !== blockDoc._id))
-  }
-
-  const isBlocked = (date) => {
-    const dateStr = date.toISOString().split('T')[0]
-    return blocks.some((block) => block.date === dateStr)
+    await client.delete(block._id)
+    setBlocks(blocks.filter((b) => b._id !== block._id))
   }
 
   return (
     <div>
-      <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Admin Panel - Block/Unblock Days</h2>
+      <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>
+        Admin Panel - Block/Unblock Time Slots
+      </h2>
       <FullCalendar
         plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
         selectable={true}
         select={(info) => {
-          const dateStr = info.startStr.split('T')[0]
-          if (isBlocked(info.start)) {
-            if (window.confirm(`Unblock ${dateStr}?`)) {
-              handleUnblock(dateStr)
-            }
+          const isAlreadyBlocked = blocks.some(
+            (b) => b.start === info.startStr && b.end === info.endStr
+          )
+          if (isAlreadyBlocked) {
+            if (window.confirm('Unblock this slot?')) handleUnblock(info)
           } else {
-            if (window.confirm(`Block ${dateStr}?`)) {
-              handleBlock(info)
-            }
+            if (window.confirm('Block this slot?')) handleBlock(info)
           }
         }}
         events={blocks.map((block) => ({
           title: 'Blocked',
-          start: block.date,
-          end: block.date,
+          start: block.start,
+          end: block.end,
           display: 'background',
           color: '#ff6666'
         }))}
