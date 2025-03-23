@@ -16,20 +16,28 @@ This is a full-stack calendar reservation system built with **React**, **FullCal
 
 ## 📁 Folder Structure
 
-```bash
+```
 calendar-reservation-app/
 ├── frontend/        # React app (calendar UI + admin panel)
 ├── backend/         # Sanity project
-
+```
 
 🚀 Getting Started
 1. Clone the Repository
-```git clone https://github.com/RV-3/Project-Jerusalem.git
-cd Project-Jerusalem ```
+```
+git clone https://github.com/RV-3/Project-Jerusalem.git
+cd Project-Jerusalem
+```
 ⚙️ FRONTEND SETUP
-```cd frontend```
-```npm install```
-```npm start```
+```
+cd frontend
+```
+```
+npm install
+```
+```
+npm start
+```
 Opens the calendar at: http://localhost:3000/
 
 Admin panel at: http://localhost:3000/admin
@@ -39,9 +47,14 @@ Admin panel at: http://localhost:3000/admin
 🔙 BACKEND SETUP (SANITY)
 If you're starting fresh:
 
-```cd backend/project-jerusalem```
-```npm install```
-```npm run dev```
+```cd backend/project-jerusalem
+```
+```
+npm install
+```
+```
+npm run dev
+```
 This starts Sanity Studio at: http://localhost:3333/
 
 From here, you can:
