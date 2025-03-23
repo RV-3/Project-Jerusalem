@@ -3,3 +3,8 @@
   background-color: #f3f3f3 !important;
   opacity: 0.6;
 }
+
+.fc-day-blocked {
+  background-color: #ffdddd !important;
+  opacity: 0.6;
+}
