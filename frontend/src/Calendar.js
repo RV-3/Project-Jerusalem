@@ -5,11 +5,11 @@ import interactionPlugin from '@fullcalendar/interaction'
 import sanityClient from '@sanity/client'
 
 const client = sanityClient({
-  projectId: 'gt19q25e', // ← Replace this!
+  projectId: 'gt19q25e',
   dataset: 'production',
   useCdn: false,
   apiVersion: '2023-01-01',
-  token: 'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8' // ← Optional write token if needed
+  token: 'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8'
 })
 
 export default function Calendar() {
@@ -30,33 +30,51 @@ export default function Calendar() {
       )
   }, [])
 
-  const handleDateClick = (info) => {
-    const name = prompt('Enter your name')
-    const phone = prompt('Enter your phone number')
+  const handleSelect = (info) => {
+    const name = prompt('Enter your name:')
+    const phone = prompt('Enter your phone number:')
     if (!name || !phone) return
-
-    const start = info.dateStr
-    const end = new Date(new Date(start).getTime() + 60 * 60 * 1000)
 
     client
       .create({
         _type: 'reservation',
         name,
         phone,
-        start,
-        end
+        start: info.startStr,
+        end: info.endStr
       })
-      .then(() => window.location.reload())
+      .then((res) => {
+        setEvents([
+          ...events,
+          {
+            id: res._id,
+            title: name,
+            start: info.startStr,
+            end: info.endStr
+          }
+        ])
+      })
   }
 
   return (
     <FullCalendar
       plugins={[timeGridPlugin, interactionPlugin]}
-      initialView="timeGridDay"
-      slotDuration="01:00:00"
-      allDaySlot={false}
-      dateClick={handleDateClick}
+      initialView="timeGridWeek"
+      selectable={true}
+      select={handleSelect}
       events={events}
+      allDaySlot={false}
+      slotDuration="01:00:00"
+      slotMinTime="00:00:00"
+      slotMaxTime="24:00:00"
+      headerToolbar={{
+        left: 'prev,next today',
+        center: 'title',
+        right: '' // Removes the "day/week" toggle
+      }}
+      eventContent={(arg) => (
+        <div>{arg.event.title}</div> // Only show the name in the block
+      )}
       height="auto"
     />
   )
