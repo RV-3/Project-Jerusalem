@@ -4,7 +4,7 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import Modal from 'react-modal'
 import sanityClient from '@sanity/client'
-import './Calendar.css'
+import './AdminCalendar.css'
 
 Modal.setAppElement('#root')
 
@@ -164,7 +164,6 @@ export default function AdminBlockCalendar() {
           end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
         }}
         selectable={true}
-        selectMirror={true}
         select={(info) => {
           if (isEverySlotInRangeBlocked(info)) {
             if (window.confirm('Unblock this time slot?')) handleUnblock(info)

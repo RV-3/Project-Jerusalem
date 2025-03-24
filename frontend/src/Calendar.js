@@ -90,6 +90,18 @@ export default function Calendar() {
     setFormData({ name: '', phone: '' })
   }
 
+  const formatSelectedTime = () => {
+    if (!selectedInfo) return ''
+    const startDate = new Date(selectedInfo.start)
+    const endDate = new Date(selectedInfo.end)
+
+    const weekday = startDate.toLocaleDateString('en-US', { weekday: 'long' })
+    const startTime = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    const endTime = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+
+    return `${weekday} (${startTime} - ${endTime})`
+  }
+
   return (
     <>
       <FullCalendar
@@ -97,7 +109,6 @@ export default function Calendar() {
         initialView="timeGridWeek"
         selectable={true}
         validRange={{
-          start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
           end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
         }}
         select={handleSelect}
@@ -151,6 +162,7 @@ export default function Calendar() {
         }}
       >
         <h2>Reserve a Time Slot</h2>
+        <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>{formatSelectedTime()}</p>
         <form onSubmit={handleSubmit}>
           <label>Name:</label>
           <input

@@ -25,3 +25,18 @@
   z-index: 1;
   pointer-events: none;
 }
+/* Add vertical lines between days */
+.fc .fc-timegrid-col {
+  border-left: 1px solid #ddd;
+}
+
+.fc .fc-timegrid-axis {
+  border-right: 1px solid #ccc;
+}
+.fc .fc-timegrid-slot {
+  border-top: 1px solid #eee;
+}
+.fc .fc-timegrid-slot,
+.fc .fc-timegrid-col {
+  border-color: #e0e0e0;
+}
