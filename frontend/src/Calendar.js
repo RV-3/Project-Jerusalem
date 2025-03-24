@@ -107,8 +107,10 @@ export default function Calendar() {
       <FullCalendar
         plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
+        themeSystem="standard"
         selectable={true}
         validRange={{
+          start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
           end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
         }}
         select={handleSelect}

@@ -13,30 +13,19 @@
   background-color: #ffcccc !important;
   opacity: 1 !important;
 }
-.fc-timegrid-slot.fc-highlight {
-  position: relative;
+/* Force grid lines for v6 */
+.fc .fc-scrollgrid,
+.fc .fc-scrollgrid table,
+.fc .fc-scrollgrid th,
+.fc .fc-scrollgrid td {
+  border: 1px solid var(--fc-border-color, #ddd) !important;
+  border-collapse: collapse !important;
 }
 
-.fc-timegrid-slot.fc-highlight::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-color: rgba(255, 100, 100, 0.2);
-  z-index: 1;
-  pointer-events: none;
-}
-/* Add vertical lines between days */
-.fc .fc-timegrid-col {
-  border-left: 1px solid #ddd;
-}
-
-.fc .fc-timegrid-axis {
-  border-right: 1px solid #ccc;
-}
 .fc .fc-timegrid-slot {
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--fc-border-color, #ddd) !important;
 }
-.fc .fc-timegrid-slot,
+
 .fc .fc-timegrid-col {
-  border-color: #e0e0e0;
+  border-left: 1px solid var(--fc-border-color, #ddd) !important;
 }

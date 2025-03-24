@@ -6,6 +6,7 @@ import Modal from 'react-modal'
 import sanityClient from '@sanity/client'
 import './AdminCalendar.css'
 
+
 Modal.setAppElement('#root')
 
 const ADMIN_PASSWORD = 'admin123'
@@ -159,6 +160,7 @@ export default function AdminBlockCalendar() {
         ref={calendarRef}
         plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
+        themeSystem="standard"
         validRange={{
           start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
           end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
