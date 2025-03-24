@@ -24,7 +24,6 @@ export default function Calendar() {
   const [formData, setFormData] = useState({ name: '', phone: '' })
 
   useEffect(() => {
-    // Fetch reservations
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) =>
@@ -38,7 +37,6 @@ export default function Calendar() {
         )
       )
 
-    // Fetch blocked time ranges
     client
       .fetch(`*[_type == "blocked"]{start, end}`)
       .then((data) =>
@@ -53,8 +51,7 @@ export default function Calendar() {
 
   const isTimeBlocked = (start, end) => {
     return blockedTimes.some(
-      (block) =>
-        start < block.end && end > block.start
+      (block) => start < block.end && end > block.start
     )
   }
 
@@ -99,6 +96,10 @@ export default function Calendar() {
         plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
         selectable={true}
+        validRange={{
+          start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
+          end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+        }}
         select={handleSelect}
         events={[
           ...events,

@@ -8,6 +8,8 @@ import './Calendar.css'
 
 Modal.setAppElement('#root')
 
+const ADMIN_PASSWORD = 'admin123'
+
 const client = sanityClient({
   projectId: 'gt19q25e',
   dataset: 'production',
@@ -17,6 +19,9 @@ const client = sanityClient({
 })
 
 export default function AdminBlockCalendar() {
+  const [authenticated, setAuthenticated] = useState(
+    localStorage.getItem('isAdmin') === 'true'
+  )
   const [blocks, setBlocks] = useState([])
   const [reservations, setReservations] = useState([])
   const [modalIsOpen, setModalIsOpen] = useState(false)
@@ -24,8 +29,10 @@ export default function AdminBlockCalendar() {
   const calendarRef = useRef()
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    if (authenticated) {
+      fetchData()
+    }
+  }, [authenticated])
 
   const fetchData = async () => {
     const calendarApi = calendarRef.current?.getApi()
@@ -41,36 +48,64 @@ export default function AdminBlockCalendar() {
     }
   }
 
-  const isSlotBlocked = (slot) => {
-    return blocks.some(block => {
-      const blockStart = new Date(block.start).getTime()
-      const blockEnd = new Date(block.end).getTime()
-      const slotStart = new Date(slot.start).getTime()
-      const slotEnd = new Date(slot.end).getTime()
-      return slotStart >= blockStart && slotEnd <= blockEnd
-    })
+  const isEverySlotInRangeBlocked = (slot) => {
+    const slotStart = new Date(slot.start)
+    const slotEnd = new Date(slot.end)
+
+    while (slotStart < slotEnd) {
+      const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
+      const match = blocks.find(block =>
+        new Date(block.start).getTime() === slotStart.getTime() &&
+        new Date(block.end).getTime() === end.getTime()
+      )
+      if (!match) return false
+      slotStart.setHours(slotStart.getHours() + 1)
+    }
+    return true
   }
 
   const handleBlock = async (info) => {
-    if (isSlotBlocked(info)) return alert('Already blocked!')
-    await client.create({
-      _type: 'blocked',
-      start: info.startStr,
-      end: info.endStr
-    })
+    const slotStart = new Date(info.start)
+    const slotEnd = new Date(info.end)
+    const blocksToCreate = []
+
+    while (slotStart < slotEnd) {
+      const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
+      const isBlocked = blocks.some(block =>
+        new Date(block.start).getTime() === slotStart.getTime() &&
+        new Date(block.end).getTime() === end.getTime()
+      )
+      if (!isBlocked) {
+        blocksToCreate.push({
+          _type: 'blocked',
+          start: slotStart.toISOString(),
+          end: end.toISOString()
+        })
+      }
+      slotStart.setHours(slotStart.getHours() + 1)
+    }
+
+    await Promise.all(blocksToCreate.map(b => client.create(b)))
     fetchData()
   }
 
   const handleUnblock = async (info) => {
-    const match = blocks.find(block => {
-      const blockStart = new Date(block.start).getTime()
-      const blockEnd = new Date(block.end).getTime()
-      const slotStart = new Date(info.start).getTime()
-      const slotEnd = new Date(info.end).getTime()
-      return slotStart >= blockStart && slotEnd <= blockEnd
-    })
-    if (!match) return alert('Block not found.')
-    await client.delete(match._id)
+    const slotStart = new Date(info.start)
+    const slotEnd = new Date(info.end)
+    const deletes = []
+
+    while (slotStart < slotEnd) {
+      const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
+      const match = blocks.find(block =>
+        new Date(block.start).getTime() === slotStart.getTime() &&
+        new Date(block.end).getTime() === end.getTime()
+      )
+      if (match) deletes.push(client.delete(match._id))
+      slotStart.setHours(slotStart.getHours() + 1)
+    }
+
+    if (deletes.length === 0) return alert("No matching blocked slots found.")
+    await Promise.all(deletes)
     fetchData()
   }
 
@@ -84,13 +119,35 @@ export default function AdminBlockCalendar() {
 
   const handleDeleteReservation = async () => {
     if (!selectedReservation) return
-    const confirm = window.confirm("Delete this reservation?")
-    if (!confirm) return
+    if (!window.confirm("Delete this reservation?")) return
 
     await client.delete(selectedReservation._id)
     fetchData()
     setModalIsOpen(false)
     setSelectedReservation(null)
+  }
+
+  if (!authenticated) {
+    return (
+      <div style={{ textAlign: 'center', marginTop: '100px' }}>
+        <h2>Enter Admin Password</h2>
+        <input
+          type="password"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (e.target.value === ADMIN_PASSWORD) {
+                localStorage.setItem('isAdmin', 'true')
+                setAuthenticated(true)
+              } else {
+                alert('Incorrect password')
+              }
+            }
+          }}
+          style={{ padding: '8px', fontSize: '16px', width: '250px' }}
+          placeholder="Admin password"
+        />
+      </div>
+    )
   }
 
   return (
@@ -102,10 +159,14 @@ export default function AdminBlockCalendar() {
         ref={calendarRef}
         plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
+        validRange={{
+          start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
+          end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+        }}
         selectable={true}
         selectMirror={true}
         select={(info) => {
-          if (isSlotBlocked(info)) {
+          if (isEverySlotInRangeBlocked(info)) {
             if (window.confirm('Unblock this time slot?')) handleUnblock(info)
           } else {
             if (window.confirm('Block this time slot?')) handleBlock(info)
