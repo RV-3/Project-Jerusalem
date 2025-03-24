@@ -1,10 +1,20 @@
-/* Gray out past days */
-.fc-day-past {
-  background-color: #cc4444 !important;
-  opacity: 0.0;
+/* Default background */
+.fc td, .fc th {
+  background-color: white !important;
 }
 
-.fc-day-blocked {
-  background-color: #cc4444 !important;
-  opacity: 0.0;
+/* Past dates */
+.fc-day-past {
+  background-color: #f3f3f3 !important;
+}
+
+/* Blocked slots */
+.fc-day-blocked, .fc-bg-event {
+  background-color: #ffcccc !important;
+  opacity: 1 !important;
+}
+.fc .fc-highlight {
+  background-color: rgba(255, 100, 100, 0.2) !important; /* Light red tint */
+  border: none !important;
+  box-shadow: none !important;
 }

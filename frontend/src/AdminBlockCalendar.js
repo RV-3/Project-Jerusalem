@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -20,42 +20,57 @@ export default function AdminBlockCalendar() {
   const [reservations, setReservations] = useState([])
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState(null)
+  const calendarRef = useRef()
 
   useEffect(() => {
-    client.fetch(`*[_type == "blocked"]{_id, start, end}`).then(setBlocks)
-    client
-      .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
-      .then(setReservations)
+    fetchData()
   }, [])
 
-  const handleBlock = async (info) => {
-    const isAlreadyBlocked = blocks.find(
-      (block) =>
-        new Date(block.start).getTime() === info.start.getTime() &&
-        new Date(block.end).getTime() === info.end.getTime()
-    )
-    if (isAlreadyBlocked) {
-      alert('Slot already blocked!')
-      return
-    }
+  const fetchData = async () => {
+    const calendarApi = calendarRef.current?.getApi()
+    const currentViewDate = calendarApi?.getDate()
 
-    const res = await client.create({
+    const blocksData = await client.fetch(`*[_type == "blocked"]{_id, start, end}`)
+    const resData = await client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
+    setBlocks(blocksData)
+    setReservations(resData)
+
+    if (calendarApi && currentViewDate) {
+      calendarApi.gotoDate(currentViewDate)
+    }
+  }
+
+  const isSlotBlocked = (slot) => {
+    return blocks.some(block => {
+      const blockStart = new Date(block.start).getTime()
+      const blockEnd = new Date(block.end).getTime()
+      const slotStart = new Date(slot.start).getTime()
+      const slotEnd = new Date(slot.end).getTime()
+      return slotStart >= blockStart && slotEnd <= blockEnd
+    })
+  }
+
+  const handleBlock = async (info) => {
+    if (isSlotBlocked(info)) return alert('Already blocked!')
+    await client.create({
       _type: 'blocked',
       start: info.startStr,
       end: info.endStr
     })
-    setBlocks([...blocks, res])
+    fetchData()
   }
 
   const handleUnblock = async (info) => {
-    const match = blocks.find(
-      (block) =>
-        new Date(block.start).getTime() === info.start.getTime() &&
-        new Date(block.end).getTime() === info.end.getTime()
-    )
+    const match = blocks.find(block => {
+      const blockStart = new Date(block.start).getTime()
+      const blockEnd = new Date(block.end).getTime()
+      const slotStart = new Date(info.start).getTime()
+      const slotEnd = new Date(info.end).getTime()
+      return slotStart >= blockStart && slotEnd <= blockEnd
+    })
     if (!match) return alert('Block not found.')
     await client.delete(match._id)
-    setBlocks(blocks.filter((b) => b._id !== match._id))
+    fetchData()
   }
 
   const handleEventClick = (clickInfo) => {
@@ -72,7 +87,7 @@ export default function AdminBlockCalendar() {
     if (!confirm) return
 
     await client.delete(selectedReservation._id)
-    setReservations(reservations.filter(r => r._id !== selectedReservation._id))
+    fetchData()
     setModalIsOpen(false)
     setSelectedReservation(null)
   }
@@ -83,16 +98,13 @@ export default function AdminBlockCalendar() {
         Admin Panel - View & Block Time Slots
       </h2>
       <FullCalendar
+        ref={calendarRef}
         plugins={[timeGridPlugin, interactionPlugin]}
         initialView="timeGridWeek"
         selectable={true}
+        selectMirror={true}
         select={(info) => {
-          const isBlocked = blocks.some(
-            (b) =>
-              new Date(b.start).getTime() === info.start.getTime() &&
-              new Date(b.end).getTime() === info.end.getTime()
-          )
-          if (isBlocked) {
+          if (isSlotBlocked(info)) {
             if (window.confirm('Unblock this time slot?')) handleUnblock(info)
           } else {
             if (window.confirm('Block this time slot?')) handleBlock(info)
@@ -113,7 +125,7 @@ export default function AdminBlockCalendar() {
             start: block.start,
             end: block.end,
             display: 'background',
-            color: '#ff9999'
+            color: '#ffcccc'
           }))
         ]}
         allDaySlot={false}
@@ -156,7 +168,17 @@ export default function AdminBlockCalendar() {
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-          <button onClick={handleDeleteReservation} style={{ marginRight: '10px', color: 'white', background: '#cc0000', border: 'none', padding: '8px 12px', borderRadius: '4px' }}>
+          <button
+            onClick={handleDeleteReservation}
+            style={{
+              marginRight: '10px',
+              color: 'white',
+              background: '#cc0000',
+              border: 'none',
+              padding: '8px 12px',
+              borderRadius: '4px'
+            }}
+          >
             Delete
           </button>
           <button onClick={() => setModalIsOpen(false)} style={{ padding: '8px 12px' }}>
