@@ -18,3 +18,10 @@
   border: none !important;
   box-shadow: none !important;
 }
+/* Nuclear override for highlight */
+.fc-timegrid .fc-highlight,
+.fc .fc-timegrid-slot.fc-highlight {
+  background-color: rgba(255, 0, 0, 0.2) !important;
+  border: none !important;
+  box-shadow: none !important;
+}

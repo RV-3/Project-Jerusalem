@@ -4,6 +4,7 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import Modal from 'react-modal'
 import sanityClient from '@sanity/client'
+import './Calendar.css'
 
 Modal.setAppElement('#root')
 
