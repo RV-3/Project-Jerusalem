@@ -24,10 +24,11 @@ export default function Calendar() {
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
 
-  // Ref to access the FullCalendar API
+  // Create a ref to access the FullCalendar API (if needed)
   const calendarRef = useRef(null)
 
   useEffect(() => {
+    // Fetch reservations (events)
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) =>
@@ -41,6 +42,7 @@ export default function Calendar() {
         )
       )
 
+    // Fetch blocked times
     client
       .fetch(`*[_type == "blocked"]{start, end}`)
       .then((data) =>
@@ -114,15 +116,19 @@ export default function Calendar() {
 
   return (
     <>
+      {/* Container for horizontal scrolling */}
       <div style={{ overflowX: 'auto' }}>
         <FullCalendar
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
-          // Use day view on small screens by default, week view otherwise
-          initialView={window.innerWidth < 768 ? 'timeGridDay' : 'timeGridWeek'}
-          dayMinWidth={200} // Minimum width for each day column to enable horizontal scroll
-          longPressDelay={300} // Quicker touch response
-          // You can also specify these if you want snappier dragging/touch:
+          // Force timeGridWeek on all screen sizes
+          initialView="timeGridWeek"
+
+          // Minimum width for day columns so they don't collapse on mobile
+          dayMinWidth={150}
+
+          // Optional: Faster touch event responses
+          longPressDelay={500}
           // selectLongPressDelay={500}
           // eventLongPressDelay={500}
 
@@ -159,7 +165,7 @@ export default function Calendar() {
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
-            right: '' // you can add 'timeGridDay,timeGridWeek' if you want toggle buttons
+            right: '' // Add 'timeGridDay,timeGridWeek' if you want toggle buttons
           }}
           eventContent={(arg) => {
             // Hide text for blocked events
@@ -167,7 +173,6 @@ export default function Calendar() {
             return <div>{arg.event.title}</div>
           }}
           height="auto"
-        
         />
       </div>
 
@@ -200,7 +205,9 @@ export default function Calendar() {
           <input
             type="text"
             value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, name: e.target.value })
+            }
             required
             style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
           />
