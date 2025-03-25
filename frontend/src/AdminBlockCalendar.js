@@ -16,7 +16,7 @@ const client = sanityClient({
   dataset: 'production',
   useCdn: false,
   apiVersion: '2023-01-01',
-  token: 'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8'
+  token: process.env.REACT_APP_SANITY_TOKEN || 'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8'
 })
 
 export default function AdminBlockCalendar() {
@@ -130,8 +130,17 @@ export default function AdminBlockCalendar() {
 
   if (!authenticated) {
     return (
-      <div style={{ textAlign: 'center', marginTop: '100px' }}>
-        <h2>Enter Admin Password</h2>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        padding: '1rem',
+        boxSizing: 'border-box',
+        background: '#fff'
+      }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Enter Admin Password</h2>
         <input
           type="password"
           onKeyDown={(e) => {
@@ -144,11 +153,41 @@ export default function AdminBlockCalendar() {
               }
             }
           }}
-          style={{ padding: '8px', fontSize: '16px', width: '250px' }}
           placeholder="Admin password"
+          style={{
+            width: '100%',
+            maxWidth: '300px',
+            padding: '12px',
+            fontSize: '1rem',
+            marginBottom: '1rem',
+            border: '1px solid #ccc',
+            borderRadius: '5px'
+          }}
         />
+        <button
+          onClick={() => {
+            const input = document.querySelector('input[type="password"]')
+            if (input.value === ADMIN_PASSWORD) {
+              localStorage.setItem('isAdmin', 'true')
+              setAuthenticated(true)
+            } else {
+              alert('Incorrect password')
+            }
+          }}
+          style={{
+            padding: '12px 24px',
+            fontSize: '1rem',
+            backgroundColor: '#1890ff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '5px'
+          }}
+        >
+          Submit
+        </button>
       </div>
     )
+
   }
 
   return (
