@@ -109,14 +109,13 @@ export default function Calendar() {
       <div style={{ overflowX: 'auto' }}>
         <FullCalendar
           plugins={[timeGridPlugin, interactionPlugin]}
-          initialView="timeGridWeek"
+          initialView={isMobile ? 'timeGridDay' : 'timeGridWeek'}
           themeSystem="standard"
-          longPressDelay={300}
+          selectable={true}
           validRange={{
             start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
             end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
           }}
-          selectable={true}
           select={handleSelect}
           events={[
             ...events,
@@ -133,7 +132,6 @@ export default function Calendar() {
             const isBlocked = isTimeBlocked(selectInfo.start, selectInfo.end)
             return !isPast && !isBlocked
           }}
-          dayMinWidth={isMobile ? 140 : undefined} // optional if you have scrollGrid
           allDaySlot={false}
           slotDuration="01:00:00"
           slotMinTime="00:00:00"
