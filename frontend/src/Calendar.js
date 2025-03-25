@@ -109,7 +109,7 @@ export default function Calendar() {
       <div style={{ overflowX: 'auto' }}>
         <FullCalendar
           plugins={[timeGridPlugin, interactionPlugin]}
-          initialView={isMobile ? 'timeGridDay' : 'timeGridWeek'}
+          initialView='timeGridWeek'}
           themeSystem="standard"
           selectable={true}
           validRange={{
