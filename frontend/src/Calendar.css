@@ -13,19 +13,44 @@
   background-color: #ffcccc !important;
   opacity: 1 !important;
 }
-/* Force grid lines for v6 */
-.fc .fc-scrollgrid,
-.fc .fc-scrollgrid table,
-.fc .fc-scrollgrid th,
-.fc .fc-scrollgrid td {
-  border: 1px solid var(--fc-border-color, #ddd) !important;
-  border-collapse: collapse !important;
+
+/* Ensure horizontal scrolling in case it's needed */
+.fc .fc-view-harness,
+.fc .fc-scroller {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
 }
 
-.fc .fc-timegrid-slot {
-  border-top: 1px solid var(--fc-border-color, #ddd) !important;
+/* Minimum width for the table if dayMinWidth isn't applied or to supplement */
+.fc .fc-timegrid > table {
+  min-width: 700px; /* 7 days * 100px each, if desired */
 }
 
-.fc .fc-timegrid-col {
-  border-left: 1px solid var(--fc-border-color, #ddd) !important;
+/* Responsive styling for smaller screens */
+@media (max-width: 768px) {
+  /* Increase slot height for better tap targets */
+  .fc .fc-timegrid-slot {
+    height: 3.5em !important;
+  }
+
+  /* Slightly bigger event font */
+  .fc-event-title {
+    font-size: 0.95rem !important;
+  }
+
+  /* Increase spacing within event boxes */
+  .fc .fc-event-main-frame {
+    padding: 2px 4px;
+  }
+
+  /* Optionally, a bigger line-height for time slots */
+  .fc-timegrid-slots tr {
+    line-height: 2.2em !important;
+  }
+
+  /* You can also auto-hide some toolbar items on very small screens */
+  .fc-header-toolbar .fc-toolbar-chunk:first-child {
+    display: none; /* e.g., hide prev/next buttons if desired */
+  }
 }

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
+import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import sanityClient from '@sanity/client'
 import Modal from 'react-modal'
@@ -22,6 +23,9 @@ export default function Calendar() {
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
+
+  // Ref to access the FullCalendar API
+  const calendarRef = useRef(null)
 
   useEffect(() => {
     client
@@ -96,8 +100,14 @@ export default function Calendar() {
     const endDate = new Date(selectedInfo.end)
 
     const weekday = startDate.toLocaleDateString('en-US', { weekday: 'long' })
-    const startTime = startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-    const endTime = endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    const startTime = startDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    })
+    const endTime = endDate.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    })
 
     return `${weekday} (${startTime} - ${endTime})`
   }
@@ -106,13 +116,25 @@ export default function Calendar() {
     <>
       <div style={{ overflowX: 'auto' }}>
         <FullCalendar
-          plugins={[timeGridPlugin, interactionPlugin]}
-          initialView='timeGridWeek'
+          ref={calendarRef}
+          plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
+          // Use day view on small screens by default, week view otherwise
+          initialView={window.innerWidth < 768 ? 'timeGridDay' : 'timeGridWeek'}
+          dayMinWidth={200} // Minimum width for each day column to enable horizontal scroll
+          longPressDelay={300} // Quicker touch response
+          // You can also specify these if you want snappier dragging/touch:
+          // selectLongPressDelay={500}
+          // eventLongPressDelay={500}
+
           themeSystem="standard"
           selectable={true}
           validRange={{
-            start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
-            end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+            start: new Date(
+              new Date().setDate(new Date().getDate() - 7)
+            ).toISOString(),
+            end: new Date(
+              new Date().setDate(new Date().getDate() + 30)
+            ).toISOString()
           }}
           select={handleSelect}
           events={[
@@ -137,13 +159,15 @@ export default function Calendar() {
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
-            right: ''
+            right: '' // you can add 'timeGridDay,timeGridWeek' if you want toggle buttons
           }}
           eventContent={(arg) => {
+            // Hide text for blocked events
             if (arg.event.id.startsWith('blocked-')) return null
             return <div>{arg.event.title}</div>
           }}
           height="auto"
+        
         />
       </div>
 
@@ -168,7 +192,9 @@ export default function Calendar() {
         }}
       >
         <h2>Reserve a Time Slot</h2>
-        <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>{formatSelectedTime()}</p>
+        <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>
+          {formatSelectedTime()}
+        </p>
         <form onSubmit={handleSubmit}>
           <label>Name:</label>
           <input
@@ -182,7 +208,9 @@ export default function Calendar() {
           <input
             type="tel"
             value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            onChange={(e) =>
+              setFormData({ ...formData, phone: e.target.value })
+            }
             required
             style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
           />
