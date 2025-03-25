@@ -1,5 +1,6 @@
 /* Default background */
-.fc td, .fc th {
+.fc td,
+.fc th {
   background-color: white !important;
 }
 
@@ -9,7 +10,8 @@
 }
 
 /* Blocked slots */
-.fc-day-blocked, .fc-bg-event {
+.fc-day-blocked,
+.fc-bg-event {
   background-color: #ffcccc !important;
   opacity: 1 !important;
 }
@@ -27,7 +29,24 @@
   min-width: 700px; /* 7 days * 100px each, if desired */
 }
 
-/* Responsive styling for smaller screens */
+/* ----------- GRID LINES (APPLY GLOBALLY) ----------- */
+
+/* Stronger (or dashed) horizontal lines at each time slot */
+td.fc-timegrid-slot.fc-timegrid-slot-lane {
+  border-bottom: 1px dashed #ccc !important;
+}
+
+/* More distinct vertical lines between day columns */
+.fc-timegrid-col-frame {
+  border-right: 1px solid #ccc !important;
+}
+
+/* Optional: a border around the entire timeGrid body */
+.fc-timegrid-body {
+  border: 1px solid #ccc !important;
+}
+
+/* ----------- RESPONSIVE STYLES FOR SMALLER SCREENS ----------- */
 @media (max-width: 768px) {
   /* Increase slot height for better tap targets */
   .fc .fc-timegrid-slot {
@@ -49,8 +68,28 @@
     line-height: 2.2em !important;
   }
 
-  /* You can also auto-hide some toolbar items on very small screens */
+  /* Example: hide the prev/next buttons on very narrow screens */
   .fc-header-toolbar .fc-toolbar-chunk:first-child {
-    display: none; /* e.g., hide prev/next buttons if desired */
+    display: none;
   }
+  /* Horizontal red lines */
+  td.fc-timegrid-slot.fc-timegrid-slot-lane {
+    border-bottom: 2px dashed red !important;
+    background-image: none !important;
+  }
+
+  td.fc-timegrid-slot.fc-timegrid-slot-lane::before {
+    content: none !important;
+  }
+
+  /* Vertical red lines between day columns */
+  .fc-timegrid-col {
+    border-right: 2px dashed red !important;
+  }
+
+  .fc-timegrid-cols > :last-child {
+    border-right: none !important;
+  }
+
+
 }
