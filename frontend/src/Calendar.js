@@ -23,6 +23,8 @@ export default function Calendar() {
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
 
+  const isMobile = window.innerWidth < 768
+
   useEffect(() => {
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
@@ -104,46 +106,50 @@ export default function Calendar() {
 
   return (
     <>
-      <FullCalendar
-        plugins={[timeGridPlugin, interactionPlugin]}
-        initialView="timeGridWeek"
-        themeSystem="standard"
-        selectable={true}
-        validRange={{
-          start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
-          end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
-        }}
-        select={handleSelect}
-        events={[
-          ...events,
-          ...blockedTimes.map((block, i) => ({
-            id: `blocked-${i}`,
-            start: block.start,
-            end: block.end,
-            display: 'background',
-            color: '#ffcccc'
-          }))
-        ]}
-        selectAllow={(selectInfo) => {
-          const isPast = selectInfo.start < new Date()
-          const isBlocked = isTimeBlocked(selectInfo.start, selectInfo.end)
-          return !isPast && !isBlocked
-        }}
-        allDaySlot={false}
-        slotDuration="01:00:00"
-        slotMinTime="00:00:00"
-        slotMaxTime="24:00:00"
-        headerToolbar={{
-          left: 'prev,next today',
-          center: 'title',
-          right: ''
-        }}
-        eventContent={(arg) => {
-          if (arg.event.id.startsWith('blocked-')) return null
-          return <div>{arg.event.title}</div>
-        }}
-        height="auto"
-      />
+      <div style={{ overflowX: 'auto' }}>
+        <FullCalendar
+          plugins={[timeGridPlugin, interactionPlugin]}
+          initialView="timeGridWeek"
+          themeSystem="standard"
+          longPressDelay={300}
+          validRange={{
+            start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
+            end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+          }}
+          selectable={true}
+          select={handleSelect}
+          events={[
+            ...events,
+            ...blockedTimes.map((block, i) => ({
+              id: `blocked-${i}`,
+              start: block.start,
+              end: block.end,
+              display: 'background',
+              color: '#ffcccc'
+            }))
+          ]}
+          selectAllow={(selectInfo) => {
+            const isPast = selectInfo.start < new Date()
+            const isBlocked = isTimeBlocked(selectInfo.start, selectInfo.end)
+            return !isPast && !isBlocked
+          }}
+          dayMinWidth={isMobile ? 140 : undefined} // optional if you have scrollGrid
+          allDaySlot={false}
+          slotDuration="01:00:00"
+          slotMinTime="00:00:00"
+          slotMaxTime="24:00:00"
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: ''
+          }}
+          eventContent={(arg) => {
+            if (arg.event.id.startsWith('blocked-')) return null
+            return <div>{arg.event.title}</div>
+          }}
+          height="auto"
+        />
+      </div>
 
       <Modal
         isOpen={modalIsOpen}
@@ -159,7 +165,9 @@ export default function Calendar() {
             borderRadius: '10px',
             background: 'white',
             maxWidth: '400px',
-            width: '90%'
+            width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto'
           }
         }}
       >
