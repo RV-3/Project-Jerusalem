@@ -23,8 +23,6 @@ export default function Calendar() {
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
 
-  const isMobile = window.innerWidth < 768
-
   useEffect(() => {
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
