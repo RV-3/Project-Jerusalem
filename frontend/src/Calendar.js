@@ -112,6 +112,8 @@ export default function Calendar() {
           initialView='timeGridWeek'}
           themeSystem="standard"
           selectable={true}
+          dayMinWidth={200}
+          longPressDelay={300} // Makes taps respond faster
           validRange={{
             start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
             end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
