@@ -125,10 +125,10 @@ export default function Calendar() {
           initialView="timeGridWeek"
 
           // Minimum width for day columns so they don't collapse on mobile
-          dayMinWidth={150}
+          dayMinWidth={120}
 
           // Optional: Faster touch event responses
-          longPressDelay={500}
+          longPressDelay={700}
           // selectLongPressDelay={500}
           // eventLongPressDelay={500}
 
