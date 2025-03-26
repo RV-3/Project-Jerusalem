@@ -1,7 +1,19 @@
-/* Default background */
+/* Vertical grid lines between day columns */
+.fc-timegrid-col {
+  border-left: 1px solid #ddd;
+}
+
+/* Optional: remove the last border */
+.fc-timegrid-col:last-child {
+  border-right: none;
+}
+
+
+/* ✅ Restore background + grid borders */
 .fc td,
 .fc th {
   background-color: white !important;
+  border: 1px solid #ddd !important;
 }
 
 /* Past dates */
@@ -16,80 +28,48 @@
   opacity: 1 !important;
 }
 
-/* Ensure horizontal scrolling in case it's needed */
+/* Allow horizontal scroll */
 .fc .fc-view-harness,
 .fc .fc-scroller {
   overflow-x: auto;
   overflow-y: visible;
-  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
 }
 
-/* Minimum width for the table if dayMinWidth isn't applied or to supplement */
+/* Enforce min width for horizontal scroll */
 .fc .fc-timegrid > table {
-  min-width: 700px; /* 7 days * 100px each, if desired */
+  min-width: 700px;
 }
 
-/* ----------- GRID LINES (APPLY GLOBALLY) ----------- */
-
-/* Stronger (or dashed) horizontal lines at each time slot */
+/* Optional: stronger horizontal slot lines */
 td.fc-timegrid-slot.fc-timegrid-slot-lane {
   border-bottom: 1px dashed #ccc !important;
 }
 
-/* More distinct vertical lines between day columns */
-.fc-timegrid-col-frame {
-  border-right: 1px solid #ccc !important;
-}
-
-/* Optional: a border around the entire timeGrid body */
-.fc-timegrid-body {
-  border: 1px solid #ccc !important;
-}
-
-/* ----------- RESPONSIVE STYLES FOR SMALLER SCREENS ----------- */
+/* Responsive tweaks */
 @media (max-width: 768px) {
-  /* Increase slot height for better tap targets */
   .fc .fc-timegrid-slot {
     height: 3.5em !important;
   }
 
-  /* Slightly bigger event font */
   .fc-event-title {
     font-size: 0.95rem !important;
   }
 
-  /* Increase spacing within event boxes */
   .fc .fc-event-main-frame {
     padding: 2px 4px;
   }
 
-  /* Optionally, a bigger line-height for time slots */
   .fc-timegrid-slots tr {
     line-height: 2.2em !important;
   }
 
-  /* Example: hide the prev/next buttons on very narrow screens */
   .fc-header-toolbar .fc-toolbar-chunk:first-child {
     display: none;
   }
-  /* Horizontal red lines */
-  td.fc-timegrid-slot.fc-timegrid-slot-lane {
-    border-bottom: 2px dashed red !important;
-    background-image: none !important;
-  }
+
 
   td.fc-timegrid-slot.fc-timegrid-slot-lane::before {
     content: none !important;
   }
-
-  /* Vertical red lines between day columns */
-  .fc-timegrid-col {
-    border-right: 2px dashed red !important;
-  }
-
-  .fc-timegrid-cols > :last-child {
-    border-right: none !important;
-  }
-
-
 }
