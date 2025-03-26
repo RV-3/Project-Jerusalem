@@ -1,11 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
+import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import Modal from 'react-modal'
 import sanityClient from '@sanity/client'
-import './AdminCalendar.css'
-
+import Modal from 'react-modal'
 
 Modal.setAppElement('#root')
 
@@ -187,7 +186,6 @@ export default function AdminBlockCalendar() {
         </button>
       </div>
     )
-
   }
 
   return (
@@ -197,13 +195,46 @@ export default function AdminBlockCalendar() {
       </h2>
       <FullCalendar
         ref={calendarRef}
-        plugins={[timeGridPlugin, interactionPlugin]}
-        initialView="timeGridWeek"
-        themeSystem="standard"
-        validRange={{
-          start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
-          end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
+        /* PLUGINS: add scrollGridPlugin for sticky headers */
+        plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
+
+        /* Use the same custom multi-day TimeGrid view as your main calendar */
+        initialView="timeGrid30Day"
+        views={{
+          timeGrid30Day: {
+            type: 'timeGrid',       // timeGrid layout
+            duration: { days: 30 }, // full 30 days
+            dayCount: 30,           // exactly 30 columns
+            buttonText: '30 days',
+          },
         }}
+
+        themeSystem="standard"
+
+        /* Sizing & Sticky Headers */
+        stickyHeaderDates={true}
+        stickyFooterScrollbar={false}
+        dayMinWidth={120}
+        allDaySlot={false}
+        slotDuration="01:00:00"
+        slotMinTime="00:00:00"
+        slotMaxTime="24:00:00"
+        height="auto"
+
+        /* Faster mobile tapping */
+        longPressDelay={50}
+
+        /* Valid range: up to 30 days from now (or adjust as needed) */
+        validRange={{
+          start: new Date(
+            new Date().setDate(new Date().getDate() - 7)
+          ).toISOString(),
+          end: new Date(
+            new Date().setDate(new Date().getDate() + 30)
+          ).toISOString()
+        }}
+
+        /* Handle blocking/unblocking logic on selection */
         selectable={true}
         select={(info) => {
           if (isEverySlotInRangeBlocked(info)) {
@@ -212,7 +243,8 @@ export default function AdminBlockCalendar() {
             if (window.confirm('Block this time slot?')) handleBlock(info)
           }
         }}
-        eventClick={handleEventClick}
+
+        /* Show reservations & blocked slots as events */
         events={[
           ...reservations.map((res) => ({
             id: res._id,
@@ -230,16 +262,14 @@ export default function AdminBlockCalendar() {
             color: '#ffcccc'
           }))
         ]}
-        allDaySlot={false}
-        slotDuration="01:00:00"
-        slotMinTime="00:00:00"
-        slotMaxTime="24:00:00"
+
+        eventClick={handleEventClick}
+
         headerToolbar={{
           left: 'prev,next today',
           center: 'title',
           right: ''
         }}
-        height="auto"
       />
 
       <Modal

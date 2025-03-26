@@ -23,8 +23,8 @@ export default function Calendar() {
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
+  const [isSubmitting, setIsSubmitting] = useState(false) // NEW
 
-  // Create a ref to access the FullCalendar API (if needed)
   const calendarRef = useRef(null)
 
   useEffect(() => {
@@ -74,33 +74,40 @@ export default function Calendar() {
     const { name, phone } = formData
     if (!name || !phone || !selectedInfo) return
 
-    const res = await client.create({
-      _type: 'reservation',
-      name,
-      phone,
-      start: selectedInfo.startStr,
-      end: selectedInfo.endStr
-    })
-
-    setEvents([
-      ...events,
-      {
-        id: res._id,
-        title: name,
+    try {
+      setIsSubmitting(true) // disable button
+      const res = await client.create({
+        _type: 'reservation',
+        name,
+        phone,
         start: selectedInfo.startStr,
         end: selectedInfo.endStr
-      }
-    ])
+      })
 
-    setModalIsOpen(false)
-    setFormData({ name: '', phone: '' })
+      setEvents((prev) => [
+        ...prev,
+        {
+          id: res._id,
+          title: name,
+          start: selectedInfo.startStr,
+          end: selectedInfo.endStr
+        }
+      ])
+
+      setModalIsOpen(false)
+      setFormData({ name: '', phone: '' })
+    } catch (err) {
+      console.error('Reservation creation failed:', err)
+      alert('Error creating reservation. Please try again.')
+    } finally {
+      setIsSubmitting(false) // re‐enable button
+    }
   }
 
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
     const startDate = new Date(selectedInfo.start)
     const endDate = new Date(selectedInfo.end)
-
     const weekday = startDate.toLocaleDateString('en-US', { weekday: 'long' })
     const startTime = startDate.toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -110,40 +117,28 @@ export default function Calendar() {
       hour: 'numeric',
       minute: '2-digit'
     })
-
     return `${weekday} (${startTime} - ${endTime})`
   }
 
   return (
     <>
-
       <div>
         <FullCalendar
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
-          // Force timeGridWeek on all screen sizes
           initialView="timeGrid30Day"
           views={{
             timeGrid30Day: {
-              type: 'timeGrid',       // still a timeGrid layout
-              duration: { days: 30 }, // 30 consecutive days
-              dayCount: 30,           // ensures exactly 30 columns
-              buttonText: '30 days',  // optional text if you add a toolbar button
+              type: 'timeGrid',
+              duration: { days: 30 },
+              dayCount: 30,
+              buttonText: '30 days',
             },
           }}
-
-          /* Enable sticky headers and time axis */
           stickyHeaderDates={true}
           stickyFooterScrollbar={false}
-
-          // Minimum width for day columns so they don't collapse on mobile
           dayMinWidth={120}
-
-          // Optional: Faster touch event responses
           longPressDelay={100}
-          // selectLongPressDelay={500}
-          // eventLongPressDelay={500}
-
           themeSystem="standard"
           selectable={true}
           validRange={{
@@ -177,10 +172,9 @@ export default function Calendar() {
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
-            right: '' // Add 'timeGridDay,timeGridWeek' if you want toggle buttons
+            right: ''
           }}
           eventContent={(arg) => {
-            // Hide text for blocked events
             if (arg.event.id.startsWith('blocked-')) return null
             return <div>{arg.event.title}</div>
           }}
@@ -190,7 +184,10 @@ export default function Calendar() {
 
       <Modal
         isOpen={modalIsOpen}
-        onRequestClose={() => setModalIsOpen(false)}
+        onRequestClose={() => {
+          setModalIsOpen(false)
+          setIsSubmitting(false) // reset in case user cancels mid-submission
+        }}
         contentLabel="Reservation Form"
         style={{
           overlay: { backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000 },
@@ -234,8 +231,9 @@ export default function Calendar() {
             style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button type="submit" style={{ marginRight: '10px' }}>
-              Reserve
+            {/* Disable the button if isSubmitting */}
+            <button type="submit" disabled={isSubmitting} style={{ marginRight: '10px' }}>
+              {isSubmitting ? 'Reserving...' : 'Reserve'}
             </button>
             <button type="button" onClick={() => setModalIsOpen(false)}>
               Cancel
