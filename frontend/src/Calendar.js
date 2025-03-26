@@ -23,7 +23,7 @@ export default function Calendar() {
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
-  const [isSubmitting, setIsSubmitting] = useState(false) // NEW
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const calendarRef = useRef(null)
 
@@ -56,15 +56,12 @@ export default function Calendar() {
   }, [])
 
   const isTimeBlocked = (start, end) => {
-    return blockedTimes.some(
-      (block) => start < block.end && end > block.start
-    )
+    return blockedTimes.some((block) => start < block.end && end > block.start)
   }
 
   const handleSelect = (info) => {
     const isPast = info.start < new Date()
     if (isPast || isTimeBlocked(info.start, info.end)) return
-
     setSelectedInfo(info)
     setModalIsOpen(true)
   }
@@ -132,9 +129,18 @@ export default function Calendar() {
               type: 'timeGrid',
               duration: { days: 30 },
               dayCount: 30,
-              buttonText: '30 days',
-            },
+              buttonText: '30 days'
+            }
           }}
+
+          /* Show weekday + numeric date, e.g. "Mon 3/18" */
+          dayHeaderFormat={{
+            weekday: 'short', // "Mon", "Tue", etc.
+            month: 'numeric', // "3"
+            day: 'numeric',   // "18"
+            omitCommas: true  // remove comma
+          }}
+
           stickyHeaderDates={true}
           stickyFooterScrollbar={false}
           dayMinWidth={120}
@@ -186,7 +192,7 @@ export default function Calendar() {
         isOpen={modalIsOpen}
         onRequestClose={() => {
           setModalIsOpen(false)
-          setIsSubmitting(false) // reset in case user cancels mid-submission
+          setIsSubmitting(false) // reset if user cancels mid-submission
         }}
         contentLabel="Reservation Form"
         style={{
@@ -231,8 +237,11 @@ export default function Calendar() {
             style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
           />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            {/* Disable the button if isSubmitting */}
-            <button type="submit" disabled={isSubmitting} style={{ marginRight: '10px' }}>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              style={{ marginRight: '10px' }}
+            >
               {isSubmitting ? 'Reserving...' : 'Reserve'}
             </button>
             <button type="button" onClick={() => setModalIsOpen(false)}>

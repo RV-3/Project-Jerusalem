@@ -44,6 +44,7 @@ export default function AdminBlockCalendar() {
     setReservations(resData)
 
     if (calendarApi && currentViewDate) {
+      // Re-center the calendar to the previously viewed date (if any)
       calendarApi.gotoDate(currentViewDate)
     }
   }
@@ -69,6 +70,7 @@ export default function AdminBlockCalendar() {
     const slotEnd = new Date(info.end)
     const blocksToCreate = []
 
+    // Create blocked docs, hour by hour
     while (slotStart < slotEnd) {
       const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
       const isBlocked = blocks.some(block =>
@@ -94,6 +96,7 @@ export default function AdminBlockCalendar() {
     const slotEnd = new Date(info.end)
     const deletes = []
 
+    // Delete existing blocked docs, hour by hour
     while (slotStart < slotEnd) {
       const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
       const match = blocks.find(block =>
@@ -104,7 +107,9 @@ export default function AdminBlockCalendar() {
       slotStart.setHours(slotStart.getHours() + 1)
     }
 
-    if (deletes.length === 0) return alert("No matching blocked slots found.")
+    if (deletes.length === 0) {
+      return alert("No matching blocked slots found.")
+    }
     await Promise.all(deletes)
     fetchData()
   }
@@ -193,25 +198,31 @@ export default function AdminBlockCalendar() {
       <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>
         Admin Panel - View & Block Time Slots
       </h2>
+
       <FullCalendar
         ref={calendarRef}
-        /* PLUGINS: add scrollGridPlugin for sticky headers */
         plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
 
-        /* Use the same custom multi-day TimeGrid view as your main calendar */
+        /* 30-day custom timeGrid, same as your main calendar */
         initialView="timeGrid30Day"
         views={{
           timeGrid30Day: {
-            type: 'timeGrid',       // timeGrid layout
-            duration: { days: 30 }, // full 30 days
-            dayCount: 30,           // exactly 30 columns
-            buttonText: '30 days',
-          },
+            type: 'timeGrid',
+            duration: { days: 30 },
+            dayCount: 30,
+            buttonText: '30 days'
+          }
         }}
 
-        themeSystem="standard"
+        /* Show "Mon 3/18" style headers */
+        dayHeaderFormat={{
+          weekday: 'short',  // "Mon"
+          month: 'numeric',  // "3"
+          day: 'numeric',    // "18"
+          omitCommas: true
+        }}
 
-        /* Sizing & Sticky Headers */
+        /* Sticky header & axis */
         stickyHeaderDates={true}
         stickyFooterScrollbar={false}
         dayMinWidth={120}
@@ -224,7 +235,7 @@ export default function AdminBlockCalendar() {
         /* Faster mobile tapping */
         longPressDelay={50}
 
-        /* Valid range: up to 30 days from now (or adjust as needed) */
+        /* Limit date range to ~30 days from now (you can adjust) */
         validRange={{
           start: new Date(
             new Date().setDate(new Date().getDate() - 7)
@@ -234,17 +245,21 @@ export default function AdminBlockCalendar() {
           ).toISOString()
         }}
 
-        /* Handle blocking/unblocking logic on selection */
+        /* Let admin select time range to block/unblock */
         selectable={true}
         select={(info) => {
           if (isEverySlotInRangeBlocked(info)) {
-            if (window.confirm('Unblock this time slot?')) handleUnblock(info)
+            if (window.confirm('Unblock this time slot?')) {
+              handleUnblock(info)
+            }
           } else {
-            if (window.confirm('Block this time slot?')) handleBlock(info)
+            if (window.confirm('Block this time slot?')) {
+              handleBlock(info)
+            }
           }
         }}
 
-        /* Show reservations & blocked slots as events */
+        /* Display events: reservations + blocked times */
         events={[
           ...reservations.map((res) => ({
             id: res._id,
@@ -313,7 +328,10 @@ export default function AdminBlockCalendar() {
           >
             Delete
           </button>
-          <button onClick={() => setModalIsOpen(false)} style={{ padding: '8px 12px' }}>
+          <button
+            onClick={() => setModalIsOpen(false)}
+            style={{ padding: '8px 12px' }}
+          >
             Close
           </button>
         </div>
