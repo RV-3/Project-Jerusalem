@@ -116,12 +116,21 @@ export default function Calendar() {
 
   return (
     <>
+
       <div>
         <FullCalendar
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
           // Force timeGridWeek on all screen sizes
-          initialView="timeGridWeek"
+          initialView="timeGrid30Day"
+          views={{
+            timeGrid30Day: {
+              type: 'timeGrid',       // still a timeGrid layout
+              duration: { days: 30 }, // 30 consecutive days
+              dayCount: 30,           // ensures exactly 30 columns
+              buttonText: '30 days',  // optional text if you add a toolbar button
+            },
+          }}
 
           /* Enable sticky headers and time axis */
           stickyHeaderDates={true}
@@ -131,7 +140,7 @@ export default function Calendar() {
           dayMinWidth={120}
 
           // Optional: Faster touch event responses
-          longPressDelay={50}
+          longPressDelay={100}
           // selectLongPressDelay={500}
           // eventLongPressDelay={500}
 
