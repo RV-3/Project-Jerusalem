@@ -1,66 +1,56 @@
-/* Vertical grid lines between day columns */
+/* Remove the universal 1px border from every td/th */
+.fc td,
+.fc th {
+  /* background-color: white !important; */
+  /* border: 1px solid #ddd !important; */
+}
+
+/* Keep your vertical day column lines */
 .fc-timegrid-col {
   border-left: 1px solid #ddd;
 }
-
-/* Optional: remove the last border */
 .fc-timegrid-col:last-child {
   border-right: none;
 }
 
-
-/* ✅ Restore background + grid borders */
-.fc td,
-.fc th {
-  background-color: white !important;
-  border: 1px solid #ddd !important;
-}
-
-/* Past dates */
+/* Past dates, blocked events, etc. are fine */
 .fc-day-past {
   background-color: #f3f3f3 !important;
 }
-
-/* Blocked slots */
 .fc-day-blocked,
 .fc-bg-event {
   background-color: #ffcccc !important;
   opacity: 1 !important;
 }
 
-/* Enforce min width for horizontal scroll */
+/* Remove or comment out min-width for the table.
+   Rely on dayMinWidth in your JS. */
 .fc .fc-timegrid > table {
-  min-width: 700px;
+  /* min-width: 700px; */
 }
 
-/* Optional: stronger horizontal slot lines */
+/* Keep your dashed horizontal slot lines */
 td.fc-timegrid-slot.fc-timegrid-slot-lane {
   border-bottom: 1px dashed #ccc !important;
 }
 
-/* Responsive tweaks */
+/* You can keep your responsive rules if needed */
 @media (max-width: 768px) {
   .fc .fc-timegrid-slot {
     height: 3.5em !important;
   }
-
   .fc-event-title {
     font-size: 0.95rem !important;
   }
-
   .fc .fc-event-main-frame {
     padding: 2px 4px;
   }
-
   .fc-timegrid-slots tr {
     line-height: 2.2em !important;
   }
-
   .fc-header-toolbar .fc-toolbar-chunk:first-child {
     display: none;
   }
-
-
   td.fc-timegrid-slot.fc-timegrid-slot-lane::before {
     content: none !important;
   }

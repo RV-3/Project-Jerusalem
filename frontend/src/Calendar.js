@@ -131,7 +131,7 @@ export default function Calendar() {
           dayMinWidth={120}
 
           // Optional: Faster touch event responses
-          longPressDelay={100}
+          longPressDelay={50}
           // selectLongPressDelay={500}
           // eventLongPressDelay={500}
 
