@@ -28,14 +28,6 @@
   opacity: 1 !important;
 }
 
-/* Allow horizontal scroll */
-.fc .fc-view-harness,
-.fc .fc-scroller {
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-}
-
 /* Enforce min width for horizontal scroll */
 .fc .fc-timegrid > table {
   min-width: 700px;

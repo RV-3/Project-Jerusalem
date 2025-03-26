@@ -116,8 +116,7 @@ export default function Calendar() {
 
   return (
     <>
-      {/* Container for horizontal scrolling */}
-      <div style={{ overflowX: 'auto' }}>
+      <div>
         <FullCalendar
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
