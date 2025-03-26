@@ -124,11 +124,15 @@ export default function Calendar() {
           // Force timeGridWeek on all screen sizes
           initialView="timeGridWeek"
 
+          /* Enable sticky headers and time axis */
+          stickyHeaderDates={true}
+          stickyFooterScrollbar={false}
+
           // Minimum width for day columns so they don't collapse on mobile
           dayMinWidth={120}
 
           // Optional: Faster touch event responses
-          longPressDelay={700}
+          longPressDelay={100}
           // selectLongPressDelay={500}
           // eventLongPressDelay={500}
 
