@@ -30,7 +30,7 @@ export default function Calendar() {
 
   const calendarRef = useRef(null)
 
-  // Fetch reservations and blocked times from Sanity
+  // Fetch events and blocked times
   useEffect(() => {
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
@@ -55,17 +55,15 @@ export default function Calendar() {
     )
   }, [])
 
-  // Helper to check if a time range is blocked
+  // Check if a time range is blocked
   const isTimeBlocked = (start, end) => {
     return blockedTimes.some((block) => start < block.end && end > block.start)
   }
 
-  // Dynamic "past" background event. We'll re-render this every minute
-  // so that the blocked region for "past" times is always current.
+  // Past background event
   useEffect(() => {
     function updatePastBlockEvent() {
       const now = new Date()
-      // Start from midnight of the current day
       const todayMidnight = new Date(now)
       todayMidnight.setHours(0, 0, 0, 0)
 
@@ -74,22 +72,16 @@ export default function Calendar() {
         start: todayMidnight,
         end: now,
         display: 'background',
-        color: '#ffcccc' // style however you'd like
+        color: '#ffcccc'
       })
     }
 
-    // Initial render
     updatePastBlockEvent()
-
-    // Update every minute
-    const interval = setInterval(() => {
-      updatePastBlockEvent()
-    }, 60 * 1000)
-
+    const interval = setInterval(updatePastBlockEvent, 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // Handle user selection
+  // Handle select
   const handleSelect = (info) => {
     const isPast = info.start < new Date()
     if (isPast || isTimeBlocked(info.start, info.end)) return
@@ -97,18 +89,17 @@ export default function Calendar() {
     setModalIsOpen(true)
   }
 
-  // Submit reservation form
+  // Submit
   const handleSubmit = async (e) => {
     e.preventDefault()
-    const { name, phone } = formData
-    if (!name || !phone || !selectedInfo) return
+    if (!formData.name || !formData.phone || !selectedInfo) return
 
     try {
       setIsSubmitting(true)
       const res = await client.create({
         _type: 'reservation',
-        name,
-        phone,
+        name: formData.name,
+        phone: formData.phone,
         start: selectedInfo.startStr,
         end: selectedInfo.endStr
       })
@@ -117,7 +108,7 @@ export default function Calendar() {
         ...prev,
         {
           id: res._id,
-          title: name,
+          title: formData.name,
           start: selectedInfo.startStr,
           end: selectedInfo.endStr
         }
@@ -133,7 +124,6 @@ export default function Calendar() {
     }
   }
 
-  // For displaying the selected slot in the modal
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
     const startDate = new Date(selectedInfo.start)
@@ -165,30 +155,26 @@ export default function Calendar() {
               buttonText: '30 days'
             }
           }}
+          /* Let each day be at least 200px wide for visibility. Increase if needed. */
+          dayMinWidth={200}
           dayHeaderFormat={{
-            weekday: 'short', // "Mon", "Tue"
-            month: 'numeric', // "3"
-            day: 'numeric', // "18"
+            weekday: 'short',
+            month: 'numeric',
+            day: 'numeric',
             omitCommas: true
           }}
-          stickyHeaderDates={true}
+          stickyHeaderDates
           stickyFooterScrollbar={false}
-          dayMinWidth={120}
           longPressDelay={100}
           selectLongPressDelay={100}
           eventLongPressDelay={100}
+          selectable
           themeSystem="standard"
-          selectable={true}
           validRange={{
-            start: new Date(
-              new Date().setDate(new Date().getDate() - 7)
-            ).toISOString(),
-            end: new Date(
-              new Date().setDate(new Date().getDate() + 30)
-            ).toISOString()
+            start: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(),
+            end: new Date(new Date().setDate(new Date().getDate() + 30)).toISOString()
           }}
           select={handleSelect}
-          // Combine your normal events, blocked times, and the "past" background event
           events={[
             ...events,
             ...blockedTimes.map((block, i) => ({
@@ -200,17 +186,30 @@ export default function Calendar() {
             })),
             ...(pastBlockEvent ? [pastBlockEvent] : [])
           ]}
-          // Prevent multi-day *and* multi-hour selection
+          // Only allow 1-hour same-day selections
           selectAllow={(selectInfo) => {
             const isPast = selectInfo.start < new Date()
             const isBlocked = isTimeBlocked(selectInfo.start, selectInfo.end)
-            const isSameDay =
+
+            let isSameDay =
               selectInfo.start.toDateString() === selectInfo.end.toDateString()
 
-            // Ensure the selection is exactly one hour (matching slotDuration="01:00:00")
-            const durationMs = selectInfo.end.getTime() - selectInfo.start.getTime()
+            // exactly 1 hour?
+            const durationMs = selectInfo.end - selectInfo.start
             const oneHourMs = 60 * 60 * 1000
             const isExactlyOneHour = durationMs === oneHourMs
+
+            // "midnight fix": if end is exactly midnight next day
+            if (!isSameDay && isExactlyOneHour) {
+              const endDate = new Date(selectInfo.end)
+              if (
+                endDate.getHours() === 0 &&
+                endDate.getMinutes() === 0 &&
+                endDate.getSeconds() === 0
+              ) {
+                isSameDay = true
+              }
+            }
 
             return !isPast && !isBlocked && isSameDay && isExactlyOneHour
           }}
@@ -224,13 +223,38 @@ export default function Calendar() {
             right: ''
           }}
           eventContent={(arg) => {
-            // Hide the label for background “blocked” events
+            // hide text for background or past-block events
             if (arg.event.id.startsWith('blocked-') || arg.event.id === 'past-block') {
               return null
             }
             return <div>{arg.event.title}</div>
           }}
           height="auto"
+          /* *************** Add Sunday + Monday classes *************** */
+          dayCellClassNames={(arg) => {
+            const day = arg.date.getDay()
+            // Sunday
+            if (day === 0) {
+              return ['fc-sunday']
+            }
+            // Monday
+            if (day === 1) {
+              return ['fc-monday']
+            }
+            return []
+          }}
+          dayHeaderClassNames={(arg) => {
+            const day = arg.date.getDay()
+            // Sunday
+            if (day === 0) {
+              return ['fc-sunday']
+            }
+            // Monday
+            if (day === 1) {
+              return ['fc-monday']
+            }
+            return []
+          }}
         />
       </div>
 

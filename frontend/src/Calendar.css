@@ -1,11 +1,10 @@
 /* Remove the universal 1px border from every td/th */
 .fc td,
 .fc th {
-  /* background-color: white !important; */
   /* border: 1px solid #ddd !important; */
 }
 
-/* Keep your vertical day column lines */
+/* Keep vertical day column lines for all columns by default */
 .fc-timegrid-col {
   border-left: 1px solid #ddd;
 }
@@ -13,7 +12,7 @@
   border-right: none;
 }
 
-/* Past dates, blocked events, etc. are fine */
+/* Past/blocked times styling is unchanged */
 .fc-day-past {
   background-color: #f3f3f3 !important;
 }
@@ -23,18 +22,94 @@
   opacity: 1 !important;
 }
 
-/* Remove or comment out min-width for the table.
-   Rely on dayMinWidth in your JS. */
+/* We'll rely on dayMinWidth in JS for widths, so no min-width here. */
 .fc .fc-timegrid > table {
   /* min-width: 700px; */
 }
+
+/* ============================= */
+/* SUNDAY (.fc-sunday)           */
+/* ============================= */
+.fc-timegrid-col.fc-sunday,
+.fc-col-header-cell.fc-sunday {
+  position: relative;
+  /* remove the normal right border for the "gap" in the middle */
+  border-right: none !important;
+
+  /* add a thick border on the "outer" left edge (closing off Sunday) */
+  border-left: none solid black !important;
+}
+
+/*
+  Sunday "owns" 20px of the boundary on the right side.
+  We'll use a black or white bar.
+  If you want it white, set background-color: white.
+  If you want a "transparent gap," keep a white bar, etc.
+  For debugging, let's do black so you see it easily.
+*/
+.fc-timegrid-col.fc-sunday::after,
+.fc-col-header-cell.fc-sunday::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 0px;        /* half of the total 40px boundary */
+  background-color: white; /* black for testing; or white if you want an empty gap */
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ============================= */
+/* MONDAY (.fc-monday)           */
+/* ============================= */
+.fc-timegrid-col.fc-monday,
+.fc-col-header-cell.fc-monday {
+  position: relative;
+  /* remove normal left border for the "gap" in the middle */
+  border-left: 1px !important;
+
+  /* add a thick border on the "outer" right edge (closing off Monday) */
+  border-right: none solid black !important;
+}
+
+/*
+  Monday "owns" 20px of the boundary on the left side.
+  Also black for testing or white if you want it "blank."
+*/
+.fc-timegrid-col.fc-monday::before,
+.fc-col-header-cell.fc-monday::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 20px;         /* half of the 40px boundary */
+  background-color: white;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/*
+  Net effect:
+  - Sunday has a 2px black border on the far left, plus a 20px bar on the right.
+  - Monday has a 20px bar on the left, plus a 2px black border on the far right.
+  - The total gap between Sunday and Monday is 40px, filled by black bars.
+*/
 
 /* Keep your dashed horizontal slot lines */
 td.fc-timegrid-slot.fc-timegrid-slot-lane {
   border-bottom: 1px dashed #ccc !important;
 }
 
-/* You can keep your responsive rules if needed */
+/* Remove highlight on "today" */
+.fc-day-today,
+.fc-timegrid-col.fc-day-today,
+.fc-scrollgrid-sync-table td.fc-day-today {
+  background-color: transparent !important;
+}
+
+/* Responsive tweaks if needed */
 @media (max-width: 768px) {
   .fc .fc-timegrid-slot {
     height: 3.5em !important;
