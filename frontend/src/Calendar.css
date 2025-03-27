@@ -97,6 +97,10 @@
   z-index: 9999;
 }
 
+.fc-timegrid-event {
+  border: none !important;
+}
+
 /* Keep your dashed horizontal slot lines */
 td.fc-timegrid-slot.fc-timegrid-slot-lane {
   border-bottom: 1px dashed #ccc !important;
