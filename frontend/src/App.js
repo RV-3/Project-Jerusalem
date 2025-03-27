@@ -7,7 +7,7 @@ function App() {
   return (
     <Router>
       <div style={{ padding: '2rem' }}>
-        <h2 style={{ textAlign: 'center' }}>Adoration Schedule</h2>
+        <h2 style={{ textAlign: 'center' }}>24/7 Jerusalem</h2>
         <nav style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <Link to="/" style={{ marginRight: '1rem' }}>Main Calendar</Link>
           <Link to="/admin">Admin Panel</Link>
