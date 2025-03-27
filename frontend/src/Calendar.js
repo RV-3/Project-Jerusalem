@@ -145,6 +145,8 @@ export default function Calendar() {
           stickyFooterScrollbar={false}
           dayMinWidth={120}
           longPressDelay={100}
+          selectLongPressDelay={100}
+          eventLongPressDelay={100}
           themeSystem="standard"
           selectable={true}
           validRange={{
