@@ -16,7 +16,7 @@ function App() {
           style={{
             textAlign: 'center',
             fontFamily: "'Cinzel Decorative",
-            fontSize: '3rem',
+            fontSize: '2rem',
             color: 'black',
             textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
             marginBottom: '1.5rem'
