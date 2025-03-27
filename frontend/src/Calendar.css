@@ -4,7 +4,7 @@
   /* border: 1px solid #ddd !important; */
 }
 
-/* Keep vertical day column lines for other columns */
+/* Keep vertical day column lines for all columns by default */
 .fc-timegrid-col {
   border-left: 1px solid #ddd;
 }
@@ -12,7 +12,7 @@
   border-right: none;
 }
 
-/* Example past/blocked styling, unchanged */
+/* Past/blocked times styling is unchanged */
 .fc-day-past {
   background-color: #f3f3f3 !important;
 }
@@ -22,122 +22,62 @@
   opacity: 1 !important;
 }
 
-/* We'll rely on dayMinWidth in JS to control widths. */
+/* Remove or comment out min-width for the table.
+   We'll rely on dayMinWidth in the JS. */
 .fc .fc-timegrid > table {
   /* min-width: 700px; */
 }
 
-/* ============================= */
-/* SUNDAY (.fc-sunday)           */
-/* ============================= */
-
-/*
-   1) Add a thick outer border on Sunday’s far-left edge to
-      "close off" that side.
-*/
+/* ====================================================== */
+/* SUNDAY (.fc-sunday) => remove right border, add a 20px */
+/* black bar on the right side of Sunday.                 */
+/* ====================================================== */
 .fc-timegrid-col.fc-sunday,
 .fc-col-header-cell.fc-sunday {
   position: relative;
-  border-left: 2px solid black !important; /* outer line on Sunday’s far left */
-
-  /* remove the normal RIGHT border so we can do our custom gap on that side */
-  border-right: none !important;
+  border-right: none !important; /* remove normal right border on Sunday */
 }
 
-/*
-   2) Insert a 1px boundary line at Sunday’s *right* edge,
-      so it’s clearly separated from the upcoming gap.
-*/
-.fc-timegrid-col.fc-sunday::before,
-.fc-col-header-cell.fc-sunday::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;              /* boundary line at Sunday’s right edge */
-  width: 1px;
-  background-color: black;  /* line color */
-  pointer-events: none;
-  z-index: 9999;
-}
-
-/*
-   3) Insert a 19px black block *outside* that boundary line
-      to form half of the 40px gap.
-   - The block extends from right:-19px up to right:0.
-   - Combined with Monday’s 19px block, we get 38px of "gap"
-     plus 2 boundary lines (1px each) for a total 40px.
-*/
 .fc-timegrid-col.fc-sunday::after,
 .fc-col-header-cell.fc-sunday::after {
   content: "";
   position: absolute;
   top: 0;
+  right: 0;
   bottom: 0;
-  right: -19px;          /* place it outside the column */
-  width: 19px;           /* half of (40px - 2 lines) */
-  background-color: black;  /* or white if you want an empty "gap" */
+  width: 35px;          /* half of the total 40px boundary */
+  background-color: white; /* black for testing */
   pointer-events: none;
   z-index: 9999;
 }
 
-/* ============================= */
-/* MONDAY (.fc-monday)           */
-/* ============================= */
-
-/*
-   1) Add a thick outer border on Monday’s far-right edge
-      to "close off" that side.
-*/
+/* ====================================================== */
+/* MONDAY (.fc-monday) => remove left border, add a 20px  */
+/* black bar on the left side of Monday.                  */
+/* ====================================================== */
 .fc-timegrid-col.fc-monday,
 .fc-col-header-cell.fc-monday {
   position: relative;
-  border-right: 2px solid black !important; /* outer line on Monday’s far right */
-
-  /* remove the normal LEFT border for the gap on that side */
-  border-left: none !important;
+  border-left: none !important; /* remove normal left border on Monday */
 }
 
-/*
-   2) Insert a 1px boundary line at Monday’s *left* edge,
-      so it’s clearly separated from the preceding gap.
-*/
 .fc-timegrid-col.fc-monday::before,
 .fc-col-header-cell.fc-monday::before {
   content: "";
   position: absolute;
   top: 0;
+  left: 0;
   bottom: 0;
-  left: 0;               /* boundary line at Monday’s left edge */
-  width: 1px;
-  background-color: black;
+  width: 35px;         /* half of the 40px boundary */
+  background-color: white;
   pointer-events: none;
   z-index: 9999;
 }
 
 /*
-   3) Insert a 19px black block *outside* that boundary line
-      to form the other half of the 40px gap.
-*/
-.fc-timegrid-col.fc-monday::after,
-.fc-col-header-cell.fc-monday::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -19px;
-  width: 19px;
-  background-color: black;
-  pointer-events: none;
-  z-index: 9999;
-}
-
-/*
-   Net effect:
-   - Sunday has an outer left border (2px), a boundary line (1px) at the right edge, and 19px black outside it.
-   - Monday has 19px black outside its left edge, plus a boundary line (1px) at that left edge, and an outer right border (2px).
-   - The total "space" from Sunday’s boundary line + Sunday’s 19px + Monday’s 19px + Monday’s boundary line
-     = 1px + 19px + 19px + 1px = 40px
+  Sunday has 20px black on the right,
+  Monday has 20px black on the left,
+  total 40px black gap in between.
 */
 
 /* Keep your dashed horizontal slot lines */
