@@ -233,7 +233,7 @@ export default function AdminBlockCalendar() {
         height="auto"
 
         /* Faster mobile tapping */
-        longPressDelay={50}
+        longPressDelay={100}
 
         /* Limit date range to ~30 days from now (you can adjust) */
         validRange={{
