@@ -146,6 +146,7 @@ export default function Calendar() {
         <FullCalendar
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
+          eventOverlap={false}
           initialView="timeGrid30Day"
           views={{
             timeGrid30Day: {

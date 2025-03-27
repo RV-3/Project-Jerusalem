@@ -27,17 +27,14 @@
 .fc .fc-timegrid > table {
   /* min-width: 700px; */
 }
-
-/* ====================================================== */
-/* SUNDAY (.fc-sunday) => remove right border, add a 20px */
-/* black bar on the right side of Sunday.                 */
-/* ====================================================== */
+/* ========== Sunday ========== */
 .fc-timegrid-col.fc-sunday,
 .fc-col-header-cell.fc-sunday {
   position: relative;
-  border-right: none !important; /* remove normal right border on Sunday */
+  border-right: none !important; /* no normal border */
 }
 
+/* Big 35px white bar anchored to Sunday’s right edge */
 .fc-timegrid-col.fc-sunday::after,
 .fc-col-header-cell.fc-sunday::after {
   content: "";
@@ -45,22 +42,34 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 35px;          /* half of the total 40px boundary */
-  background-color: white; /* black for testing */
+  width: 35px;
+  background-color: white;
   pointer-events: none;
   z-index: 9999;
 }
 
-/* ====================================================== */
-/* MONDAY (.fc-monday) => remove left border, add a 20px  */
-/* black bar on the left side of Monday.                  */
-/* ====================================================== */
+/* Thin black boundary line at right:35px so Sunday looks "closed" */
+.fc-timegrid-col.fc-sunday::before,
+.fc-col-header-cell.fc-sunday::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 35px;
+  width: 0.3px;
+  background-color: black;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ========== Monday ========== */
 .fc-timegrid-col.fc-monday,
 .fc-col-header-cell.fc-monday {
   position: relative;
-  border-left: none !important; /* remove normal left border on Monday */
+  border-left: none !important; /* no normal border */
 }
 
+/* Big 35px white bar anchored to Monday’s left edge */
 .fc-timegrid-col.fc-monday::before,
 .fc-col-header-cell.fc-monday::before {
   content: "";
@@ -68,17 +77,25 @@
   top: 0;
   left: 0;
   bottom: 0;
-  width: 35px;         /* half of the 40px boundary */
+  width: 35px;
   background-color: white;
   pointer-events: none;
   z-index: 9999;
 }
 
-/*
-  Sunday has 20px black on the right,
-  Monday has 20px black on the left,
-  total 40px black gap in between.
-*/
+/* Thin black boundary line at left:35px so Monday looks "closed" */
+.fc-timegrid-col.fc-monday::after,
+.fc-col-header-cell.fc-monday::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 35px;
+  width: 0.25px;
+  background-color: black;
+  pointer-events: none;
+  z-index: 9999;
+}
 
 /* Keep your dashed horizontal slot lines */
 td.fc-timegrid-slot.fc-timegrid-slot-lane {
