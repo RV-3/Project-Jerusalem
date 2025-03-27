@@ -14,12 +14,15 @@ const client = sanityClient({
   dataset: 'production',
   useCdn: false,
   apiVersion: '2023-01-01',
-  token: process.env.REACT_APP_SANITY_TOKEN || 'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8'
+  token:
+    process.env.REACT_APP_SANITY_TOKEN ||
+    'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8'
 })
 
 export default function Calendar() {
   const [events, setEvents] = useState([])
   const [blockedTimes, setBlockedTimes] = useState([])
+  const [pastBlockEvent, setPastBlockEvent] = useState(null)
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
@@ -27,8 +30,8 @@ export default function Calendar() {
 
   const calendarRef = useRef(null)
 
+  // Fetch reservations and blocked times from Sanity
   useEffect(() => {
-    // Fetch reservations (events)
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) =>
@@ -42,23 +45,51 @@ export default function Calendar() {
         )
       )
 
-    // Fetch blocked times
-    client
-      .fetch(`*[_type == "blocked"]{start, end}`)
-      .then((data) =>
-        setBlockedTimes(
-          data.map((item) => ({
-            start: new Date(item.start),
-            end: new Date(item.end)
-          }))
-        )
+    client.fetch(`*[_type == "blocked"]{start, end}`).then((data) =>
+      setBlockedTimes(
+        data.map((item) => ({
+          start: new Date(item.start),
+          end: new Date(item.end)
+        }))
       )
+    )
   }, [])
 
+  // Helper to check if a time range is blocked
   const isTimeBlocked = (start, end) => {
     return blockedTimes.some((block) => start < block.end && end > block.start)
   }
 
+  // Dynamic "past" background event. We'll re-render this every minute
+  // so that the blocked region for "past" times is always current.
+  useEffect(() => {
+    function updatePastBlockEvent() {
+      const now = new Date()
+      // Start from midnight of the current day
+      const todayMidnight = new Date(now)
+      todayMidnight.setHours(0, 0, 0, 0)
+
+      setPastBlockEvent({
+        id: 'past-block',
+        start: todayMidnight,
+        end: now,
+        display: 'background',
+        color: '#ffcccc' // style however you'd like
+      })
+    }
+
+    // Initial render
+    updatePastBlockEvent()
+
+    // Update every minute
+    const interval = setInterval(() => {
+      updatePastBlockEvent()
+    }, 60 * 1000)
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Handle user selection
   const handleSelect = (info) => {
     const isPast = info.start < new Date()
     if (isPast || isTimeBlocked(info.start, info.end)) return
@@ -66,13 +97,14 @@ export default function Calendar() {
     setModalIsOpen(true)
   }
 
+  // Submit reservation form
   const handleSubmit = async (e) => {
     e.preventDefault()
     const { name, phone } = formData
     if (!name || !phone || !selectedInfo) return
 
     try {
-      setIsSubmitting(true) // disable button
+      setIsSubmitting(true)
       const res = await client.create({
         _type: 'reservation',
         name,
@@ -97,10 +129,11 @@ export default function Calendar() {
       console.error('Reservation creation failed:', err)
       alert('Error creating reservation. Please try again.')
     } finally {
-      setIsSubmitting(false) // re‐enable button
+      setIsSubmitting(false)
     }
   }
 
+  // For displaying the selected slot in the modal
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
     const startDate = new Date(selectedInfo.start)
@@ -132,15 +165,12 @@ export default function Calendar() {
               buttonText: '30 days'
             }
           }}
-
-          /* Show weekday + numeric date, e.g. "Mon 3/18" */
           dayHeaderFormat={{
-            weekday: 'short', // "Mon", "Tue", etc.
+            weekday: 'short', // "Mon", "Tue"
             month: 'numeric', // "3"
-            day: 'numeric',   // "18"
-            omitCommas: true  // remove comma
+            day: 'numeric', // "18"
+            omitCommas: true
           }}
-
           stickyHeaderDates={true}
           stickyFooterScrollbar={false}
           dayMinWidth={120}
@@ -158,6 +188,7 @@ export default function Calendar() {
             ).toISOString()
           }}
           select={handleSelect}
+          // Combine your normal events, blocked times, and the "past" background event
           events={[
             ...events,
             ...blockedTimes.map((block, i) => ({
@@ -166,12 +197,22 @@ export default function Calendar() {
               end: block.end,
               display: 'background',
               color: '#ffcccc'
-            }))
+            })),
+            ...(pastBlockEvent ? [pastBlockEvent] : [])
           ]}
+          // Prevent multi-day *and* multi-hour selection
           selectAllow={(selectInfo) => {
             const isPast = selectInfo.start < new Date()
             const isBlocked = isTimeBlocked(selectInfo.start, selectInfo.end)
-            return !isPast && !isBlocked
+            const isSameDay =
+              selectInfo.start.toDateString() === selectInfo.end.toDateString()
+
+            // Ensure the selection is exactly one hour (matching slotDuration="01:00:00")
+            const durationMs = selectInfo.end.getTime() - selectInfo.start.getTime()
+            const oneHourMs = 60 * 60 * 1000
+            const isExactlyOneHour = durationMs === oneHourMs
+
+            return !isPast && !isBlocked && isSameDay && isExactlyOneHour
           }}
           allDaySlot={false}
           slotDuration="01:00:00"
@@ -183,7 +224,10 @@ export default function Calendar() {
             right: ''
           }}
           eventContent={(arg) => {
-            if (arg.event.id.startsWith('blocked-')) return null
+            // Hide the label for background “blocked” events
+            if (arg.event.id.startsWith('blocked-') || arg.event.id === 'past-block') {
+              return null
+            }
             return <div>{arg.event.title}</div>
           }}
           height="auto"
@@ -194,7 +238,7 @@ export default function Calendar() {
         isOpen={modalIsOpen}
         onRequestClose={() => {
           setModalIsOpen(false)
-          setIsSubmitting(false) // reset if user cancels mid-submission
+          setIsSubmitting(false)
         }}
         contentLabel="Reservation Form"
         style={{
