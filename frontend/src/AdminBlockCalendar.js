@@ -4,7 +4,6 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import client from './utils/sanityClient.js'
-import sanityClient from '@sanity/client'
 import Modal from 'react-modal'
 
 Modal.setAppElement('#root')
