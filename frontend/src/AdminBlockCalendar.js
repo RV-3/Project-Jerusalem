@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
+import { isIOS } from 'react-device-detect' 
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
+import client from './utils/sanityClient.js'
 import sanityClient from '@sanity/client'
 import Modal from 'react-modal'
 
@@ -10,13 +12,6 @@ Modal.setAppElement('#root')
 
 const ADMIN_PASSWORD = 'admin123'
 
-const client = sanityClient({
-  projectId: 'gt19q25e',
-  dataset: 'production',
-  useCdn: false,
-  apiVersion: '2023-01-01',
-  token: process.env.REACT_APP_SANITY_TOKEN || 'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8'
-})
 
 export default function AdminBlockCalendar() {
   const [authenticated, setAuthenticated] = useState(
@@ -234,6 +229,8 @@ export default function AdminBlockCalendar() {
 
         /* Faster mobile tapping */
         longPressDelay={100}
+        selectLongPressDelay={100}
+        eventLongPressDelay={100}
 
         /* Limit date range to ~30 days from now (you can adjust) */
         validRange={{

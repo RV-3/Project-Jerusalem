@@ -1,23 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import sanityClient from '@sanity/client'
+import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
 import './Calendar.css'
 
 Modal.setAppElement('#root')
-
-const client = sanityClient({
-  projectId: 'gt19q25e',
-  dataset: 'production',
-  useCdn: false,
-  apiVersion: '2023-01-01',
-  token:
-    process.env.REACT_APP_SANITY_TOKEN ||
-    'skLXmnuhIUZNJQF7cGeN77COiIcZRnyj7ssiWNzdveN3S0cZF6LTw0uvznBO4l2VoolGM5nSVPYnw13YZtrBDEohI3fJWa49gWWMp0fyOX5tP1hxp7qrR9zDHxZoivk0n7yUa7pcxqsGvzJ0Z2bKVbl29i3QuaIBtHoOqGxiN0SvUwgvO9W8'
-})
 
 export default function Calendar() {
   const [events, setEvents] = useState([])
@@ -29,6 +21,9 @@ export default function Calendar() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const calendarRef = useRef(null)
+
+  // Define different delays for iOS vs. other devices
+  const platformDelay = isIOS ? 100 : 20
 
   // Fetch events and blocked times
   useEffect(() => {
@@ -101,8 +96,6 @@ export default function Calendar() {
     const isPast = info.start < new Date()
     if (isPast || isTimeBlocked(info.start, info.end)) return
 
-    // if we got here, the user "technically" can click, but we only finalize
-    // if selectAllow also passes. We'll do the final check in selectAllow anyway.
     setSelectedInfo(info)
     setModalIsOpen(true)
   }
@@ -182,9 +175,10 @@ export default function Calendar() {
           }}
           stickyHeaderDates
           stickyFooterScrollbar={false}
-          longPressDelay={100}
-          selectLongPressDelay={100}
-          eventLongPressDelay={100}
+          // Use our platformDelay instead of a static 100
+          longPressDelay={platformDelay}
+          selectLongPressDelay={platformDelay}
+          eventLongPressDelay={platformDelay}
           selectable
           themeSystem="standard"
           validRange={{
@@ -260,7 +254,6 @@ export default function Calendar() {
             return <div>{arg.event.title}</div>
           }}
           height="auto"
-          // Sunday/Monday classes remain the same, omitted for brevity
         />
       </div>
 
