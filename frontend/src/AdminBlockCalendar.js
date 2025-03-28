@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
-import { isIOS } from 'react-device-detect' 
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
