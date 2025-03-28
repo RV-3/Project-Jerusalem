@@ -193,6 +193,7 @@ export default function AdminBlockCalendar() {
       </h2>
 
       <FullCalendar
+        timeZone="Asia/Jerusalem"
         ref={calendarRef}
         plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
 

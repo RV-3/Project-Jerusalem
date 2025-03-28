@@ -154,6 +154,7 @@ export default function Calendar() {
     <>
       <div>
         <FullCalendar
+          timeZone="Asia/Jerusalem"
           ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
           initialView="timeGrid30Day"
