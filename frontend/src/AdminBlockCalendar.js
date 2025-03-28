@@ -10,6 +10,21 @@ Modal.setAppElement('#root')
 
 const ADMIN_PASSWORD = 'admin123'
 
+// Return current moment in Jerusalem as a Date
+function getJerusalemNow() {
+  const jerusalemStr = new Date().toLocaleString('en-US', {
+    timeZone: 'Asia/Jerusalem'
+  })
+  return new Date(jerusalemStr)
+}
+
+// Return midnight X days ago (in Jerusalem)
+function getJerusalemMidnightXDaysAgo(daysAgo = 7) {
+  const now = getJerusalemNow()
+  now.setDate(now.getDate() - daysAgo)
+  now.setHours(0, 0, 0, 0)
+  return now
+}
 
 export default function AdminBlockCalendar() {
   const [authenticated, setAuthenticated] = useState(
@@ -17,8 +32,10 @@ export default function AdminBlockCalendar() {
   )
   const [blocks, setBlocks] = useState([])
   const [reservations, setReservations] = useState([])
+  const [pastBlockEvent, setPastBlockEvent] = useState(null)
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState(null)
+
   const calendarRef = useRef()
 
   useEffect(() => {
@@ -27,30 +44,53 @@ export default function AdminBlockCalendar() {
     }
   }, [authenticated])
 
+  // Fetch block+reservation data
   const fetchData = async () => {
     const calendarApi = calendarRef.current?.getApi()
     const currentViewDate = calendarApi?.getDate()
 
     const blocksData = await client.fetch(`*[_type == "blocked"]{_id, start, end}`)
     const resData = await client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
+
     setBlocks(blocksData)
     setReservations(resData)
 
+    // Restore view date if the user was on a different day
     if (calendarApi && currentViewDate) {
-      // Re-center the calendar to the previously viewed date (if any)
       calendarApi.gotoDate(currentViewDate)
     }
   }
 
+  // Create "past-block" from 7 days ago to now (Jerusalem)
+  useEffect(() => {
+    function updatePastBlockEvent() {
+      const earliest = getJerusalemMidnightXDaysAgo(7)
+      const now = getJerusalemNow()
+
+      setPastBlockEvent({
+        id: 'past-block',
+        start: earliest,
+        end: now,
+        display: 'background',
+        color: '#ffcccc'
+      })
+    }
+
+    updatePastBlockEvent()
+    const interval = setInterval(updatePastBlockEvent, 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Check if every hour is blocked
   const isEverySlotInRangeBlocked = (slot) => {
     const slotStart = new Date(slot.start)
     const slotEnd = new Date(slot.end)
 
     while (slotStart < slotEnd) {
-      const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
-      const match = blocks.find(block =>
-        new Date(block.start).getTime() === slotStart.getTime() &&
-        new Date(block.end).getTime() === end.getTime()
+      const nextHour = new Date(slotStart.getTime() + 60 * 60 * 1000)
+      const match = blocks.find((b) =>
+        new Date(b.start).getTime() === slotStart.getTime() &&
+        new Date(b.end).getTime() === nextHour.getTime()
       )
       if (!match) return false
       slotStart.setHours(slotStart.getHours() + 1)
@@ -61,52 +101,71 @@ export default function AdminBlockCalendar() {
   const handleBlock = async (info) => {
     const slotStart = new Date(info.start)
     const slotEnd = new Date(info.end)
-    const blocksToCreate = []
+    // Extra check if needed, but we'll rely on selectAllow now
+    if (slotStart < getJerusalemNow()) {
+      alert('Cannot block a past time slot.')
+      return
+    }
 
-    // Create blocked docs, hour by hour
+    const blocksToCreate = []
     while (slotStart < slotEnd) {
-      const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
-      const isBlocked = blocks.some(block =>
-        new Date(block.start).getTime() === slotStart.getTime() &&
-        new Date(block.end).getTime() === end.getTime()
+      const nextHour = new Date(slotStart.getTime() + 60 * 60 * 1000)
+      const alreadyBlocked = blocks.some(
+        (b) =>
+          new Date(b.start).getTime() === slotStart.getTime() &&
+          new Date(b.end).getTime() === nextHour.getTime()
       )
-      if (!isBlocked) {
+      if (!alreadyBlocked) {
         blocksToCreate.push({
           _type: 'blocked',
           start: slotStart.toISOString(),
-          end: end.toISOString()
+          end: nextHour.toISOString()
         })
       }
       slotStart.setHours(slotStart.getHours() + 1)
     }
 
-    await Promise.all(blocksToCreate.map(b => client.create(b)))
-    fetchData()
+    if (blocksToCreate.length) {
+      await Promise.all(blocksToCreate.map((b) => client.create(b)))
+      fetchData()
+    } else {
+      alert('All those slots are already blocked.')
+    }
   }
 
   const handleUnblock = async (info) => {
     const slotStart = new Date(info.start)
     const slotEnd = new Date(info.end)
-    const deletes = []
+    // Extra check if needed, but we'll rely on selectAllow now
+    if (slotStart < getJerusalemNow()) {
+      alert('Cannot unblock a past time slot.')
+      return
+    }
 
-    // Delete existing blocked docs, hour by hour
+    const deletes = []
     while (slotStart < slotEnd) {
-      const end = new Date(slotStart.getTime() + 60 * 60 * 1000)
-      const match = blocks.find(block =>
-        new Date(block.start).getTime() === slotStart.getTime() &&
-        new Date(block.end).getTime() === end.getTime()
+      const nextHour = new Date(slotStart.getTime() + 60 * 60 * 1000)
+      const match = blocks.find(
+        (b) =>
+          new Date(b.start).getTime() === slotStart.getTime() &&
+          new Date(b.end).getTime() === nextHour.getTime()
       )
-      if (match) deletes.push(client.delete(match._id))
+      if (match) {
+        deletes.push(client.delete(match._id))
+      }
       slotStart.setHours(slotStart.getHours() + 1)
     }
 
-    if (deletes.length === 0) {
-      return alert("No matching blocked slots found.")
+    if (!deletes.length) {
+      alert('No matching blocked slots found.')
+      return
     }
+
     await Promise.all(deletes)
     fetchData()
   }
 
+  // If it's a reservation event => open modal
   const handleEventClick = (clickInfo) => {
     const res = reservations.find((r) => r._id === clickInfo.event.id)
     if (res) {
@@ -115,9 +174,10 @@ export default function AdminBlockCalendar() {
     }
   }
 
+  // Delete reservation
   const handleDeleteReservation = async () => {
     if (!selectedReservation) return
-    if (!window.confirm("Delete this reservation?")) return
+    if (!window.confirm('Delete this reservation?')) return
 
     await client.delete(selectedReservation._id)
     fetchData()
@@ -127,17 +187,21 @@ export default function AdminBlockCalendar() {
 
   if (!authenticated) {
     return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        padding: '1rem',
-        boxSizing: 'border-box',
-        background: '#fff'
-      }}>
-        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Enter Admin Password</h2>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          padding: '1rem',
+          boxSizing: 'border-box',
+          background: '#fff'
+        }}
+      >
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
+          Enter Admin Password
+        </h2>
         <input
           type="password"
           onKeyDown={(e) => {
@@ -186,18 +250,25 @@ export default function AdminBlockCalendar() {
     )
   }
 
+  // Setup valid range ~7 days back -> 30 days ahead
+  const nowJerusalem = getJerusalemNow()
+  const validRangeStart = new Date(nowJerusalem)
+  validRangeStart.setDate(validRangeStart.getDate() - 7)
+  validRangeStart.setHours(0, 0, 0, 0)
+
+  const validRangeEnd = new Date(nowJerusalem)
+  validRangeEnd.setDate(validRangeEnd.getDate() + 30)
+
   return (
     <div>
       <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        Admin Panel - View & Block Time Slots
+        Admin Panel - View &amp; Block Time Slots
       </h2>
 
       <FullCalendar
-        timeZone="Asia/Jerusalem"
         ref={calendarRef}
+        timeZone="Asia/Jerusalem"
         plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
-
-        /* 30-day custom timeGrid, same as your main calendar */
         initialView="timeGrid30Day"
         views={{
           timeGrid30Day: {
@@ -207,17 +278,13 @@ export default function AdminBlockCalendar() {
             buttonText: '30 days'
           }
         }}
-
-        /* Show "Mon 3/18" style headers */
         dayHeaderFormat={{
-          weekday: 'short',  // "Mon"
-          month: 'numeric',  // "3"
-          day: 'numeric',    // "18"
+          weekday: 'short',
+          month: 'numeric',
+          day: 'numeric',
           omitCommas: true
         }}
-
-        /* Sticky header & axis */
-        stickyHeaderDates={true}
+        stickyHeaderDates
         stickyFooterScrollbar={false}
         dayMinWidth={120}
         allDaySlot={false}
@@ -226,37 +293,38 @@ export default function AdminBlockCalendar() {
         slotMaxTime="24:00:00"
         height="auto"
 
-        /* Faster mobile tapping */
+        // Tapping speed
         longPressDelay={100}
         selectLongPressDelay={100}
         eventLongPressDelay={100}
 
-        /* Limit date range to ~30 days from now (you can adjust) */
         validRange={{
-          start: new Date(
-            new Date().setDate(new Date().getDate() - 7)
-          ).toISOString(),
-          end: new Date(
-            new Date().setDate(new Date().getDate() + 30)
-          ).toISOString()
+          start: validRangeStart.toISOString(),
+          end: validRangeEnd.toISOString()
         }}
 
-        /* Let admin select time range to block/unblock */
         selectable={true}
+        /* Using 'selectAllow' to outright disallow any selection that starts in the past. */
+        selectAllow={(selectInfo) => {
+          const slotStart = new Date(selectInfo.startStr)
+          return slotStart >= getJerusalemNow()
+        }}
         select={(info) => {
+          // If the entire range is blocked => attempt to unblock
           if (isEverySlotInRangeBlocked(info)) {
             if (window.confirm('Unblock this time slot?')) {
               handleUnblock(info)
             }
           } else {
+            // otherwise attempt to block
             if (window.confirm('Block this time slot?')) {
               handleBlock(info)
             }
           }
         }}
 
-        /* Display events: reservations + blocked times */
         events={[
+          // Show reservations
           ...reservations.map((res) => ({
             id: res._id,
             title: res.name,
@@ -264,18 +332,19 @@ export default function AdminBlockCalendar() {
             end: res.end,
             color: '#3788d8'
           })),
-          ...blocks.map((block) => ({
-            id: block._id,
+          // Show blocked (background)
+          ...blocks.map((b) => ({
+            id: b._id,
             title: 'Blocked',
-            start: block.start,
-            end: block.end,
+            start: b.start,
+            end: b.end,
             display: 'background',
             color: '#ffcccc'
-          }))
+          })),
+          // Show big past block event
+          ...(pastBlockEvent ? [pastBlockEvent] : [])
         ]}
-
         eventClick={handleEventClick}
-
         headerToolbar={{
           left: 'prev,next today',
           center: 'title',
@@ -283,15 +352,13 @@ export default function AdminBlockCalendar() {
         }}
       />
 
+      {/* Modal for reservation details */}
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={() => setModalIsOpen(false)}
         contentLabel="Reservation Info"
         style={{
-          overlay: {
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            zIndex: 1000
-          },
+          overlay: { backgroundColor: 'rgba(0, 0, 0, 0.4)', zIndex: 1000 },
           content: {
             top: '50%',
             left: '50%',
@@ -306,8 +373,12 @@ export default function AdminBlockCalendar() {
         <h3>Reservation Details</h3>
         {selectedReservation && (
           <div>
-            <p><strong>Name:</strong> {selectedReservation.name}</p>
-            <p><strong>Phone:</strong> {selectedReservation.phone}</p>
+            <p>
+              <strong>Name:</strong> {selectedReservation.name}
+            </p>
+            <p>
+              <strong>Phone:</strong> {selectedReservation.phone}
+            </p>
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>

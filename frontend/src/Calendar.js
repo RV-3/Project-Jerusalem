@@ -10,6 +10,28 @@ import './Calendar.css'
 
 Modal.setAppElement('#root')
 
+/**
+ * Returns the current moment in Jerusalem time as a JS Date object.
+ */
+function getJerusalemNow() {
+  const jerusalemString = new Date().toLocaleString('en-US', {
+    timeZone: 'Asia/Jerusalem'
+  })
+  return new Date(jerusalemString)
+}
+
+/**
+ * Returns a Date for "X days ago at 00:00" in Jerusalem (helpful for blocking from that date).
+ */
+function getJerusalemMidnightXDaysAgo(daysAgo = 7) {
+  const nowJerusalem = getJerusalemNow()
+  // Move back 'daysAgo' days
+  nowJerusalem.setDate(nowJerusalem.getDate() - daysAgo)
+  // Set to midnight
+  nowJerusalem.setHours(0, 0, 0, 0)
+  return nowJerusalem
+}
+
 export default function Calendar() {
   const [events, setEvents] = useState([])
   const [blockedTimes, setBlockedTimes] = useState([])
@@ -21,14 +43,15 @@ export default function Calendar() {
 
   const calendarRef = useRef(null)
 
-  // Define different delays for iOS vs. other devices
+  // Shorter press delay for non-iOS
   const platformDelay = isIOS ? 100 : 20
 
-  // Fetch events and blocked times
+  // 1. Fetch events and blocked times
   useEffect(() => {
+    // Fetch reservations
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
-      .then((data) =>
+      .then((data) => {
         setEvents(
           data.map((res) => ({
             id: res._id,
@@ -37,75 +60,92 @@ export default function Calendar() {
             end: res.end
           }))
         )
-      )
+      })
 
-    client.fetch(`*[_type == "blocked"]{start, end}`).then((data) =>
+    // Fetch blocked times
+    client.fetch(`*[_type == "blocked"]{start, end}`).then((data) => {
       setBlockedTimes(
         data.map((item) => ({
           start: new Date(item.start),
           end: new Date(item.end)
         }))
       )
-    )
+    })
   }, [])
 
-  // Check if a time range is blocked
+  // 2. Helpers to check blocked/reserved
   const isTimeBlocked = (start, end) => {
     return blockedTimes.some((block) => start < block.end && end > block.start)
   }
 
-  // Helper: Check if slot already has a reservation
-  // i.e., does it overlap with any non-blocked (foreground) event?
   const isSlotReserved = (start, end) => {
     return events.some((evt) => {
-      // ignore background "blocked-" or "past-block"
       if (evt.id.startsWith('blocked-') || evt.id === 'past-block') {
         return false
       }
-      // check overlap
       const evtStart = new Date(evt.start)
       const evtEnd = new Date(evt.end)
       return start < evtEnd && end > evtStart
     })
   }
 
-  // Past background event
+  // 3. Pink background for everything from 7 days ago -> "rounded up" current hour
   useEffect(() => {
     function updatePastBlockEvent() {
-      const now = new Date()
-      const todayMidnight = new Date(now)
-      todayMidnight.setHours(0, 0, 0, 0)
+      const earliest = getJerusalemMidnightXDaysAgo(7)
+      const nowJerusalem = getJerusalemNow()
+
+      // Round up to the next hour if we are mid-hour
+      const endOfCurrentHour = new Date(nowJerusalem)
+      if (
+        endOfCurrentHour.getMinutes() !== 0 ||
+        endOfCurrentHour.getSeconds() !== 0
+      ) {
+        endOfCurrentHour.setHours(endOfCurrentHour.getHours() + 1, 0, 0, 0)
+      }
 
       setPastBlockEvent({
         id: 'past-block',
-        start: todayMidnight,
-        end: now,
+        start: earliest,
+        end: endOfCurrentHour,
         display: 'background',
         color: '#ffcccc'
       })
     }
 
     updatePastBlockEvent()
+    // Update every minute, in case new minutes become "past"
     const interval = setInterval(updatePastBlockEvent, 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // Handle select
+  // 4. Handle user selection for a new reservation
   const handleSelect = (info) => {
-    const isPast = info.start < new Date()
-    if (isPast || isTimeBlocked(info.start, info.end)) return
+    const nowJerusalem = getJerusalemNow()
+    const slotStart = new Date(info.startStr)
+    const slotEnd = new Date(info.endStr)
 
-    setSelectedInfo(info)
+    // If it's in the past or blocked, ignore
+    if (slotStart < nowJerusalem) return
+    if (isTimeBlocked(slotStart, slotEnd)) return
+
+    // Store offset-aware strings for DB
+    setSelectedInfo({
+      startStr: info.startStr,
+      endStr: info.endStr
+    })
+
     setModalIsOpen(true)
   }
 
-  // Submit
+  // 5. Reservation submission
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name || !formData.phone || !selectedInfo) return
 
     try {
       setIsSubmitting(true)
+      // Create in Sanity
       const res = await client.create({
         _type: 'reservation',
         name: formData.name,
@@ -114,6 +154,7 @@ export default function Calendar() {
         end: selectedInfo.endStr
       })
 
+      // Update local state
       setEvents((prev) => [
         ...prev,
         {
@@ -124,6 +165,7 @@ export default function Calendar() {
         }
       ])
 
+      // Reset form + close modal
       setModalIsOpen(false)
       setFormData({ name: '', phone: '' })
     } catch (err) {
@@ -134,10 +176,12 @@ export default function Calendar() {
     }
   }
 
+  // 6. Format time range in the modal
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
-    const startDate = new Date(selectedInfo.start)
-    const endDate = new Date(selectedInfo.end)
+    const startDate = new Date(selectedInfo.startStr)
+    const endDate = new Date(selectedInfo.endStr)
+
     const weekday = startDate.toLocaleDateString('en-US', { weekday: 'long' })
     const startTime = startDate.toLocaleTimeString('en-US', {
       hour: 'numeric',
@@ -150,12 +194,21 @@ export default function Calendar() {
     return `${weekday} (${startTime} - ${endTime})`
   }
 
+  // 7. Build validRange for ~7 days back to +30 days forward
+  const nowJerusalem = getJerusalemNow()
+  const validRangeStart = new Date(nowJerusalem)
+  validRangeStart.setDate(validRangeStart.getDate() - 7)
+  validRangeStart.setHours(0, 0, 0, 0)
+
+  const validRangeEnd = new Date(nowJerusalem)
+  validRangeEnd.setDate(validRangeEnd.getDate() + 30)
+
   return (
     <>
       <div>
         <FullCalendar
-          timeZone="Asia/Jerusalem"
           ref={calendarRef}
+          timeZone="Asia/Jerusalem"
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
           initialView="timeGrid30Day"
           views={{
@@ -175,23 +228,20 @@ export default function Calendar() {
           }}
           stickyHeaderDates
           stickyFooterScrollbar={false}
-          // Use our platformDelay instead of a static 100
           longPressDelay={platformDelay}
           selectLongPressDelay={platformDelay}
           eventLongPressDelay={platformDelay}
           selectable
           themeSystem="standard"
           validRange={{
-            start: new Date(
-              new Date().setDate(new Date().getDate() - 7)
-            ).toISOString(),
-            end: new Date(
-              new Date().setDate(new Date().getDate() + 30)
-            ).toISOString()
+            start: validRangeStart.toISOString(),
+            end: validRangeEnd.toISOString()
           }}
           select={handleSelect}
           events={[
+            // real reservations
             ...events,
+            // block docs => background events
             ...blockedTimes.map((block, i) => ({
               id: `blocked-${i}`,
               start: block.start,
@@ -199,37 +249,33 @@ export default function Calendar() {
               display: 'background',
               color: '#ffcccc'
             })),
+            // big "past-block" from 7 days ago -> endOfCurrentHour
             ...(pastBlockEvent ? [pastBlockEvent] : [])
           ]}
-          // Only allow 1-hour same-day selections if NOT reserved, NOT blocked, etc.
           selectAllow={(selectInfo) => {
-            const isPast = selectInfo.start < new Date()
-            if (isPast) return false
+            const slotStart = new Date(selectInfo.startStr)
+            const slotEnd = new Date(selectInfo.endStr)
+            const nowJerusalem = getJerusalemNow()
 
-            const isBlocked = isTimeBlocked(selectInfo.start, selectInfo.end)
-            if (isBlocked) return false
+            // no selecting past or blocked/reserved
+            if (slotStart < nowJerusalem) return false
+            if (isTimeBlocked(slotStart, slotEnd)) return false
+            if (isSlotReserved(slotStart, slotEnd)) return false
 
-            // new check: if already reserved, disallow
-            const alreadyReserved = isSlotReserved(selectInfo.start, selectInfo.end)
-            if (alreadyReserved) return false
-
-            // standard same-day + exactly 1 hour check
-            let isSameDay =
-              selectInfo.start.toDateString() ===
-              selectInfo.end.toDateString()
-
-            // exactly 1 hour?
-            const durationMs = selectInfo.end - selectInfo.start
+            // must be exactly 1 hour, same day
+            const durationMs = slotEnd - slotStart
             const oneHourMs = 60 * 60 * 1000
             const isExactlyOneHour = durationMs === oneHourMs
 
-            // "midnight fix": if end is exactly midnight next day
+            let isSameDay =
+              slotStart.toDateString() === slotEnd.toDateString()
+
+            // if it crosses midnight exactly
             if (!isSameDay && isExactlyOneHour) {
-              const endDate = new Date(selectInfo.end)
               if (
-                endDate.getHours() === 0 &&
-                endDate.getMinutes() === 0 &&
-                endDate.getSeconds() === 0
+                slotEnd.getHours() === 0 &&
+                slotEnd.getMinutes() === 0 &&
+                slotEnd.getSeconds() === 0
               ) {
                 isSameDay = true
               }
@@ -247,7 +293,7 @@ export default function Calendar() {
             right: ''
           }}
           eventContent={(arg) => {
-            // hide text for background or past-block events
+            // hide text for background / "past-block" events
             if (arg.event.id.startsWith('blocked-') || arg.event.id === 'past-block') {
               return null
             }
@@ -257,6 +303,7 @@ export default function Calendar() {
         />
       </div>
 
+      {/* Modal for reservation */}
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={() => {
@@ -295,6 +342,7 @@ export default function Calendar() {
             required
             style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
           />
+
           <label>Phone:</label>
           <input
             type="tel"
@@ -305,6 +353,7 @@ export default function Calendar() {
             required
             style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
           />
+
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
               type="submit"
@@ -313,7 +362,10 @@ export default function Calendar() {
             >
               {isSubmitting ? 'Reserving...' : 'Reserve'}
             </button>
-            <button type="button" onClick={() => setModalIsOpen(false)}>
+            <button
+              type="button"
+              onClick={() => setModalIsOpen(false)}
+            >
               Cancel
             </button>
           </div>
