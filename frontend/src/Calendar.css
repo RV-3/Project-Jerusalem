@@ -33,6 +33,13 @@
 td.fc-timegrid-slot.fc-timegrid-slot-lane {
   border-bottom: 1px dashed #ccc !important;
 }
+/* Remove highlight on "today" */
+.fc-day-today,
+.fc-timegrid-col.fc-day-today,
+.fc-scrollgrid-sync-table td.fc-day-today {
+  background-color: transparent !important;
+}
+
 
 /* You can keep your responsive rules if needed */
 @media (max-width: 768px) {
