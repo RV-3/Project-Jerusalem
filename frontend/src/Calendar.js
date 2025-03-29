@@ -4,6 +4,7 @@ import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
+import { formatDate } from '@fullcalendar/core'
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
 import './Calendar.css'
@@ -11,25 +12,26 @@ import './Calendar.css'
 Modal.setAppElement('#root')
 
 /**
- * Returns the current moment in Jerusalem time as a JS Date object.
+ * Returns the **next** top-of-hour in Jerusalem.
  */
-function getJerusalemNow() {
+function getJerusalemNextHour() {
   const jerusalemString = new Date().toLocaleString('en-US', {
     timeZone: 'Asia/Jerusalem'
   })
-  return new Date(jerusalemString)
+  const dateObj = new Date(jerusalemString)
+  if (dateObj.getMinutes() !== 0 || dateObj.getSeconds() !== 0) {
+    dateObj.setHours(dateObj.getHours() + 1, 0, 0, 0)
+  }
+  return dateObj
 }
 
-/**
- * Returns a Date for "X days ago at 00:00" in Jerusalem (helpful for blocking from that date).
- */
-function getJerusalemMidnightXDaysAgo(daysAgo = 7) {
-  const nowJerusalem = getJerusalemNow()
-  // Move back 'daysAgo' days
-  nowJerusalem.setDate(nowJerusalem.getDate() - daysAgo)
-  // Set to midnight
-  nowJerusalem.setHours(0, 0, 0, 0)
-  return nowJerusalem
+// Force parse as UTC
+function parseAsUTC(isoString) {
+  // If it ends with 'Z' or has +/- in it, assume the offset is there
+  if (!isoString.match(/[zZ]|[+-]\d{2}:\d{2}$/)) {
+    return new Date(isoString + 'Z')
+  }
+  return new Date(isoString)
 }
 
 export default function Calendar() {
@@ -42,110 +44,161 @@ export default function Calendar() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const calendarRef = useRef(null)
-
-  // Shorter press delay for non-iOS
+  // For iOS, FullCalendar needs a longer press delay to handle selection properly
   const platformDelay = isIOS ? 100 : 20
 
-  // 1. Fetch events and blocked times
+  // 1) Fetch reservations & blocked times
   useEffect(() => {
-    // Fetch reservations
-    client
-      .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
+    // 1) Reservations
+    client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) => {
-        setEvents(
-          data.map((res) => ({
-            id: res._id,
-            title: res.name,
-            start: res.start,
-            end: res.end
-          }))
-        )
+        console.log('[DEBUG] Fetched reservations:', data)
+        // parse all reservations as Date objects
+        const parsed = data.map((res) => ({
+          id: res._id,
+          title: res.name,
+          start: parseAsUTC(res.start),
+          end: parseAsUTC(res.end)
+        }))
+        setEvents(parsed)
       })
 
-    // Fetch blocked times
+    // 2) Blocked
     client.fetch(`*[_type == "blocked"]{start, end}`).then((data) => {
-      setBlockedTimes(
-        data.map((item) => ({
-          start: new Date(item.start),
-          end: new Date(item.end)
-        }))
-      )
+      console.log('[DEBUG] Fetched blocked times (raw):', data)
+      const converted = data.map((item) => ({
+        start: parseAsUTC(item.start),
+        end: parseAsUTC(item.end)
+      }))
+      setBlockedTimes(converted)
     })
   }, [])
 
-  // 2. Helpers to check blocked/reserved
+  // 2) Helper: Check if a time range is blocked
   const isTimeBlocked = (start, end) => {
-    return blockedTimes.some((block) => start < block.end && end > block.start)
-  }
+    const startMs = start.getTime()
+    const endMs = end.getTime()
+    console.log('[DEBUG] isTimeBlocked checking numeric range:', startMs, '->', endMs)
 
-  const isSlotReserved = (start, end) => {
-    return events.some((evt) => {
-      if (evt.id.startsWith('blocked-') || evt.id === 'past-block') {
-        return false
+    return blockedTimes.some((block, idx) => {
+      const blockStartMs = block.start.getTime()
+      const blockEndMs = block.end.getTime()
+      const overlaps = startMs < blockEndMs && endMs > blockStartMs
+      if (overlaps) {
+        console.log(`[DEBUG] Overlap FOUND with block index ${idx}`, {
+          blockStartMs,
+          blockEndMs,
+          blockStartISO: block.start.toISOString(),
+          blockEndISO: block.end.toISOString()
+        })
+      } else {
+        console.log(`[DEBUG] No overlap with block index ${idx}`, {
+          blockStartMs,
+          blockEndMs
+        })
       }
-      const evtStart = new Date(evt.start)
-      const evtEnd = new Date(evt.end)
-      return start < evtEnd && end > evtStart
+      return overlaps
     })
   }
 
-  // 3. Pink background for everything from 7 days ago -> "rounded up" current hour
-  useEffect(() => {
-    function updatePastBlockEvent() {
-      const earliest = getJerusalemMidnightXDaysAgo(7)
-      const nowJerusalem = getJerusalemNow()
+  // 3) Check if slot already has a reservation
+  //    includes robust fallback parse in case something is still a string
+  function isSlotReserved(slotStart, slotEnd) {
+    const startTime = slotStart.getTime()
+    const endTime = slotEnd.getTime()
+    console.log('[DEBUG] isSlotReserved checking numeric range:', startTime, '->', endTime)
 
-      // Round up to the next hour if we are mid-hour
-      const endOfCurrentHour = new Date(nowJerusalem)
-      if (
-        endOfCurrentHour.getMinutes() !== 0 ||
-        endOfCurrentHour.getSeconds() !== 0
-      ) {
-        endOfCurrentHour.setHours(endOfCurrentHour.getHours() + 1, 0, 0, 0)
+    return events.some((evt, idx) => {
+      // ignore background/past-block events
+      if (evt.id.startsWith('blocked-') || evt.id === 'past-block') {
+        return false
       }
 
-      setPastBlockEvent({
+      // parse any strings to Date if needed
+      let evtStart = evt.start
+      let evtEnd = evt.end
+
+      if (!(evtStart instanceof Date)) {
+        evtStart = parseAsUTC(evtStart)
+      }
+      if (!(evtEnd instanceof Date)) {
+        evtEnd = parseAsUTC(evtEnd)
+      }
+
+      const evtStartTime = evtStart.getTime()
+      const evtEndTime = evtEnd.getTime()
+
+      // Overlap means (start < eventEnd) && (end > eventStart)
+      const overlap = (startTime < evtEndTime) && (endTime > evtStartTime)
+      if (overlap) {
+        console.log(`[DEBUG] Overlap FOUND with event index ${idx} =>`, {
+          evtId: evt.id,
+          evtTitle: evt.title,
+          evtStartTime,
+          evtEndTime,
+          evtStartISO: evtStart.toISOString(),
+          evtEndISO: evtEnd.toISOString()
+        })
+      } else {
+        console.log(`[DEBUG] No overlap with event index ${idx}`, {
+          evtId: evt.id,
+          evtTitle: evt.title
+        })
+      }
+      return overlap
+    })
+  }
+
+  // 4) Past background event
+  useEffect(() => {
+    function updatePastBlockEvent() {
+      const now = new Date()
+      const todayMidnight = new Date(now)
+      todayMidnight.setHours(0, 0, 0, 0)
+
+      const pbEvent = {
         id: 'past-block',
-        start: earliest,
-        end: endOfCurrentHour,
+        start: todayMidnight,
+        end: now,
         display: 'background',
         color: '#ffcccc'
-      })
+      }
+      console.log('[DEBUG] Updating pastBlockEvent:', pbEvent)
+      setPastBlockEvent(pbEvent)
     }
 
     updatePastBlockEvent()
-    // Update every minute, in case new minutes become "past"
     const interval = setInterval(updatePastBlockEvent, 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
-  // 4. Handle user selection for a new reservation
+  // 5) Handle slot select
+  //    FullCalendar provides info.start / info.end as Date objects,
+  //    so we can rely on them being real Dates
   const handleSelect = (info) => {
-    const nowJerusalem = getJerusalemNow()
-    const slotStart = new Date(info.startStr)
-    const slotEnd = new Date(info.endStr)
+    console.log('[DEBUG] handleSelect triggered with:', info)
 
-    // If it's in the past or blocked, ignore
-    if (slotStart < nowJerusalem) return
-    if (isTimeBlocked(slotStart, slotEnd)) return
+    // Quick check for blocking
+    if (isTimeBlocked(info.start, info.end)) {
+      console.log('[DEBUG] handleSelect: selection disallowed => blocked.')
+      return
+    }
 
-    // Store offset-aware strings for DB
-    setSelectedInfo({
-      startStr: info.startStr,
-      endStr: info.endStr
-    })
-
+    // store the selection (info) for the modal
+    setSelectedInfo(info)
     setModalIsOpen(true)
   }
 
-  // 5. Reservation submission
+  // 6) Reservation submission
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name || !formData.phone || !selectedInfo) return
 
     try {
       setIsSubmitting(true)
-      // Create in Sanity
+      console.log('[DEBUG] Creating new reservation in Sanity:', selectedInfo)
+
+      // 1) Create in Sanity as ISO strings
       const res = await client.create({
         _type: 'reservation',
         name: formData.name,
@@ -153,19 +206,20 @@ export default function Calendar() {
         start: selectedInfo.startStr,
         end: selectedInfo.endStr
       })
+      console.log('[DEBUG] Created reservation:', res)
 
-      // Update local state
+      // 2) Locally add the newly created event as Date objects
+      //    so isSlotReserved can do getTime() with no errors
       setEvents((prev) => [
         ...prev,
         {
           id: res._id,
           title: formData.name,
-          start: selectedInfo.startStr,
-          end: selectedInfo.endStr
+          start: selectedInfo.start,  // already a Date from FullCalendar
+          end: selectedInfo.end
         }
       ])
 
-      // Reset form + close modal
       setModalIsOpen(false)
       setFormData({ name: '', phone: '' })
     } catch (err) {
@@ -176,39 +230,39 @@ export default function Calendar() {
     }
   }
 
-  // 6. Format time range in the modal
+  // 7) Format the time range in the modal
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
-    const startDate = new Date(selectedInfo.startStr)
-    const endDate = new Date(selectedInfo.endStr)
 
-    const weekday = startDate.toLocaleDateString('en-US', { weekday: 'long' })
-    const startTime = startDate.toLocaleTimeString('en-US', {
+    const calendarApi = calendarRef.current?.getApi()
+
+    // We rely on selectedInfo.start being a Date,
+    // so FullCalendar can handle formatting in 'Asia/Jerusalem'
+    const startStr = calendarApi.formatDate(selectedInfo.start, {
+      timeZone: 'Asia/Jerusalem',
+      hour: 'numeric',
+      minute: '2-digit',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      weekday: 'long'
+    })
+
+    const endStr = calendarApi.formatDate(selectedInfo.end, {
+      timeZone: 'Asia/Jerusalem',
       hour: 'numeric',
       minute: '2-digit'
     })
-    const endTime = endDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit'
-    })
-    return `${weekday} (${startTime} - ${endTime})`
+
+    return `${startStr} - ${endStr}`
   }
-
-  // 7. Build validRange for ~7 days back to +30 days forward
-  const nowJerusalem = getJerusalemNow()
-  const validRangeStart = new Date(nowJerusalem)
-  validRangeStart.setDate(validRangeStart.getDate() - 7)
-  validRangeStart.setHours(0, 0, 0, 0)
-
-  const validRangeEnd = new Date(nowJerusalem)
-  validRangeEnd.setDate(validRangeEnd.getDate() + 30)
 
   return (
     <>
       <div>
         <FullCalendar
-          ref={calendarRef}
           timeZone="Asia/Jerusalem"
+          ref={calendarRef}
           plugins={[timeGridPlugin, interactionPlugin, scrollGridPlugin]}
           initialView="timeGrid30Day"
           views={{
@@ -234,14 +288,17 @@ export default function Calendar() {
           selectable
           themeSystem="standard"
           validRange={{
-            start: validRangeStart.toISOString(),
-            end: validRangeEnd.toISOString()
+            start: new Date(
+              new Date().setDate(new Date().getDate() - 7)
+            ).toISOString(),
+            end: new Date(
+              new Date().setDate(new Date().getDate() + 30)
+            ).toISOString()
           }}
           select={handleSelect}
           events={[
-            // real reservations
             ...events,
-            // block docs => background events
+            // blocked => background events
             ...blockedTimes.map((block, i) => ({
               id: `blocked-${i}`,
               start: block.start,
@@ -249,39 +306,50 @@ export default function Calendar() {
               display: 'background',
               color: '#ffcccc'
             })),
-            // big "past-block" from 7 days ago -> endOfCurrentHour
+            // optional 'past-block' event
             ...(pastBlockEvent ? [pastBlockEvent] : [])
           ]}
+          // Disallow slots that begin before next top-of-hour in Jerusalem
           selectAllow={(selectInfo) => {
-            const slotStart = new Date(selectInfo.startStr)
-            const slotEnd = new Date(selectInfo.endStr)
-            const nowJerusalem = getJerusalemNow()
+            console.log('[DEBUG] selectAllow triggered with:', selectInfo)
+            const nextHourJerusalem = getJerusalemNextHour()
 
-            // no selecting past or blocked/reserved
-            if (slotStart < nowJerusalem) return false
-            if (isTimeBlocked(slotStart, slotEnd)) return false
-            if (isSlotReserved(slotStart, slotEnd)) return false
+            if (selectInfo.start < nextHourJerusalem) {
+              console.log('[DEBUG] selectAllow => false (slot is before next hour in Jerusalem)')
+              return false
+            }
 
-            // must be exactly 1 hour, same day
-            const durationMs = slotEnd - slotStart
+            // Also disallow if blocked/reserved
+            const blocked = isTimeBlocked(selectInfo.start, selectInfo.end)
+            const reserved = isSlotReserved(selectInfo.start, selectInfo.end)
+            if (blocked || reserved) {
+              console.log('[DEBUG] selectAllow => false (blocked or reserved)')
+              return false
+            }
+
+            // same-day + exactly 1 hour logic
+            const durationMs = selectInfo.end - selectInfo.start
             const oneHourMs = 60 * 60 * 1000
             const isExactlyOneHour = durationMs === oneHourMs
 
+            // check if same day (or ends exactly at midnight)
             let isSameDay =
-              slotStart.toDateString() === slotEnd.toDateString()
+              selectInfo.start.toDateString() === selectInfo.end.toDateString()
 
-            // if it crosses midnight exactly
             if (!isSameDay && isExactlyOneHour) {
+              const endDate = selectInfo.end
               if (
-                slotEnd.getHours() === 0 &&
-                slotEnd.getMinutes() === 0 &&
-                slotEnd.getSeconds() === 0
+                endDate.getHours() === 0 &&
+                endDate.getMinutes() === 0 &&
+                endDate.getSeconds() === 0
               ) {
                 isSameDay = true
               }
             }
 
-            return isSameDay && isExactlyOneHour
+            const finalAllow = isSameDay && isExactlyOneHour
+            console.log('[DEBUG] selectAllow =>', finalAllow)
+            return finalAllow
           }}
           allDaySlot={false}
           slotDuration="01:00:00"
@@ -293,7 +361,7 @@ export default function Calendar() {
             right: ''
           }}
           eventContent={(arg) => {
-            // hide text for background / "past-block" events
+            // hide text for background/past-block events
             if (arg.event.id.startsWith('blocked-') || arg.event.id === 'past-block') {
               return null
             }
@@ -307,6 +375,7 @@ export default function Calendar() {
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={() => {
+          console.log('[DEBUG] Modal onRequestClose called')
           setModalIsOpen(false)
           setIsSubmitting(false)
         }}
@@ -336,24 +405,18 @@ export default function Calendar() {
           <input
             type="text"
             value={formData.name}
-            onChange={(e) =>
-              setFormData({ ...formData, name: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
             style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
           />
-
           <label>Phone:</label>
           <input
             type="tel"
             value={formData.phone}
-            onChange={(e) =>
-              setFormData({ ...formData, phone: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             required
             style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
           />
-
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <button
               type="submit"
