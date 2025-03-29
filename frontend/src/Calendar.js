@@ -4,7 +4,7 @@ import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import { formatDate } from '@fullcalendar/core'
+// Removed: import { formatDate } from '@fullcalendar/core'
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
 import './Calendar.css'
@@ -44,7 +44,6 @@ export default function Calendar() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const calendarRef = useRef(null)
-  // For iOS, FullCalendar needs a longer press delay to handle selection properly
   const platformDelay = isIOS ? 100 : 20
 
   // 1) Fetch reservations & blocked times
@@ -53,7 +52,6 @@ export default function Calendar() {
     client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) => {
         console.log('[DEBUG] Fetched reservations:', data)
-        // parse all reservations as Date objects
         const parsed = data.map((res) => ({
           id: res._id,
           title: res.name,
@@ -102,7 +100,6 @@ export default function Calendar() {
   }
 
   // 3) Check if slot already has a reservation
-  //    includes robust fallback parse in case something is still a string
   function isSlotReserved(slotStart, slotEnd) {
     const startTime = slotStart.getTime()
     const endTime = slotEnd.getTime()
@@ -113,20 +110,8 @@ export default function Calendar() {
       if (evt.id.startsWith('blocked-') || evt.id === 'past-block') {
         return false
       }
-
-      // parse any strings to Date if needed
-      let evtStart = evt.start
-      let evtEnd = evt.end
-
-      if (!(evtStart instanceof Date)) {
-        evtStart = parseAsUTC(evtStart)
-      }
-      if (!(evtEnd instanceof Date)) {
-        evtEnd = parseAsUTC(evtEnd)
-      }
-
-      const evtStartTime = evtStart.getTime()
-      const evtEndTime = evtEnd.getTime()
+      const evtStartTime = evt.start.getTime()
+      const evtEndTime = evt.end.getTime()
 
       // Overlap means (start < eventEnd) && (end > eventStart)
       const overlap = (startTime < evtEndTime) && (endTime > evtStartTime)
@@ -136,8 +121,8 @@ export default function Calendar() {
           evtTitle: evt.title,
           evtStartTime,
           evtEndTime,
-          evtStartISO: evtStart.toISOString(),
-          evtEndISO: evtEnd.toISOString()
+          evtStartISO: evt.start.toISOString(),
+          evtEndISO: evt.end.toISOString()
         })
       } else {
         console.log(`[DEBUG] No overlap with event index ${idx}`, {
@@ -173,18 +158,14 @@ export default function Calendar() {
   }, [])
 
   // 5) Handle slot select
-  //    FullCalendar provides info.start / info.end as Date objects,
-  //    so we can rely on them being real Dates
   const handleSelect = (info) => {
     console.log('[DEBUG] handleSelect triggered with:', info)
 
-    // Quick check for blocking
     if (isTimeBlocked(info.start, info.end)) {
       console.log('[DEBUG] handleSelect: selection disallowed => blocked.')
       return
     }
 
-    // store the selection (info) for the modal
     setSelectedInfo(info)
     setModalIsOpen(true)
   }
@@ -198,7 +179,7 @@ export default function Calendar() {
       setIsSubmitting(true)
       console.log('[DEBUG] Creating new reservation in Sanity:', selectedInfo)
 
-      // 1) Create in Sanity as ISO strings
+      // Store in Sanity as ISO strings:
       const res = await client.create({
         _type: 'reservation',
         name: formData.name,
@@ -208,14 +189,13 @@ export default function Calendar() {
       })
       console.log('[DEBUG] Created reservation:', res)
 
-      // 2) Locally add the newly created event as Date objects
-      //    so isSlotReserved can do getTime() with no errors
+      // Add new event to local state as Date objects
       setEvents((prev) => [
         ...prev,
         {
           id: res._id,
           title: formData.name,
-          start: selectedInfo.start,  // already a Date from FullCalendar
+          start: selectedInfo.start,  // keep them as Date objects
           end: selectedInfo.end
         }
       ])
@@ -236,8 +216,6 @@ export default function Calendar() {
 
     const calendarApi = calendarRef.current?.getApi()
 
-    // We rely on selectedInfo.start being a Date,
-    // so FullCalendar can handle formatting in 'Asia/Jerusalem'
     const startStr = calendarApi.formatDate(selectedInfo.start, {
       timeZone: 'Asia/Jerusalem',
       hour: 'numeric',
@@ -298,7 +276,6 @@ export default function Calendar() {
           select={handleSelect}
           events={[
             ...events,
-            // blocked => background events
             ...blockedTimes.map((block, i) => ({
               id: `blocked-${i}`,
               start: block.start,
@@ -306,14 +283,12 @@ export default function Calendar() {
               display: 'background',
               color: '#ffcccc'
             })),
-            // optional 'past-block' event
             ...(pastBlockEvent ? [pastBlockEvent] : [])
           ]}
           // Disallow slots that begin before next top-of-hour in Jerusalem
           selectAllow={(selectInfo) => {
             console.log('[DEBUG] selectAllow triggered with:', selectInfo)
             const nextHourJerusalem = getJerusalemNextHour()
-
             if (selectInfo.start < nextHourJerusalem) {
               console.log('[DEBUG] selectAllow => false (slot is before next hour in Jerusalem)')
               return false
@@ -328,16 +303,16 @@ export default function Calendar() {
             }
 
             // same-day + exactly 1 hour logic
+            let isSameDay =
+              selectInfo.start.toDateString() === selectInfo.end.toDateString()
+
             const durationMs = selectInfo.end - selectInfo.start
             const oneHourMs = 60 * 60 * 1000
             const isExactlyOneHour = durationMs === oneHourMs
 
-            // check if same day (or ends exactly at midnight)
-            let isSameDay =
-              selectInfo.start.toDateString() === selectInfo.end.toDateString()
-
+            // midnight fix
             if (!isSameDay && isExactlyOneHour) {
-              const endDate = selectInfo.end
+              const endDate = new Date(selectInfo.end)
               if (
                 endDate.getHours() === 0 &&
                 endDate.getMinutes() === 0 &&
@@ -371,7 +346,6 @@ export default function Calendar() {
         />
       </div>
 
-      {/* Modal for reservation */}
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={() => {
