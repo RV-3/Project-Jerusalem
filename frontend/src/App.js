@@ -1,17 +1,42 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import Calendar from './Calendar'
 import AdminBlockCalendar from './AdminBlockCalendar'
 
+// 1) Small clock component to display current Jerusalem time
+function JerusalemClock() {
+  const [timeString, setTimeString] = useState('')
+
+  useEffect(() => {
+    function updateTime() {
+      // Get local time in "Asia/Jerusalem"
+      const now = new Date().toLocaleTimeString('en-US', {
+        timeZone: 'Asia/Jerusalem',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+      setTimeString(now)
+    }
+
+    updateTime() // show immediately
+    const intervalId = setInterval(updateTime, 1000) // update every second
+
+    return () => clearInterval(intervalId)
+  }, [])
+
+  return (
+    <div style={{ textAlign: 'center', fontSize: '1rem', marginBottom: '1rem' }}>
+       {timeString}
+    </div>
+  )
+}
+
+// 2) Main App
 function App() {
   return (
     <Router>
       <div style={{ padding: '2rem' }}>
-        {/*
-          Title with a decorative font, light text shadow, and color.
-          - "fontFamily: 'Lobster', cursive" references the Google Font.
-          - "textShadow" gives a subtle 3D effect.
-        */}
         <h2
           style={{
             textAlign: 'center',
@@ -24,6 +49,9 @@ function App() {
         >
           24/7 JERUSALEM
         </h2>
+
+        {/* 3) Put the clock below the heading */}
+        <JerusalemClock />
 
         <nav style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <Link to="/" style={{ marginRight: '1rem' }}>Main Calendar</Link>
