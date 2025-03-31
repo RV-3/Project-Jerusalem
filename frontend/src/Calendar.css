@@ -15,11 +15,11 @@
 
 /* Past dates, blocked events, etc. are fine */
 .fc-day-past {
-  background-color: #e0e0e0 !important;
+  background-color: #c3c3c3 !important;
 }
 .fc-day-blocked,
 .fc-bg-event {
-  background-color: #e0e0e0 !important;
+  background-color: #c3c3c3 !important;
   opacity: 1 !important;
 }
 
