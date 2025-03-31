@@ -52,9 +52,7 @@ const HOUR_OPTIONS_12H = [
 ]
 
 function format24HourTo12(hourStr) {
-  if (hourStr === '24') {
-    return '12 AM (next day)'
-  }
+  if (hourStr === '24') return '12 AM (next day)'
   const found = HOUR_OPTIONS_12H.find((opt) => opt.value === String(hourStr))
   return found ? found.label : `${hourStr}:00`
 }
@@ -73,7 +71,7 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
 
   // If startHour >= endHour, reset endHour
   useEffect(() => {
-    if (startHour && endHour && parseInt(endHour) <= parseInt(startHour)) {
+    if (startHour && endHour && parseInt(endHour, 10) <= parseInt(startHour, 10)) {
       setEndHour('')
     }
   }, [startHour, endHour])
@@ -82,7 +80,7 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
   const filteredEndOptions = !startHour
     ? HOUR_OPTIONS_12H
     : HOUR_OPTIONS_12H.filter(
-        (opt) => parseInt(opt.value) > parseInt(startHour)
+        (opt) => parseInt(opt.value, 10) > parseInt(startHour, 10)
       )
 
   const isAddDisabled = !startHour || !endHour
@@ -136,7 +134,7 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     columnGap: '0.5rem'
   }
 
-  // 30% smaller remove button
+  // Smaller remove button
   const removeBtnBase = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -376,8 +374,8 @@ export default function AdminBlockCalendar() {
     const endJerusalem   = moment.tz(hEnd, 'Asia/Jerusalem')
 
     const dayAnchor = startJerusalem.clone().startOf('day')
-    const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-    const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
+    const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
+    const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
 
     if (startJerusalem.isBefore(rStart) || endJerusalem.isAfter(rEnd)) {
       return false
@@ -601,7 +599,7 @@ export default function AdminBlockCalendar() {
       })
     })
 
-    // Past-block overlay => #6e6e6e (slightly different grey if desired)
+    // Past-block overlay => #6e6e6e
     if (pastBlockEvent) {
       events.push(pastBlockEvent)
     }
@@ -755,10 +753,7 @@ export default function AdminBlockCalendar() {
           end: validRangeEnd.toISOString()
         }}
         selectable
-        selectAllow={(selectInfo) => {
-          // Only future times
-          return new Date(selectInfo.startStr) >= new Date()
-        }}
+        selectAllow={(selectInfo) => new Date(selectInfo.startStr) >= new Date()}
         select={(info) => {
           if (isRangeCompletelyBlocked(info)) {
             if (window.confirm('Unblock this time slot?')) {
