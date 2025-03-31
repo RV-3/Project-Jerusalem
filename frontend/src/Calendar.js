@@ -44,7 +44,7 @@ export default function Calendar() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const calendarRef = useRef(null)
-  const platformDelay = isIOS ? 100 : 0
+  const platformDelay = isIOS ? 100 : 10
 
   // 1) Fetch reservations & blocked times
   useEffect(() => {
