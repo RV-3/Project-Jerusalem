@@ -5,7 +5,6 @@ import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
 
-// moment-timezone plugins
 import moment from 'moment-timezone'
 import momentPlugin from '@fullcalendar/moment'
 import momentTimezonePlugin from '@fullcalendar/moment-timezone'
@@ -16,10 +15,7 @@ import './Calendar.css'
 
 Modal.setAppElement('#root')
 
-/**
- * Return the "next top-of-hour" in Jerusalem as a Moment,
- * so we can forbid selections earlier than that.
- */
+/** Return the "next top-of-hour" in Jerusalem as a Moment, so we forbid selections earlier than that. */
 function getJerusalemNextHourMoment() {
   const nowJer = moment.tz('Asia/Jerusalem')
   if (nowJer.minute() !== 0 || nowJer.second() !== 0) {
@@ -28,20 +24,18 @@ function getJerusalemNextHourMoment() {
   return nowJer
 }
 
-/**
- * Check timeException logic in Asia/Jerusalem.
- */
-function isHourExcepted(rule, hStart, hEnd) {
+// -----------------------------------
+// HELPER to see if an hour is in a doc’s timeExceptions
+// (shared logic for day-based or hour-based rules).
+// -----------------------------------
+function isHourExcepted(exceptions = [], hStart, hEnd) {
   const startJer = moment.tz(hStart, 'Asia/Jerusalem')
   const endJer   = moment.tz(hEnd,   'Asia/Jerusalem')
-
-  // The local (Jerusalem) date as YYYY-MM-DD
-  const dateStr = startJer.format('YYYY-MM-DD')
-  const exceptions = rule.timeExceptions || []
+  const dateStr  = startJer.format('YYYY-MM-DD')
 
   return exceptions.some((ex) => {
     if (!ex.date) return false
-    // Skip if not the same local date
+    // Must match the same day in Jerusalem
     if (ex.date.slice(0, 10) !== dateStr) return false
 
     // Build the exception start/end in Jerusalem
@@ -54,66 +48,100 @@ function isHourExcepted(rule, hStart, hEnd) {
   })
 }
 
-/**
- * doesRuleCover => true if [hStart,hEnd) is within [rule.startHour, rule.endHour)
- * in Jerusalem time, and not excepted.
- */
-function doesRuleCover(rule, hStart, hEnd) {
+// -----------------------------------
+// For HOUR-based rules
+// -----------------------------------
+function doesHourRuleCover(rule, hStart, hEnd) {
   const startJer = moment.tz(hStart, 'Asia/Jerusalem')
   const endJer   = moment.tz(hEnd,   'Asia/Jerusalem')
 
   // Anchor day to midnight in Jerusalem
   const dayAnchor = startJer.clone().startOf('day')
   const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-  const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
+  const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
 
   // Must be inside [rStart..rEnd) and not excepted
-  if (startJer.isBefore(rStart) || endJer.isAfter(rEnd)) {
-    return false
+  if (startJer.isBefore(rStart) || endJer.isAfter(rEnd)) return false
+  if (isHourExcepted(rule.timeExceptions, hStart, hEnd)) return false
+  return true
+}
+
+/**
+ * Expand an hour-based auto-block rule into hour slices
+ * skipping any timeExceptions. Then merge contiguous slices.
+ */
+function getHourRuleSlices(rule, viewStart, viewEnd) {
+  const slices = []
+  let dayCursor = moment.tz(viewStart, 'Asia/Jerusalem').startOf('day')
+  const dayEnd  = moment.tz(viewEnd,   'Asia/Jerusalem').endOf('day')
+
+  while (dayCursor.isSameOrBefore(dayEnd, 'day')) {
+    for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
+      const sliceStart = dayCursor.clone().hour(h)
+      const sliceEnd   = sliceStart.clone().add(1, 'hour')
+
+      // skip if outside the overall range
+      if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
+        continue
+      }
+      // skip if excepted
+      if (isHourExcepted(rule.timeExceptions, sliceStart.toDate(), sliceEnd.toDate())) {
+        continue
+      }
+      slices.push([sliceStart.toDate(), sliceEnd.toDate()])
+    }
+    dayCursor.add(1, 'day').startOf('day')
   }
-  if (isHourExcepted(rule, hStart, hEnd)) {
+  return mergeSlices(slices)
+}
+
+// -----------------------------------
+// For DAY-based rules
+// e.g. autoBlockDays: { daysOfWeek: [...], timeExceptions: [...] }
+// -----------------------------------
+function isDayCovered(dayDoc, hStart, hEnd) {
+  // If the doc doesn’t exist or no daysOfWeek => no coverage
+  if (!dayDoc?.daysOfWeek?.length) return false
+  const dayName = moment.tz(hStart, 'Asia/Jerusalem').format('dddd')
+  if (!dayDoc.daysOfWeek.includes(dayName)) return false
+
+  // Also check if there's a timeException
+  if (isHourExcepted(dayDoc.timeExceptions, hStart, hEnd)) {
     return false
   }
   return true
 }
 
-/**
- * Build hour-by-hour auto-block slices in Jerusalem, for a single rule
- * within [dayStart..dayEnd).
- */
-function getAutoBlockSlices(rule, dayStart, dayEnd) {
+/** Expand day-based blocks into hour slices (0..24), skipping timeExceptions. */
+function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
+  if (!dayDoc?.daysOfWeek?.length) return []
   const slices = []
+  let current = moment.tz(viewStart, 'Asia/Jerusalem').startOf('day')
+  const limit = moment.tz(viewEnd,   'Asia/Jerusalem').endOf('day')
 
-  // Convert to Moments anchored in Jerusalem
-  let cur = moment.tz(dayStart, 'Asia/Jerusalem').startOf('day')
-  const end = moment.tz(dayEnd, 'Asia/Jerusalem').endOf('day')
+  while (current.isBefore(limit)) {
+    const dayName = current.format('dddd')
+    if (dayDoc.daysOfWeek.includes(dayName)) {
+      for (let h = 0; h < 24; h++) {
+        const sliceStart = current.clone().hour(h)
+        const sliceEnd   = sliceStart.clone().add(1, 'hour')
 
-  while (cur.isSameOrBefore(end, 'day')) {
-    // For each hour in the rule’s range
-    for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
-      const sliceStart = cur.clone().hour(h)
-      const sliceEnd   = sliceStart.clone().add(1, 'hour')
-
-      // Skip if out of the overall [dayStart..dayEnd] range
-      if (sliceEnd.isSameOrBefore(dayStart) || sliceStart.isSameOrAfter(dayEnd)) {
-        continue
+        if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
+          continue
+        }
+        // skip if timeException
+        if (isHourExcepted(dayDoc.timeExceptions, sliceStart.toDate(), sliceEnd.toDate())) {
+          continue
+        }
+        slices.push([sliceStart.toDate(), sliceEnd.toDate()])
       }
-      // Skip if excepted
-      if (isHourExcepted(rule, sliceStart.toDate(), sliceEnd.toDate())) {
-        continue
-      }
-      slices.push([sliceStart.toDate(), sliceEnd.toDate()])
     }
-    // Move to next day in Jerusalem
-    cur.add(1, 'day').startOf('day')
+    current.add(1, 'day').startOf('day')
   }
-
   return mergeSlices(slices)
 }
 
-/**
- * Merge contiguous hour slices into bigger blocks.
- */
+// Merge contiguous hour slices
 function mergeSlices(slices) {
   if (!slices.length) return []
   slices.sort((a, b) => a[0] - b[0])
@@ -121,9 +149,8 @@ function mergeSlices(slices) {
   for (let i = 1; i < slices.length; i++) {
     const prev = merged[merged.length - 1]
     const curr = slices[i]
-    // If they touch exactly
     if (prev[1].getTime() === curr[0].getTime()) {
-      // Extend the previous block
+      // extend
       prev[1] = curr[1]
     } else {
       merged.push(curr)
@@ -133,15 +160,33 @@ function mergeSlices(slices) {
 }
 
 /**
- * Build background events from all auto-block rules within [viewStart..viewEnd].
+ * Build one big list of background events for hour-based AND day-based rules.
+ * - day-based => getDayBlockSlices
+ * - hour-based => getHourRuleSlices
  */
-function buildAutoBlockEvents(autoRules, viewStart, viewEnd) {
+function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, viewEnd) {
   const events = []
-  autoRules.forEach((rule) => {
-    const slices = getAutoBlockSlices(rule, viewStart, viewEnd)
-    slices.forEach(([s, e]) => {
+
+  // A) day-based expansions
+  if (autoBlockDaysDoc) {
+    const daySlices = getDayBlockSlices(autoBlockDaysDoc, viewStart, viewEnd)
+    daySlices.forEach(([s, e]) => {
       events.push({
-        id: `auto-${rule._id}-${s.toISOString()}`,
+        id: `auto-day-${autoBlockDaysDoc._id}-${s.toISOString()}`,
+        start: s,
+        end: e,
+        display: 'background',
+        color: '#ffcccc' // or grey
+      })
+    })
+  }
+
+  // B) hour-based expansions
+  autoBlockHours.forEach((rule) => {
+    const hourSlices = getHourRuleSlices(rule, viewStart, viewEnd)
+    hourSlices.forEach(([s, e]) => {
+      events.push({
+        id: `auto-hour-${rule._id}-${s.toISOString()}`,
         start: s,
         end: e,
         display: 'background',
@@ -149,31 +194,31 @@ function buildAutoBlockEvents(autoRules, viewStart, viewEnd) {
       })
     })
   })
+
   return events
 }
 
+// -----------------------------------
+// MAIN Calendar
+// -----------------------------------
 export default function Calendar() {
-  const [events, setEvents] = useState([])             // reservations
-  const [blockedTimes, setBlockedTimes] = useState([])  // manual-block docs
-  const [autoBlockRules, setAutoBlockRules] = useState([])
+  const [events, setEvents] = useState([])                // reservations
+  const [blockedTimes, setBlockedTimes] = useState([])     // manual-block docs
+  const [autoBlockHours, setAutoBlockHours] = useState([]) // "autoBlockedHours"
+  const [autoBlockDays, setAutoBlockDays] = useState(null) // "autoBlockedDays" doc
   const [pastBlockEvent, setPastBlockEvent] = useState(null)
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
-
   const calendarRef = useRef(null)
   const platformDelay = isIOS ? 100 : 10
 
-  // -----------------------------------------------------
-  // 1) FETCH data from Sanity (reservations, blocks, auto-rules)
-  // -----------------------------------------------------
+  // 1) FETCH data from Sanity
   useEffect(() => {
-    // Reservations
-    client
-      .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
+    // a) Reservations
+    client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) => {
-        // Let FullCalendar parse the date strings with moment-timezone
         const parsed = data.map((res) => ({
           id: res._id,
           title: res.name,
@@ -184,9 +229,8 @@ export default function Calendar() {
       })
       .catch((err) => console.error('Error fetching reservations:', err))
 
-    // Manual blocks
-    client
-      .fetch(`*[_type == "blocked"]{_id, start, end}`)
+    // b) Manual blocks
+    client.fetch(`*[_type == "blocked"]{_id, start, end}`)
       .then((data) => {
         const blocks = data.map((item) => ({
           _id: item._id,
@@ -197,51 +241,72 @@ export default function Calendar() {
       })
       .catch((err) => console.error('Error fetching blocked times:', err))
 
-    // Auto-block rules
-    client
-      .fetch(`*[_type == "autoBlockedHours"]{
-        _id,
-        startHour,
-        endHour,
-        timeExceptions[]{ date, startHour, endHour }
-      }`)
+    // c) Hour-based autoBlock
+    client.fetch(`*[_type == "autoBlockedHours"]{
+      _id,
+      startHour,
+      endHour,
+      timeExceptions[]{ date, startHour, endHour }
+    }`)
       .then((rules) => {
-        setAutoBlockRules(rules)
+        setAutoBlockHours(rules)
       })
-      .catch((err) => console.error('Error fetching auto-block rules:', err))
+      .catch((err) => console.error('Error fetching auto-block hours:', err))
+
+    // d) Day-based autoBlock
+    client.fetch(`*[_type == "autoBlockedDays"]{
+      _id,
+      daysOfWeek,
+      timeExceptions[]{ date, startHour, endHour }
+    }`)
+      .then((daysDocs) => {
+        if (daysDocs.length) {
+          setAutoBlockDays(daysDocs[0]) // if you only have one doc
+        }
+      })
+      .catch((err) => console.error('Error fetching autoBlockedDays:', err))
   }, [])
 
-  // -----------------------------------------------------
-  // 2) Check if a timeslot is blocked by manual blocks
-  // -----------------------------------------------------
+  // 2) Check time blocked by manual
   function isTimeBlockedByManual(start, end) {
-    const startMs = moment.tz(start, 'Asia/Jerusalem').valueOf()
-    const endMs   = moment.tz(end,   'Asia/Jerusalem').valueOf()
-
+    const sJer = moment.tz(start, 'Asia/Jerusalem')
+    const eJer = moment.tz(end,   'Asia/Jerusalem')
     return blockedTimes.some((b) => {
-      if (!b.start || !b.end) return false
-      const blkStart = moment.tz(b.start, 'Asia/Jerusalem').valueOf()
-      const blkEnd   = moment.tz(b.end,   'Asia/Jerusalem').valueOf()
-      return startMs < blkEnd && endMs > blkStart
+      const bStart = moment.tz(b.start, 'Asia/Jerusalem')
+      const bEnd   = moment.tz(b.end,   'Asia/Jerusalem')
+      // overlap check
+      return sJer.isBefore(bEnd) && eJer.isAfter(bStart)
     })
   }
 
-  // -----------------------------------------------------
-  // 3) Check if a timeslot is auto-blocked
-  // -----------------------------------------------------
+  // 3) Check time blocked by day-based or hour-based
   function isTimeBlockedByAuto(start, end) {
-    return autoBlockRules.some((rule) => doesRuleCover(rule, start, end))
+    // day-based check
+    if (autoBlockDays && autoBlockDays.daysOfWeek?.length) {
+      if (isDayCovered(autoBlockDays, start, end)) {
+        return true
+      }
+    }
+    // hour-based check
+    return autoBlockHours.some((rule) => doesHourRuleCover(rule, start, end))
   }
 
-  // -----------------------------------------------------
-  // 4) Check if a timeslot is already reserved
-  // -----------------------------------------------------
-  function isSlotReserved(slotStart, slotEnd) {
-    const sMs = moment.tz(slotStart, 'Asia/Jerusalem').valueOf()
-    const eMs = moment.tz(slotEnd,   'Asia/Jerusalem').valueOf()
+  // For day-based coverage check
+  function isDayCovered(dayDoc, hStart, hEnd) {
+    const dayName = moment.tz(hStart, 'Asia/Jerusalem').format('dddd')
+    if (!dayDoc.daysOfWeek?.includes(dayName)) return false
+    // check timeExceptions
+    if (isHourExcepted(dayDoc.timeExceptions || [], hStart, hEnd)) {
+      return false
+    }
+    return true
+  }
 
+  // 4) Check if a timeslot is already reserved
+  function isSlotReserved(slotStart, slotEnd) {
+    const sJer = moment.tz(slotStart, 'Asia/Jerusalem')
+    const eJer = moment.tz(slotEnd,   'Asia/Jerusalem')
     return events.some((evt) => {
-      // skip background events
       if (
         evt.id.startsWith('auto-') ||
         evt.id.startsWith('blocked-') ||
@@ -249,15 +314,14 @@ export default function Calendar() {
       ) {
         return false
       }
-      const evtStart = moment.tz(evt.start, 'Asia/Jerusalem').valueOf()
-      const evtEnd   = moment.tz(evt.end,   'Asia/Jerusalem').valueOf()
-      return sMs < evtEnd && eMs > evtStart
+      const evtStart = moment.tz(evt.start, 'Asia/Jerusalem')
+      const evtEnd   = moment.tz(evt.end,   'Asia/Jerusalem')
+      // overlap check
+      return sJer.isBefore(evtEnd) && eJer.isAfter(evtStart)
     })
   }
 
-  // -----------------------------------------------------
-  // 5) Past-block overlay: from midnight to "now" every minute
-  // -----------------------------------------------------
+  // 5) Past-block overlay
   useEffect(() => {
     function updatePastBlockEvent() {
       const nowJer = moment.tz('Asia/Jerusalem')
@@ -275,34 +339,23 @@ export default function Calendar() {
     return () => clearInterval(interval)
   }, [])
 
-  // -----------------------------------------------------
   // 6) Handle user selection => open modal if free
-  // -----------------------------------------------------
   const handleSelect = (info) => {
     const { startStr, endStr } = info
-
     if (isTimeBlockedByManual(startStr, endStr)) return
     if (isTimeBlockedByAuto(startStr, endStr)) return
     if (isSlotReserved(startStr, endStr)) return
 
-    // Store in component state => open modal
-    setSelectedInfo({
-      start: startStr,
-      end: endStr
-    })
+    setSelectedInfo({ start: startStr, end: endStr })
     setModalIsOpen(true)
   }
 
-  // -----------------------------------------------------
   // 7) Submit reservation => store in Sanity
-  // -----------------------------------------------------
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name || !formData.phone || !selectedInfo) return
-
     try {
       setIsSubmitting(true)
-
       const reservationDoc = {
         _type: 'reservation',
         name: formData.name,
@@ -310,10 +363,8 @@ export default function Calendar() {
         start: selectedInfo.start,
         end: selectedInfo.end
       }
-
       const created = await client.create(reservationDoc)
-
-      // Add to local state so it shows up immediately
+      // Show in local state so it appears right away
       setEvents((prev) => [
         ...prev,
         {
@@ -323,7 +374,6 @@ export default function Calendar() {
           end: selectedInfo.end
         }
       ])
-
       setModalIsOpen(false)
       setFormData({ name: '', phone: '' })
       setSelectedInfo(null)
@@ -335,14 +385,11 @@ export default function Calendar() {
     }
   }
 
-  // -----------------------------------------------------
-  // 8) Format the chosen times in the modal for display
-  // -----------------------------------------------------
+  // 8) Format chosen times in modal
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
     const calendarApi = calendarRef.current?.getApi()
     if (!calendarApi) return ''
-
     const startTxt = calendarApi.formatDate(selectedInfo.start, {
       timeZone: 'Asia/Jerusalem',
       hour: 'numeric',
@@ -360,9 +407,7 @@ export default function Calendar() {
     return `${startTxt} - ${endTxt}`
   }
 
-  // -----------------------------------------------------
   // 9) FullCalendar loads events
-  // -----------------------------------------------------
   function loadEvents(fetchInfo, successCallback) {
     const { start, end } = fetchInfo
     const loaded = []
@@ -389,9 +434,9 @@ export default function Calendar() {
       })
     })
 
-    // C) Auto-block expansions
-    const autoEvents = buildAutoBlockEvents(autoBlockRules, start, end)
-    autoEvents.forEach((ev) => loaded.push(ev))
+    // C) Build day+hour auto-block expansions => background
+    const autoEvents = buildAutoBlockAllEvents(autoBlockHours, autoBlockDays, start, end)
+    loaded.push(...autoEvents)
 
     // D) Past-block overlay
     if (pastBlockEvent) {
@@ -401,15 +446,11 @@ export default function Calendar() {
     successCallback(loaded)
   }
 
-  // -----------------------------------------------------
-  // RENDER
-  // -----------------------------------------------------
   return (
     <>
       <div>
         <FullCalendar
           ref={calendarRef}
-          // moment-timezone plugins
           plugins={[
             timeGridPlugin,
             scrollGridPlugin,
@@ -417,9 +458,7 @@ export default function Calendar() {
             momentPlugin,
             momentTimezonePlugin
           ]}
-          // Use named timeZone so user selections also occur in Jerusalem
           timeZone="Asia/Jerusalem"
-
           initialView="timeGrid30Day"
           views={{
             timeGrid30Day: {
@@ -443,25 +482,19 @@ export default function Calendar() {
           eventLongPressDelay={platformDelay}
           selectable
           themeSystem="standard"
-
-          // Limit user to 7 days back -> 30 days ahead
           validRange={{
             start: moment().tz('Asia/Jerusalem').subtract(7, 'days').format(),
             end:   moment().tz('Asia/Jerusalem').add(30, 'days').format()
           }}
-
           events={loadEvents}
           select={handleSelect}
-
           selectAllow={(selectInfo) => {
             const selStart = moment.tz(selectInfo.startStr, 'Asia/Jerusalem')
             const selEnd   = moment.tz(selectInfo.endStr,   'Asia/Jerusalem')
 
             // 1) Forbid times < next hour
             const nextHour = getJerusalemNextHourMoment()
-            if (selStart.isBefore(nextHour)) {
-              return false
-            }
+            if (selStart.isBefore(nextHour)) return false
 
             // 2) Forbid if blocked/reserved
             if (isTimeBlockedByManual(selStart, selEnd)) return false
@@ -474,33 +507,24 @@ export default function Calendar() {
 
             // 4) Typically require same day...
             let sameDay = selStart.isSame(selEnd, 'day')
-
-            // 4b) ...But if it ends exactly at 00:00 local time,
-            //     allow it (23:00 -> 00:00).
+            // 4b) ...But if it ends exactly at midnight, allow (23:00 -> 00:00).
             if (!sameDay && isExactlyOneHour) {
-              if (
-                selEnd.hour() === 0 &&
-                selEnd.minute() === 0 &&
-                selEnd.second() === 0
-              ) {
+              if (selEnd.hour() === 0 && selEnd.minute() === 0 && selEnd.second() === 0) {
                 sameDay = true
               }
             }
 
             return sameDay && isExactlyOneHour
           }}
-
           allDaySlot={false}
           slotDuration="01:00:00"
           slotMinTime="00:00:00"
           slotMaxTime="24:00:00"
-
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
             right: ''
           }}
-
           eventContent={(arg) => {
             // Hide text for background/past-block/auto-block events
             if (
@@ -512,7 +536,6 @@ export default function Calendar() {
             }
             return <div>{arg.event.title}</div>
           }}
-
           height="auto"
         />
       </div>
