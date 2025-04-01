@@ -691,7 +691,7 @@ export default function AdminBlockCalendar() {
   return (
     <div>
       <h2 style={{ textAlign:'center', marginBottom:'1rem', fontSize:'1.8rem' }}>
-        Admin Panel (Larger)
+        Admin Panel
       </h2>
 
       <AutoBlockControls
