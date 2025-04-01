@@ -96,13 +96,23 @@ export function AutoBlockControls({
   const [showHours, setShowHours] = useState(false)
   const [showDays, setShowDays]   = useState(false)
 
+  // Keep track of previous day selection so we can detect newly added days
+  const [selectedDays, setSelectedDays] = useState([])
+  useEffect(() => {
+    if (autoBlockDays?.daysOfWeek) {
+      setSelectedDays(autoBlockDays.daysOfWeek)
+    } else {
+      setSelectedDays([])
+    }
+  }, [autoBlockDays])
+
   // ---------------------------
   // HOURS LOGIC
   // ---------------------------
-  const [startHour, setStartHour] = useState('')
-  const [endHour, setEndHour]     = useState('')
+  const [startHour, setStartHour]       = useState('')
+  const [endHour, setEndHour]           = useState('')
   const [hoverRemoveId, setHoverRemoveId] = useState(null)
-  const [hoverAdd, setHoverAdd]           = useState(false)
+  const [hoverAdd, setHoverAdd]         = useState(false)
 
   useEffect(() => {
     if (startHour && endHour && parseInt(endHour, 10) <= parseInt(startHour, 10)) {
@@ -151,15 +161,6 @@ export function AutoBlockControls({
   // DAYS LOGIC (pop-up with toggles)
   // ---------------------------
   const [daysModalOpen, setDaysModalOpen] = useState(false)
-  const [selectedDays, setSelectedDays]    = useState([])
-
-  useEffect(() => {
-    if (autoBlockDays?.daysOfWeek) {
-      setSelectedDays(autoBlockDays.daysOfWeek)
-    } else {
-      setSelectedDays([])
-    }
-  }, [autoBlockDays])
 
   // Remove a single day => immediate doc update
   async function removeDay(dayFull) {
@@ -177,21 +178,49 @@ export function AutoBlockControls({
   }
 
   async function handleSaveDaysModal() {
-    await saveDaysToSanity(selectedDays)
+    // Detect newly added days => remove timeExceptions for those
+    // so that re-adding a day overrides any previous unblocking
+    const oldDays = autoBlockDays?.daysOfWeek || []
+    const newlyAddedDays = selectedDays.filter((d) => !oldDays.includes(d))
+
+    await saveDaysToSanity(selectedDays, newlyAddedDays)
     alert('Blocked days saved.')
     setDaysModalOpen(false)
   }
 
   // Shared doc saver
-  async function saveDaysToSanity(daysArr) {
+  async function saveDaysToSanity(daysArr, newlyAddedDays = []) {
     try {
       const docId = autoBlockDays?._id || 'autoBlockedDaysSingleton'
+      // build doc
       const docToSave = {
         _id: docId,
         _type: 'autoBlockedDays',
         daysOfWeek: daysArr,
         timeExceptions: autoBlockDays?.timeExceptions || []
       }
+
+      // --------------- OVERRIDE FIX ---------------
+      // For each newly added day, remove any timeExceptions that
+      // match that day in the future so re-applying day-block
+      // truly overrides older manual unblocking.
+      if (newlyAddedDays.length && docToSave.timeExceptions?.length) {
+        // filter out exceptions that match these day(s)
+        const filteredEx = docToSave.timeExceptions.filter((ex) => {
+          if (!ex.date) return true // keep if no date?
+
+          const exDayName = moment.tz(ex.date, 'Asia/Jerusalem').format('dddd')
+          // if it's a day that was newly added, remove that exception
+          if (newlyAddedDays.includes(exDayName)) {
+            return false
+          }
+          return true
+        })
+        docToSave.timeExceptions = filteredEx
+      }
+      // --------------- END OVERRIDE FIX ------------
+
+      // save doc
       await client.createOrReplace(docToSave)
       reloadData()
     } catch (err) {
