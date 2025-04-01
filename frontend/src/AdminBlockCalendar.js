@@ -132,24 +132,27 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
   }
 
   const removeBtnBase = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: 'none',
-    borderRadius: '9999px',
-    padding: '6px 10px',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    background: '#000',
-    color: '#fff',
-    transition: 'background 0.3s'
-  }
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  border: '1px solid #000',     // black outline
+  borderRadius: '9999px',
+  padding: '0.5px 10px',
+  fontSize: '1rem',
+  cursor: 'pointer',
+  background: '#eeeeee',        // white background
+  color: '#000000',             // black text
+  transition: 'background 0.3s, color 0.3s, border-color 0.3s'
+}
+
   const removeBtnHover = {
     background: '#333'
   }
   const xIconStyle = {
-    marginLeft: '8px',
-    fontWeight: 'bold'
+    marginLeft: '6px',
+    fontWeight: 'normal',
+    fontSize: '1.8rem' // ← increase from default (e.g. 1rem)
+
   }
 
   const addBtnBase = {
