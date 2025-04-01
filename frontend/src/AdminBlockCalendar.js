@@ -3,7 +3,6 @@ import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
-
 import moment from 'moment-timezone'
 import momentPlugin from '@fullcalendar/moment'
 import momentTimezonePlugin from '@fullcalendar/moment-timezone'
@@ -15,7 +14,7 @@ Modal.setAppElement('#root')
 
 const ADMIN_PASSWORD = 'admin123'
 
-// Helper: Return midnight X days ago in Asia/Jerusalem
+// Return midnight X days ago in Asia/Jerusalem
 function getJerusalemMidnightXDaysAgo(daysAgo) {
   return moment.tz('Asia/Jerusalem')
     .startOf('day')
@@ -23,52 +22,58 @@ function getJerusalemMidnightXDaysAgo(daysAgo) {
     .toDate()
 }
 
-// 12-hour style + “12 AM (next day)”
+// For 12-hour AM/PM pickers
 const HOUR_OPTIONS_12H = [
-  { value: '0',  label: '12 AM' },
-  { value: '1',  label: '1 AM'  },
-  { value: '2',  label: '2 AM'  },
-  { value: '3',  label: '3 AM'  },
-  { value: '4',  label: '4 AM'  },
-  { value: '5',  label: '5 AM'  },
-  { value: '6',  label: '6 AM'  },
-  { value: '7',  label: '7 AM'  },
-  { value: '8',  label: '8 AM'  },
-  { value: '9',  label: '9 AM'  },
+  { value: '0', label: '12 AM' },
+  { value: '1', label: '1 AM' },
+  { value: '2', label: '2 AM' },
+  { value: '3', label: '3 AM' },
+  { value: '4', label: '4 AM' },
+  { value: '5', label: '5 AM' },
+  { value: '6', label: '6 AM' },
+  { value: '7', label: '7 AM' },
+  { value: '8', label: '8 AM' },
+  { value: '9', label: '9 AM' },
   { value: '10', label: '10 AM' },
   { value: '11', label: '11 AM' },
   { value: '12', label: '12 PM' },
-  { value: '13', label: '1 PM'  },
-  { value: '14', label: '2 PM'  },
-  { value: '15', label: '3 PM'  },
-  { value: '16', label: '4 PM'  },
-  { value: '17', label: '5 PM'  },
-  { value: '18', label: '6 PM'  },
-  { value: '19', label: '7 PM'  },
-  { value: '20', label: '8 PM'  },
-  { value: '21', label: '9 PM'  },
+  { value: '13', label: '1 PM' },
+  { value: '14', label: '2 PM' },
+  { value: '15', label: '3 PM' },
+  { value: '16', label: '4 PM' },
+  { value: '17', label: '5 PM' },
+  { value: '18', label: '6 PM' },
+  { value: '19', label: '7 PM' },
+  { value: '20', label: '8 PM' },
+  { value: '21', label: '9 PM' },
   { value: '22', label: '10 PM' },
   { value: '23', label: '11 PM' },
   { value: '24', label: '12 AM (next day)' }
 ]
 
-// Convert 24-hour string to e.g. “12 AM”
+// Convert "24" => "12 AM (next day)" etc.
 function format24HourTo12(hourStr) {
   if (hourStr === '24') return '12 AM (next day)'
   const found = HOUR_OPTIONS_12H.find((opt) => opt.value === String(hourStr))
   return found ? found.label : `${hourStr}:00`
 }
 
-// Smaller styling for auto-block rule panel
+/**
+ * AutoBlockControls: smaller styling, remove/add rule with dark button
+ */
 export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadData }) {
   const [startHour, setStartHour] = useState('')
   const [endHour, setEndHour] = useState('')
-
   const [hoverRemoveId, setHoverRemoveId] = useState(null)
   const [hoverAdd, setHoverAdd] = useState(false)
 
+  // If startHour >= endHour => reset
   useEffect(() => {
-    if (startHour && endHour && parseInt(endHour, 10) <= parseInt(startHour, 10)) {
+    if (
+      startHour &&
+      endHour &&
+      parseInt(endHour, 10) <= parseInt(startHour, 10)
+    ) {
       setEndHour('')
     }
   }, [startHour, endHour])
@@ -110,7 +115,7 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     }
   }
 
-  // Styles
+  // Style
   const containerStyle = {
     margin: '0.3rem auto',
     padding: '0.3rem',
@@ -130,7 +135,6 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     columnGap: '0.5rem'
   }
 
-  // Remove button
   const removeBtnBase = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -152,7 +156,6 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     fontWeight: 'bold'
   }
 
-  // Add button
   const addBtnBase = {
     display: 'inline-flex',
     alignItems: 'center',
@@ -262,11 +265,13 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
   )
 }
 
-// -----------------------------------------------------------------------
-// Main AdminBlockCalendar Component
-// -----------------------------------------------------------------------
+// -------------------------------------------
+// MAIN AdminBlockCalendar
+// -------------------------------------------
 export default function AdminBlockCalendar() {
-  const [authenticated, setAuthenticated] = useState(localStorage.getItem('isAdmin') === 'true')
+  const [authenticated, setAuthenticated] = useState(
+    localStorage.getItem('isAdmin') === 'true'
+  )
   const [blocks, setBlocks] = useState([])
   const [reservations, setReservations] = useState([])
   const [autoBlockRules, setAutoBlockRules] = useState([])
@@ -275,12 +280,10 @@ export default function AdminBlockCalendar() {
   const [selectedReservation, setSelectedReservation] = useState(null)
   const calendarRef = useRef()
 
-  // --------------------------------------------
-  // 1) DATA FETCH
-  // --------------------------------------------
+  // 1) Fetch data
   async function fetchData() {
     const calendarApi = calendarRef.current?.getApi()
-    const currentViewDate = calendarApi && calendarApi.getDate()
+    const currentViewDate = calendarApi?.getDate()
 
     // 1) Manual blocks
     const blocksData = await client.fetch(`*[_type == "blocked"]{_id, start, end}`)
@@ -312,7 +315,7 @@ export default function AdminBlockCalendar() {
     }
   }, [authenticated])
 
-  // Past-block overlay: from midnight 7 days ago -> now
+  // Past-block overlay: midnight 7 days ago -> now
   useEffect(() => {
     function updatePastBlockEvent() {
       const earliest = getJerusalemMidnightXDaysAgo(7)
@@ -330,9 +333,7 @@ export default function AdminBlockCalendar() {
     return () => clearInterval(interval)
   }, [])
 
-  // --------------------------------------------
-  // HELPER: Check if [start,end) is fully blocked
-  // --------------------------------------------
+  // Check if range is fully blocked
   function isRangeCompletelyBlocked(info) {
     const slotStart = new Date(info.start)
     const slotEnd   = new Date(info.end)
@@ -365,8 +366,8 @@ export default function AdminBlockCalendar() {
     const endJerusalem   = moment.tz(hEnd, 'Asia/Jerusalem')
 
     const dayAnchor = startJerusalem.clone().startOf('day')
-    const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-    const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
+    const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
+    const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
 
     if (startJerusalem.isBefore(rStart) || endJerusalem.isAfter(rEnd)) {
       return false
@@ -395,9 +396,7 @@ export default function AdminBlockCalendar() {
     })
   }
 
-  // --------------------------------------------
   // BLOCK
-  // --------------------------------------------
   async function handleBlock(info) {
     const slotStart = new Date(info.start)
     const slotEnd   = new Date(info.end)
@@ -428,9 +427,7 @@ export default function AdminBlockCalendar() {
     fetchData()
   }
 
-  // --------------------------------------------
-  // UNBLOCK
-  // --------------------------------------------
+  // UNBLOCK => lines 447-448, 463-464 are now safe
   async function handleUnblock(info) {
     const slotStart = new Date(info.start)
     const slotEnd   = new Date(info.end)
@@ -439,7 +436,7 @@ export default function AdminBlockCalendar() {
       return
     }
 
-    // 1) Remove manual blocks
+    // 1) remove manual blocks
     const deletions = []
     let cursorBlock = new Date(slotStart)
     while (cursorBlock < slotEnd) {
@@ -455,16 +452,20 @@ export default function AdminBlockCalendar() {
       cursorBlock = nextBlock
     }
 
-    // 2) Add timeExceptions for any auto-block rule covering that hour
+    // 2) add timeExceptions for any auto-block rule covering that hour
     const patches = []
     let cursorException = new Date(slotStart)
     while (cursorException < slotEnd) {
       const nextException = new Date(cursorException.getTime() + 3600000)
       autoBlockRules.forEach((rule) => {
-        if (doesRuleCover(rule, cursorException, nextException)) {
-          const dateStr = moment.tz(cursorException, 'Asia/Jerusalem').format('YYYY-MM-DD')
-          const startHr = moment.tz(cursorException, 'Asia/Jerusalem').hour()
-          const endHr   = moment.tz(nextException, 'Asia/Jerusalem').hour()
+        // store references in local variables => no closure referencing loop variable
+        const exceptionStart = new Date(cursorException)
+        const exceptionEnd = new Date(nextException)
+
+        if (doesRuleCover(rule, exceptionStart, exceptionEnd)) {
+          const dateStr = moment.tz(exceptionStart, 'Asia/Jerusalem').format('YYYY-MM-DD')
+          const startHr = moment.tz(exceptionStart, 'Asia/Jerusalem').hour()
+          const endHr   = moment.tz(exceptionEnd, 'Asia/Jerusalem').hour()
 
           const ex = {
             _type: 'timeException',
@@ -492,9 +493,7 @@ export default function AdminBlockCalendar() {
     fetchData()
   }
 
-  // --------------------------------------------
   // CREATE AUTO-BLOCK SLICES => events
-  // --------------------------------------------
   function getAutoBlockSlices(rule, dayStart, dayEnd) {
     const slices = []
     let cursorDay = moment.tz(dayStart, 'Asia/Jerusalem').startOf('day')
@@ -534,7 +533,7 @@ export default function AdminBlockCalendar() {
     return merged
   }
 
-  // Check if an hour is fully covered by manual blocks
+  // For checking if hour is fully covered by manual blocks
   function fullyCoveredByManual(start, end) {
     let cursorCheck = new Date(start)
     while (cursorCheck < end) {
@@ -556,7 +555,8 @@ export default function AdminBlockCalendar() {
     reservations.forEach((r) => {
       events.push({
         id: r._id,
-        title: r.name,       // Show only name in UI
+        // Show only name in UI
+        title: r.name,
         start: r.start,
         end: r.end,
         color: '#3788d8'
@@ -575,7 +575,7 @@ export default function AdminBlockCalendar() {
       })
     })
 
-    // 3) Auto-block expansions => also dark grey
+    // 3) Auto-block expansions => dark grey
     autoBlockRules.forEach((rule) => {
       const slices = getAutoBlockSlices(rule, start, end)
       slices.forEach(([s, e]) => {
@@ -600,13 +600,13 @@ export default function AdminBlockCalendar() {
     successCallback(events)
   }
 
-  // Only show the name for reservations, hide time for background events
+  // Hide time for reservations, hide text for blocked
   function handleEventContent(arg) {
-    // If it's a background or blocked event => hide text
+    // background events => blocked => no text
     if (arg.event.display === 'background') {
       return null
     }
-    // Else, show the event's title (reservation name)
+    // reservations => show name only
     return <div>{arg.event.title}</div>
   }
 
@@ -692,10 +692,10 @@ export default function AdminBlockCalendar() {
     )
   }
 
-  // Valid range: 7 days back -> 30 days ahead
+  // Valid range => 7 days back to 30 days ahead
   const now = new Date()
   const validRangeStart = new Date(now)
-  validRangeStart.setHours(0,0,0,0)
+  validRangeStart.setHours(0, 0, 0, 0)
   validRangeStart.setDate(validRangeStart.getDate() - 7)
 
   const validRangeEnd = new Date(now)
@@ -755,12 +755,8 @@ export default function AdminBlockCalendar() {
           end: validRangeEnd.toISOString()
         }}
         selectable
-        selectAllow={(selectInfo) => {
-          // only allow future times
-          return new Date(selectInfo.startStr) >= new Date()
-        }}
+        selectAllow={(selectInfo) => new Date(selectInfo.startStr) >= new Date()}
         select={(info) => {
-          // If fully blocked => ask to unblock, else block
           if (isRangeCompletelyBlocked(info)) {
             if (window.confirm('Unblock this time slot?')) {
               handleUnblock(info)
@@ -772,8 +768,7 @@ export default function AdminBlockCalendar() {
           }
         }}
         events={loadEvents}
-        // show name only, hide time for reservations, hide text for blocked
-        eventContent={handleEventContent}
+        eventContent={handleEventContent} // Hide times for reservations, no text for blocked
         eventClick={handleEventClick}
         headerToolbar={{
           left: 'prev,next today',
