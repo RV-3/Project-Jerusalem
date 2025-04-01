@@ -21,47 +21,49 @@ function getJerusalemMidnightXDaysAgo(daysAgo) {
     .toDate()
 }
 
+// 12-hour style + “12 AM (next day)”
 const HOUR_OPTIONS_12H = [
-  { value: '0',  label: '12 AM' },
-  { value: '1',  label: '1 AM' },
-  { value: '2',  label: '2 AM' },
-  { value: '3',  label: '3 AM' },
-  { value: '4',  label: '4 AM' },
-  { value: '5',  label: '5 AM' },
-  { value: '6',  label: '6 AM' },
-  { value: '7',  label: '7 AM' },
-  { value: '8',  label: '8 AM' },
-  { value: '9',  label: '9 AM' },
+  { value: '0', label: '12 AM' },
+  { value: '1', label: '1 AM' },
+  { value: '2', label: '2 AM' },
+  { value: '3', label: '3 AM' },
+  { value: '4', label: '4 AM' },
+  { value: '5', label: '5 AM' },
+  { value: '6', label: '6 AM' },
+  { value: '7', label: '7 AM' },
+  { value: '8', label: '8 AM' },
+  { value: '9', label: '9 AM' },
   { value: '10', label: '10 AM' },
   { value: '11', label: '11 AM' },
   { value: '12', label: '12 PM' },
-  { value: '13', label: '1 PM'  },
-  { value: '14', label: '2 PM'  },
-  { value: '15', label: '3 PM'  },
-  { value: '16', label: '4 PM'  },
-  { value: '17', label: '5 PM'  },
-  { value: '18', label: '6 PM'  },
-  { value: '19', label: '7 PM'  },
-  { value: '20', label: '8 PM'  },
-  { value: '21', label: '9 PM'  },
+  { value: '13', label: '1 PM' },
+  { value: '14', label: '2 PM' },
+  { value: '15', label: '3 PM' },
+  { value: '16', label: '4 PM' },
+  { value: '17', label: '5 PM' },
+  { value: '18', label: '6 PM' },
+  { value: '19', label: '7 PM' },
+  { value: '20', label: '8 PM' },
+  { value: '21', label: '9 PM' },
   { value: '22', label: '10 PM' },
   { value: '23', label: '11 PM' },
   { value: '24', label: '12 AM (next day)' }
 ]
 
 function format24HourTo12(hourStr) {
-  if (hourStr === '24') return '12 AM (next day)'
+  if (hourStr === '24') {
+    return '12 AM (next day)'
+  }
   const found = HOUR_OPTIONS_12H.find((opt) => opt.value === String(hourStr))
   return found ? found.label : `${hourStr}:00`
 }
 
-// -----------------------------------
-// AutoBlockControls
-// -----------------------------------
+/**
+ * AutoBlockControls, bigger sizing
+ */
 export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadData }) {
   const [startHour, setStartHour] = useState('')
   const [endHour, setEndHour] = useState('')
-
   const [hoverRemoveId, setHoverRemoveId] = useState(null)
   const [hoverAdd, setHoverAdd] = useState(false)
 
@@ -108,24 +110,25 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     }
   }
 
-  // Basic styling
+  // Larger container & font
   const containerStyle = {
-    margin: '0.3rem auto',
-    padding: '0.3rem',
-    border: '1px solid #eee',
-    borderRadius: '5px',
+    margin: '1rem auto',
+    padding: '1rem',
+    border: '2px solid #eee',
+    borderRadius: '8px',
     backgroundColor: '#fafafa',
-    maxWidth: '300px'
+    maxWidth: '600px', // double the original 300px
+    fontSize: '1.2rem' // bigger baseline
   }
 
   const listItemStyle = {
-    marginBottom: '0.3rem',
-    padding: '0.3rem',
-    borderRadius: '4px',
+    marginBottom: '0.8rem',
+    padding: '0.8rem',
+    borderRadius: '6px',
     background: '#f5f5f5',
     display: 'flex',
     alignItems: 'center',
-    columnGap: '0.5rem'
+    columnGap: '1rem'
   }
 
   const removeBtnBase = {
@@ -134,8 +137,8 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     justifyContent: 'center',
     border: 'none',
     borderRadius: '9999px',
-    padding: '3px 6px',
-    fontSize: '0.63rem',
+    padding: '6px 10px',
+    fontSize: '1rem',
     cursor: 'pointer',
     background: '#000',
     color: '#fff',
@@ -145,7 +148,7 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     background: '#333'
   }
   const xIconStyle = {
-    marginLeft: '4px',
+    marginLeft: '8px',
     fontWeight: 'bold'
   }
 
@@ -154,8 +157,8 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
     alignItems: 'center',
     border: 'none',
     borderRadius: '9999px',
-    padding: '6px 14px',
-    fontSize: '0.8rem',
+    padding: '8px 16px',
+    fontSize: '1rem',
     cursor: isAddDisabled ? 'default' : 'pointer',
     background: isAddDisabled ? '#999' : '#444',
     color: '#fff',
@@ -166,25 +169,25 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
   }
 
   const selectStyle = {
-    padding: '2px 4px',
-    borderRadius: '3px',
+    padding: '6px 8px',
+    borderRadius: '4px',
     border: '1px solid #ccc',
-    fontSize: '0.8rem'
+    fontSize: '1rem'
   }
 
   return (
     <div style={containerStyle}>
-      <h3 style={{ margin: '0 0 0.25rem', fontSize: '0.95rem' }}>
+      <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem' }}>
         Auto-Block Hours
       </h3>
 
-      <ul style={{ listStyle: 'none', paddingLeft: 0, marginBottom: '0.5rem' }}>
+      <ul style={{ listStyle: 'none', paddingLeft: 0, marginBottom: '1rem' }}>
         {autoBlockRules.map((rule) => {
           const isHovering = hoverRemoveId === rule._id
           return (
             <li key={rule._id} style={listItemStyle}>
-              <span style={{ fontSize: '0.85rem' }}>
-                Block {format24HourTo12(rule.startHour)} – {format24HourTo12(rule.endHour)}
+              <span>
+                <strong>Block:</strong> {format24HourTo12(rule.startHour)} – {format24HourTo12(rule.endHour)}
               </span>
               <button
                 onClick={() => handleRemoveRule(rule._id)}
@@ -202,10 +205,10 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
         })}
       </ul>
 
-      <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div>
-          <label style={{ fontWeight: '600', marginRight: '4px', fontSize:'0.8rem' }}>
-            Start:
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}>
+            Start Hour:
           </label>
           <select
             value={startHour}
@@ -222,8 +225,8 @@ export function AutoBlockControls({ autoBlockRules, setAutoBlockRules, reloadDat
         </div>
 
         <div>
-          <label style={{ fontWeight: '600', marginRight: '4px', fontSize:'0.8rem' }}>
-            End:
+          <label style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}>
+            End Hour:
           </label>
           <select
             value={endHour}
@@ -276,17 +279,14 @@ export default function AdminBlockCalendar() {
   // 1) Data fetch
   async function fetchData() {
     const calendarApi = calendarRef.current?.getApi()
-    const currentViewDate = calendarApi && calendarApi.getDate()
+    const currentViewDate = calendarApi?.getDate()
 
-    // Manual blocks
     const blocksData = await client.fetch(`*[_type == "blocked"]{_id, start, end}`)
     setBlocks(blocksData)
 
-    // Reservations
     const resData = await client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
     setReservations(resData)
 
-    // Auto-block hours
     const autoData = await client.fetch(`
       *[_type == "autoBlockedHours"]{
         _id,
@@ -308,7 +308,7 @@ export default function AdminBlockCalendar() {
     }
   }, [authenticated])
 
-  // Past-block overlay
+  // Past-block overlay: 7 days back -> now
   useEffect(() => {
     function updatePastBlockEvent() {
       const earliest = getJerusalemMidnightXDaysAgo(7)
@@ -380,7 +380,7 @@ export default function AdminBlockCalendar() {
       if (!ex.date) return false
       if (ex.date.slice(0,10) !== dateStr) return false
 
-      const exDay   = startJerusalem.clone().startOf('day')
+      const exDay = startJerusalem.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
       const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
 
@@ -388,7 +388,6 @@ export default function AdminBlockCalendar() {
     })
   }
 
-  // BLOCK
   async function handleBlock(info) {
     const slotStart = new Date(info.start)
     const slotEnd   = new Date(info.end)
@@ -418,7 +417,6 @@ export default function AdminBlockCalendar() {
     fetchData()
   }
 
-  // UNBLOCK => fix "no-loop-func" by local copies
   async function handleUnblock(info) {
     const slotStart = new Date(info.start)
     const slotEnd   = new Date(info.end)
@@ -448,7 +446,7 @@ export default function AdminBlockCalendar() {
       cursorBlock = nextBlock
     }
 
-    // 2) Add timeExceptions for auto-block
+    // 2) Add timeExceptions for any auto-block
     const patches = []
     let cursorException = new Date(slotStart)
     while (cursorException < slotEnd) {
@@ -489,7 +487,6 @@ export default function AdminBlockCalendar() {
     fetchData()
   }
 
-  // For auto-block expansions => events
   function getAutoBlockSlices(rule, dayStart, dayEnd) {
     const slices = []
     let cursorDay = moment.tz(dayStart, 'Asia/Jerusalem').startOf('day')
@@ -529,7 +526,6 @@ export default function AdminBlockCalendar() {
     return merged
   }
 
-  // For manual coverage checks
   function fullyCoveredByManual(start, end) {
     let cursorCheck = new Date(start)
     while (cursorCheck < end) {
@@ -594,11 +590,12 @@ export default function AdminBlockCalendar() {
     successCallback(events)
   }
 
-  // Show name only for reservations, no text for blocked
   function handleEventContent(arg) {
+    // background => blocked => no text
     if (arg.event.display === 'background') {
       return null
     }
+    // reservations => name only
     return <div>{arg.event.title}</div>
   }
 
@@ -613,7 +610,6 @@ export default function AdminBlockCalendar() {
   async function handleDeleteReservation() {
     if (!selectedReservation) return
     if (!window.confirm('Delete this reservation?')) return
-
     await client.delete(selectedReservation._id)
     fetchData()
     setModalIsOpen(false)
@@ -694,8 +690,8 @@ export default function AdminBlockCalendar() {
 
   return (
     <div>
-      <h2 style={{ textAlign:'center', marginBottom:'1rem' }}>
-        Admin Panel
+      <h2 style={{ textAlign:'center', marginBottom:'1rem', fontSize:'1.8rem' }}>
+        Admin Panel (Larger)
       </h2>
 
       <AutoBlockControls
@@ -713,7 +709,9 @@ export default function AdminBlockCalendar() {
           momentPlugin,
           momentTimezonePlugin
         ]}
+        // Timezone
         timeZone="Asia/Jerusalem"
+        // 30-day timeGrid
         initialView="timeGrid30Day"
         views={{
           timeGrid30Day: {
@@ -723,26 +721,21 @@ export default function AdminBlockCalendar() {
             buttonText: '30 days'
           }
         }}
-        dayHeaderFormat={{
-          weekday: 'short',
-          month: 'numeric',
-          day: 'numeric',
-          omitCommas: true
-        }}
-        stickyHeaderDates
-        stickyFooterScrollbar={false}
-        dayMinWidth={120}
+        // Double the dayMinWidth from 120 → 240 for bigger columns
+        dayMinWidth={240}
         allDaySlot={false}
         slotDuration="01:00:00"
         slotMinTime="00:00:00"
         slotMaxTime="24:00:00"
         height="auto"
+        stickyHeaderDates
+        stickyFooterScrollbar={false}
         longPressDelay={100}
         selectLongPressDelay={100}
         eventLongPressDelay={100}
         validRange={{
           start: validRangeStart.toISOString(),
-          end: validRangeEnd.toISOString()
+          end:   validRangeEnd.toISOString()
         }}
         selectable
         selectAllow={(selectInfo) => new Date(selectInfo.startStr) >= new Date()}
@@ -765,6 +758,12 @@ export default function AdminBlockCalendar() {
           center: 'title',
           right: ''
         }}
+        dayHeaderFormat={{
+          weekday: 'short',
+          month: 'numeric',
+          day: 'numeric',
+          omitCommas: true
+        }}
       />
 
       <Modal
@@ -773,23 +772,25 @@ export default function AdminBlockCalendar() {
         contentLabel="Reservation Info"
         style={{
           overlay: {
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            zIndex: 1000
+            backgroundColor:'rgba(0,0,0,0.4)',
+            zIndex:1000
           },
           content: {
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%,-50%)',
-            padding: '25px',
-            borderRadius: '8px',
-            background: 'white',
-            width: '300px'
+            top:'50%',
+            left:'50%',
+            transform:'translate(-50%,-50%)',
+            padding:'25px',
+            borderRadius:'8px',
+            background:'white',
+            width:'400px'
           }
         }}
       >
-        <h3>Reservation Details</h3>
+        <h3 style={{ fontSize:'1.4rem', marginBottom:'0.5rem' }}>
+          Reservation Details
+        </h3>
         {selectedReservation && (
-          <div>
+          <div style={{ fontSize:'1rem' }}>
             <p><strong>Name:</strong> {selectedReservation.name}</p>
             <p><strong>Phone:</strong> {selectedReservation.phone}</p>
           </div>
@@ -798,20 +799,25 @@ export default function AdminBlockCalendar() {
           <button
             onClick={handleDeleteReservation}
             style={{
-              marginRight: '10px',
-              color: '#fff',
-              background: '#d9534f',
-              border: 'none',
-              padding: '8px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer'
+              marginRight:'10px',
+              color:'#fff',
+              background:'#d9534f',
+              border:'none',
+              padding:'8px 12px',
+              borderRadius:'4px',
+              cursor:'pointer',
+              fontSize:'1rem'
             }}
           >
             Delete
           </button>
           <button
             onClick={() => setModalIsOpen(false)}
-            style={{ padding: '8px 12px', cursor: 'pointer' }}
+            style={{
+              padding:'8px 12px',
+              cursor:'pointer',
+              fontSize:'1rem'
+            }}
           >
             Close
           </button>
