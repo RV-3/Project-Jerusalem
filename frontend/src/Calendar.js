@@ -97,20 +97,8 @@ function getHourRuleSlices(rule, viewStart, viewEnd) {
 
 // -----------------------------------
 // For DAY-based rules
-// e.g. autoBlockDays: { daysOfWeek: [...], timeExceptions: [...] }
+// (was a duplicate "isDayCovered" here; removed)
 // -----------------------------------
-function isDayCovered(dayDoc, hStart, hEnd) {
-  // If the doc doesn’t exist or no daysOfWeek => no coverage
-  if (!dayDoc?.daysOfWeek?.length) return false
-  const dayName = moment.tz(hStart, 'Asia/Jerusalem').format('dddd')
-  if (!dayDoc.daysOfWeek.includes(dayName)) return false
-
-  // Also check if there's a timeException
-  if (isHourExcepted(dayDoc.timeExceptions, hStart, hEnd)) {
-    return false
-  }
-  return true
-}
 
 /** Expand day-based blocks into hour slices (0..24), skipping timeExceptions. */
 function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
@@ -291,7 +279,7 @@ export default function Calendar() {
     return autoBlockHours.some((rule) => doesHourRuleCover(rule, start, end))
   }
 
-  // For day-based coverage check
+  // (SECOND) day-based coverage check: (this is the one actually used)
   function isDayCovered(dayDoc, hStart, hEnd) {
     const dayName = moment.tz(hStart, 'Asia/Jerusalem').format('dddd')
     if (!dayDoc.daysOfWeek?.includes(dayName)) return false
