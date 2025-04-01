@@ -83,7 +83,7 @@ function format24HourTo12(hourStr) {
 }
 
 // ---------------------------------------------------------------------
-// AUTO-BLOCK CONTROLS (Hours + Days UI)
+// AUTO-BLOCK CONTROLS with Toggles
 // ---------------------------------------------------------------------
 export function AutoBlockControls({
   autoBlockRules,
@@ -92,13 +92,17 @@ export function AutoBlockControls({
   setAutoBlockDays,
   reloadData
 }) {
+  // Toggles for the Hours and Days sections
+  const [showHours, setShowHours] = useState(false)
+  const [showDays, setShowDays]   = useState(false)
+
   // ---------------------------
   // HOURS LOGIC
   // ---------------------------
   const [startHour, setStartHour] = useState('')
-  const [endHour, setEndHour] = useState('')
+  const [endHour, setEndHour]     = useState('')
   const [hoverRemoveId, setHoverRemoveId] = useState(null)
-  const [hoverAdd, setHoverAdd] = useState(false)
+  const [hoverAdd, setHoverAdd]           = useState(false)
 
   useEffect(() => {
     if (startHour && endHour && parseInt(endHour, 10) <= parseInt(startHour, 10)) {
@@ -143,7 +147,62 @@ export function AutoBlockControls({
     }
   }
 
-  // Styles for the hour-blocking UI
+  // ---------------------------
+  // DAYS LOGIC (pop-up with toggles)
+  // ---------------------------
+  const [daysModalOpen, setDaysModalOpen] = useState(false)
+  const [selectedDays, setSelectedDays]    = useState([])
+
+  useEffect(() => {
+    if (autoBlockDays?.daysOfWeek) {
+      setSelectedDays(autoBlockDays.daysOfWeek)
+    } else {
+      setSelectedDays([])
+    }
+  }, [autoBlockDays])
+
+  // Remove a single day => immediate doc update
+  async function removeDay(dayFull) {
+    const newArr = selectedDays.filter((d) => d !== dayFull)
+    await saveDaysToSanity(newArr)
+  }
+
+  // Toggling inside the modal
+  function toggleDay(dayFull) {
+    setSelectedDays((prev) =>
+      prev.includes(dayFull)
+        ? prev.filter((d) => d !== dayFull)
+        : [...prev, dayFull]
+    )
+  }
+
+  async function handleSaveDaysModal() {
+    await saveDaysToSanity(selectedDays)
+    alert('Blocked days saved.')
+    setDaysModalOpen(false)
+  }
+
+  // Shared doc saver
+  async function saveDaysToSanity(daysArr) {
+    try {
+      const docId = autoBlockDays?._id || 'autoBlockedDaysSingleton'
+      const docToSave = {
+        _id: docId,
+        _type: 'autoBlockedDays',
+        daysOfWeek: daysArr,
+        timeExceptions: autoBlockDays?.timeExceptions || []
+      }
+      await client.createOrReplace(docToSave)
+      reloadData()
+    } catch (err) {
+      console.error('Error saving day-block doc:', err)
+      alert('Could not save blocked days. See console.')
+    }
+  }
+
+  // ---------------------------
+  // STYLES
+  // ---------------------------
   const containerStyle = {
     margin: '1rem auto',
     padding: '1rem',
@@ -152,6 +211,16 @@ export function AutoBlockControls({
     backgroundColor: '#fafafa',
     maxWidth: '600px',
     fontSize: '1.2rem'
+  }
+
+  const toggleHeaderStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    cursor: 'pointer',
+    padding: '0.5rem 0',
+    fontSize: '1.3rem',
+    fontWeight: 'bold'
   }
 
   const listItemStyle = {
@@ -211,292 +280,256 @@ export function AutoBlockControls({
     fontSize: '1rem'
   }
 
+  const chipStyle = {
+    display: 'inline-block',
+    padding: '4px 8px',
+    background: '#ddd',
+    borderRadius: '4px',
+    marginRight: '6px',
+    fontSize: '1rem'
+  }
+
   // ---------------------------
-  // DAYS LOGIC (pop-up with toggles)
+  // RENDER
   // ---------------------------
-  const [daysModalOpen, setDaysModalOpen] = useState(false)
-  const [selectedDays, setSelectedDays] = useState([])
-
-  useEffect(() => {
-    if (autoBlockDays?.daysOfWeek) {
-      setSelectedDays(autoBlockDays.daysOfWeek)
-    } else {
-      setSelectedDays([])
-    }
-  }, [autoBlockDays])
-
-  // Remove a single day => immediate doc update
-  async function removeDay(dayFull) {
-    const newArr = selectedDays.filter((d) => d !== dayFull)
-    await saveDaysToSanity(newArr)
-  }
-
-  // Toggling inside the modal
-  function toggleDay(dayFull) {
-    setSelectedDays((prev) =>
-      prev.includes(dayFull)
-        ? prev.filter((d) => d !== dayFull)
-        : [...prev, dayFull]
-    )
-  }
-
-  async function handleSaveDaysModal() {
-    await saveDaysToSanity(selectedDays)
-    alert('Blocked days saved.')
-    setDaysModalOpen(false)
-  }
-
-  // Shared doc saver
-  async function saveDaysToSanity(daysArr) {
-    try {
-      const docId = autoBlockDays?._id || 'autoBlockedDaysSingleton'
-      const docToSave = {
-        _id: docId,
-        _type: 'autoBlockedDays',
-        daysOfWeek: daysArr,
-        timeExceptions: autoBlockDays?.timeExceptions || []
-      }
-      await client.createOrReplace(docToSave)
-      reloadData()
-    } catch (err) {
-      console.error('Error saving day-block doc:', err)
-      alert('Could not save blocked days. See console.')
-    }
-  }
-
   return (
     <div style={containerStyle}>
-      {/* ====== HOURS SECTION ====== */}
-      <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.4rem' }}>
-        Auto-Block Hours
-      </h3>
-
-      <ul style={{ listStyle: 'none', paddingLeft: 0, marginBottom: '1rem' }}>
-        {autoBlockRules.map((rule) => {
-          const isHovering = hoverRemoveId === rule._id
-          return (
-            <li key={rule._id} style={listItemStyle}>
-              <span>
-                <strong>Block:</strong>{' '}
-                {format24HourTo12(rule.startHour)} – {format24HourTo12(rule.endHour)}
-              </span>
-              <button
-                onClick={() => handleRemoveRule(rule._id)}
-                onMouseEnter={() => setHoverRemoveId(rule._id)}
-                onMouseLeave={() => setHoverRemoveId(null)}
-                style={{
-                  ...removeBtnBase,
-                  ...(isHovering ? removeBtnHover : {})
-                }}
-              >
-                Remove<span style={xIconStyle}>×</span>
-              </button>
-            </li>
-          )
-        })}
-      </ul>
-
+      {/* ================= HOURS TOGGLE ================= */}
       <div
-        style={{
-          display: 'flex',
-          gap: '0.8rem',
-          flexWrap: 'wrap',
-          alignItems: 'flex-end'
-        }}
+        style={toggleHeaderStyle}
+        onClick={() => setShowHours((prev) => !prev)}
       >
-        <div>
-          <label
-            style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
-          >
-            Start Hour:
-          </label>
-          <select
-            value={startHour}
-            onChange={(e) => setStartHour(e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">-- Start --</option>
-            {HOUR_OPTIONS_12H.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label
-            style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
-          >
-            End Hour:
-          </label>
-          <select
-            value={endHour}
-            onChange={(e) => setEndHour(e.target.value)}
-            style={selectStyle}
-          >
-            <option value="">-- End --</option>
-            {filteredEndOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <button
-            onClick={handleAddRule}
-            onMouseEnter={() => setHoverAdd(true)}
-            onMouseLeave={() => setHoverAdd(false)}
-            style={{
-              ...addBtnBase,
-              ...(hoverAdd ? addBtnHover : {})
-            }}
-            disabled={isAddDisabled}
-          >
-            Add Rule
-          </button>
-        </div>
+        <span>Auto-Block Hours</span>
+        <span style={{ fontSize: '1rem' }}>
+          {showHours ? '▲ Hide' : '▼ Show'}
+        </span>
       </div>
+      {showHours && (
+        <div style={{ marginBottom: '2rem' }}>
+          <ul style={{ listStyle: 'none', paddingLeft: 0, marginBottom: '1rem' }}>
+            {autoBlockRules.map((rule) => {
+              const isHovering = hoverRemoveId === rule._id
+              return (
+                <li key={rule._id} style={listItemStyle}>
+                  <span>
+                    <strong>Block:</strong>{' '}
+                    {format24HourTo12(rule.startHour)} – {format24HourTo12(rule.endHour)}
+                  </span>
+                  <button
+                    onClick={() => handleRemoveRule(rule._id)}
+                    onMouseEnter={() => setHoverRemoveId(rule._id)}
+                    onMouseLeave={() => setHoverRemoveId(null)}
+                    style={{
+                      ...removeBtnBase,
+                      ...(isHovering ? removeBtnHover : {})
+                    }}
+                  >
+                    Remove<span style={xIconStyle}>×</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
 
-      <hr style={{ margin: '2rem 0 1rem' }} />
+          <div
+            style={{
+              display: 'flex',
+              gap: '0.8rem',
+              flexWrap: 'wrap',
+              alignItems: 'flex-end'
+            }}
+          >
+            <div>
+              <label
+                style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
+              >
+                Start Hour:
+              </label>
+              <select
+                value={startHour}
+                onChange={(e) => setStartHour(e.target.value)}
+                style={selectStyle}
+              >
+                <option value="">-- Start --</option>
+                {HOUR_OPTIONS_12H.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* ====== DAYS SECTION ====== */}
-      <h3 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>
-        Auto-Block Days
-      </h3>
+            <div>
+              <label
+                style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
+              >
+                End Hour:
+              </label>
+              <select
+                value={endHour}
+                onChange={(e) => setEndHour(e.target.value)}
+                style={selectStyle}
+              >
+                <option value="">-- End --</option>
+                {filteredEndOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      {/* Show existing days as chips */}
-      <div style={{ margin: '0.5rem 0' }}>
-        {(!selectedDays || selectedDays.length === 0) ? (
-          <em>No days blocked</em>
-        ) : (
-          selectedDays.map((day) => (
-            <span
-              key={day}
+            <div>
+              <button
+                onClick={handleAddRule}
+                onMouseEnter={() => setHoverAdd(true)}
+                onMouseLeave={() => setHoverAdd(false)}
+                style={{
+                  ...addBtnBase,
+                  ...(hoverAdd ? addBtnHover : {})
+                }}
+                disabled={isAddDisabled}
+              >
+                Add Rule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= DAYS TOGGLE ================= */}
+      <div
+        style={toggleHeaderStyle}
+        onClick={() => setShowDays((prev) => !prev)}
+      >
+        <span>Auto-Block Days</span>
+        <span style={{ fontSize: '1rem' }}>
+          {showDays ? '▲ Hide' : '▼ Show'}
+        </span>
+      </div>
+      {showDays && (
+        <div>
+          {/* Show existing days as chips */}
+          <div style={{ margin: '0.5rem 0' }}>
+            {(!autoBlockDays?.daysOfWeek || autoBlockDays.daysOfWeek.length === 0) ? (
+              <em>No days blocked</em>
+            ) : (
+              autoBlockDays.daysOfWeek.map((day) => (
+                <span key={day} style={chipStyle}>
+                  {DAY_SHORT_MAP[day] || day}
+                  <button
+                    onClick={() => removeDay(day)}
+                    style={{
+                      marginLeft: '6px',
+                      cursor: 'pointer',
+                      background: 'transparent',
+                      border: 'none',
+                      fontSize: '1rem'
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))
+            )}
+          </div>
+
+          {/* Button => opens modal with toggles */}
+          <button
+            onClick={() => setDaysModalOpen(true)}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '6px',
+              border: '1px solid #555',
+              backgroundColor: '#eee',
+              cursor: 'pointer'
+            }}
+          >
+            Block Days
+          </button>
+
+          <Modal
+            isOpen={daysModalOpen}
+            onRequestClose={() => setDaysModalOpen(false)}
+            contentLabel="Block Days Modal"
+            style={{
+              overlay: {
+                backgroundColor:'rgba(0,0,0,0.4)',
+                zIndex:1000
+              },
+              content: {
+                top:'50%',
+                left:'50%',
+                transform:'translate(-50%,-50%)',
+                padding:'25px',
+                borderRadius:'8px',
+                background:'white',
+                width:'400px'
+              }
+            }}
+          >
+            <h3 style={{ marginBottom: '1rem' }}>Select which days to block</h3>
+            <div
               style={{
-                display: 'inline-block',
-                padding: '4px 8px',
-                background: '#ddd',
-                borderRadius: '4px',
-                marginRight: '6px',
-                fontSize: '1rem'
+                display:'flex',
+                justifyContent:'center',
+                flexWrap:'wrap',
+                gap:'1rem',
+                marginBottom:'1.5rem'
               }}
             >
-              {DAY_SHORT_MAP[day] || day}
-              <button
-                onClick={() => removeDay(day)}
-                style={{
-                  marginLeft: '6px',
-                  cursor: 'pointer',
-                  background: 'transparent',
-                  border: 'none',
-                  fontSize: '1rem'
-                }}
-              >
-                ×
-              </button>
-            </span>
-          ))
-        )}
-      </div>
+              {DAY_TOGGLES.map(({ full, short }) => {
+                const active = selectedDays.includes(full)
+                return (
+                  <button
+                    key={full}
+                    onClick={() => toggleDay(full)}
+                    style={{
+                      minWidth:'45px',
+                      padding:'8px',
+                      borderRadius:'6px',
+                      border:'1px solid #444',
+                      background: active ? '#444' : '#fff',
+                      color: active ? '#fff' : '#444',
+                      cursor:'pointer',
+                      fontSize:'1rem'
+                    }}
+                  >
+                    {short}
+                  </button>
+                )
+              })}
+            </div>
 
-      {/* Button => opens modal with toggles */}
-      <button
-        onClick={() => setDaysModalOpen(true)}
-        style={{
-          padding: '10px 20px',
-          borderRadius: '6px',
-          border: '1px solid #555',
-          backgroundColor: '#eee',
-          cursor: 'pointer'
-        }}
-      >
-        Block Days
-      </button>
-
-      {/* Modal with day toggles */}
-      <Modal
-        isOpen={daysModalOpen}
-        onRequestClose={() => setDaysModalOpen(false)}
-        contentLabel="Block Days Modal"
-        style={{
-          overlay: {
-            backgroundColor:'rgba(0,0,0,0.4)',
-            zIndex:1000
-          },
-          content: {
-            top:'50%',
-            left:'50%',
-            transform:'translate(-50%,-50%)',
-            padding:'25px',
-            borderRadius:'8px',
-            background:'white',
-            width:'400px'
-          }
-        }}
-      >
-        <h3 style={{ marginBottom: '1rem' }}>Select which days to block</h3>
-        <div
-          style={{
-            display:'flex',
-            justifyContent:'center',
-            flexWrap:'wrap',
-            gap:'1rem',
-            marginBottom:'1.5rem'
-          }}
-        >
-          {DAY_TOGGLES.map(({ full, short }) => {
-            const active = selectedDays.includes(full)
-            return (
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem' }}>
               <button
-                key={full}
-                onClick={() => toggleDay(full)}
+                onClick={handleSaveDaysModal}
                 style={{
-                  minWidth:'45px',
-                  padding:'8px',
-                  borderRadius:'6px',
-                  border:'1px solid #444',
-                  background: active ? '#444' : '#fff',
-                  color: active ? '#fff' : '#444',
+                  backgroundColor:'#28a745',
+                  color:'#fff',
+                  border:'none',
+                  padding:'8px 12px',
+                  borderRadius:'4px',
                   cursor:'pointer',
                   fontSize:'1rem'
                 }}
               >
-                {short}
+                Save
               </button>
-            )
-          })}
+              <button
+                onClick={() => setDaysModalOpen(false)}
+                style={{
+                  padding:'8px 12px',
+                  cursor:'pointer',
+                  fontSize:'1rem'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </Modal>
         </div>
-
-        <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem' }}>
-          <button
-            onClick={handleSaveDaysModal}
-            style={{
-              backgroundColor:'#28a745',
-              color:'#fff',
-              border:'none',
-              padding:'8px 12px',
-              borderRadius:'4px',
-              cursor:'pointer',
-              fontSize:'1rem'
-            }}
-          >
-            Save
-          </button>
-          <button
-            onClick={() => setDaysModalOpen(false)}
-            style={{
-              padding:'8px 12px',
-              cursor:'pointer',
-              fontSize:'1rem'
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      </Modal>
+      )}
     </div>
   )
 }
@@ -587,7 +620,6 @@ export default function AdminBlockCalendar() {
     let cursor = slotStart
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
-      // define local copies for the callback => avoid no-loop-func
       const localHourStart = new Date(cursor.getTime())
       const localHourEnd   = new Date(nextHour.getTime())
 
@@ -666,7 +698,7 @@ export default function AdminBlockCalendar() {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
 
-      const exDay = startJerusalem.clone().startOf('day')
+      const exDay   = startJerusalem.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
       const exEnd   = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
 
@@ -686,7 +718,6 @@ export default function AdminBlockCalendar() {
     let cursor = new Date(slotStart)
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
-      // define local copies => avoid no-loop-func warnings
       const localHourStart = new Date(cursor.getTime())
       const localHourEnd   = new Date(nextHour.getTime())
 
