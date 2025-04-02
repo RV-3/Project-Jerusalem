@@ -200,7 +200,7 @@ export default function Calendar() {
   const [formData, setFormData] = useState({ name: '', phone: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const calendarRef = useRef(null)
-  const platformDelay = isIOS ? 100 : 10
+  const platformDelay = isIOS ? 100 : 0
 
   // 1) FETCH data from Sanity
   useEffect(() => {
