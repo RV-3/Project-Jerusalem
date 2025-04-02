@@ -7,13 +7,16 @@ import interactionPlugin from '@fullcalendar/interaction'
 import moment from 'moment-timezone'
 import momentPlugin from '@fullcalendar/moment'
 import momentTimezonePlugin from '@fullcalendar/moment-timezone'
-
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
+
+// Import your newly separated AutoBlockControls component
+import { AutoBlockControls } from './admin/AutoBlockControls.js'
 
 // Make sure modal is attached properly
 Modal.setAppElement('#root')
 
+// Simple admin password check (for demo)
 const ADMIN_PASSWORD = 'admin123'
 
 // Helper: get midnight in Jerusalem X days ago
@@ -22,546 +25,6 @@ function getJerusalemMidnightXDaysAgo(daysAgo) {
     .startOf('day')
     .subtract(daysAgo, 'days')
     .toDate()
-}
-
-// 12-hour style + "12 AM (next day)"
-const HOUR_OPTIONS_12H = [
-  { value: '0', label: '12 AM' },
-  { value: '1', label: '1 AM' },
-  { value: '2', label: '2 AM' },
-  { value: '3', label: '3 AM' },
-  { value: '4', label: '4 AM' },
-  { value: '5', label: '5 AM' },
-  { value: '6', label: '6 AM' },
-  { value: '7', label: '7 AM' },
-  { value: '8', label: '8 AM' },
-  { value: '9', label: '9 AM' },
-  { value: '10', label: '10 AM' },
-  { value: '11', label: '11 AM' },
-  { value: '12', label: '12 PM' },
-  { value: '13', label: '1 PM' },
-  { value: '14', label: '2 PM' },
-  { value: '15', label: '3 PM' },
-  { value: '16', label: '4 PM' },
-  { value: '17', label: '5 PM' },
-  { value: '18', label: '6 PM' },
-  { value: '19', label: '7 PM' },
-  { value: '20', label: '8 PM' },
-  { value: '21', label: '9 PM' },
-  { value: '22', label: '10 PM' },
-  { value: '23', label: '11 PM' },
-  { value: '24', label: '12 AM (next day)' }
-]
-
-// For short day labels displayed as chips
-const DAY_SHORT_MAP = {
-  Sunday: 'Su',
-  Monday: 'M',
-  Tuesday: 'T',
-  Wednesday: 'W',
-  Thursday: 'Th',
-  Friday: 'F',
-  Saturday: 'Sa'
-}
-
-// For toggles in the modal
-const DAY_TOGGLES = [
-  { full: 'Sunday',    short: 'Su' },
-  { full: 'Monday',    short: 'Mo' },
-  { full: 'Tuesday',   short: 'Tu' },
-  { full: 'Wednesday', short: 'We' },
-  { full: 'Thursday',  short: 'Th' },
-  { full: 'Friday',    short: 'Fr' },
-  { full: 'Saturday',  short: 'Sa' }
-]
-
-function format24HourTo12(hourStr) {
-  if (hourStr === '24') {
-    return '12 AM (next day)'
-  }
-  const found = HOUR_OPTIONS_12H.find((opt) => opt.value === String(hourStr))
-  return found ? found.label : `${hourStr}:00`
-}
-
-// ---------------------------------------------------------------------
-// AUTO-BLOCK CONTROLS with Toggles
-// ---------------------------------------------------------------------
-export function AutoBlockControls({
-  autoBlockRules,
-  setAutoBlockRules,
-  autoBlockDays,
-  setAutoBlockDays,
-  reloadData
-}) {
-  // Toggles for the Hours and Days sections
-  const [showHours, setShowHours] = useState(false)
-  const [showDays, setShowDays]   = useState(false)
-
-  // Keep track of previous day selection so we can detect newly added days
-  const [selectedDays, setSelectedDays] = useState([])
-  useEffect(() => {
-    if (autoBlockDays?.daysOfWeek) {
-      setSelectedDays(autoBlockDays.daysOfWeek)
-    } else {
-      setSelectedDays([])
-    }
-  }, [autoBlockDays])
-
-  // ---------------------------
-  // HOURS LOGIC
-  // ---------------------------
-  const [startHour, setStartHour]       = useState('')
-  const [endHour, setEndHour]           = useState('')
-  const [hoverRemoveId, setHoverRemoveId] = useState(null)
-  const [hoverAdd, setHoverAdd]         = useState(false)
-
-  useEffect(() => {
-    if (startHour && endHour && parseInt(endHour, 10) <= parseInt(startHour, 10)) {
-      setEndHour('')
-    }
-  }, [startHour, endHour])
-
-  const filteredEndOptions = !startHour
-    ? HOUR_OPTIONS_12H
-    : HOUR_OPTIONS_12H.filter(
-        (opt) => parseInt(opt.value, 10) > parseInt(startHour, 10)
-      )
-
-  const isAddDisabled = !startHour || !endHour
-
-  async function handleAddRule() {
-    if (isAddDisabled) return
-    try {
-      const doc = {
-        _type: 'autoBlockedHours',
-        startHour,
-        endHour,
-        timeExceptions: []
-      }
-      const created = await client.create(doc)
-      setAutoBlockRules((prev) => [...prev, created])
-      setStartHour('')
-      setEndHour('')
-      reloadData()
-    } catch (err) {
-      console.error('Error adding auto-block rule:', err)
-    }
-  }
-
-  async function handleRemoveRule(id) {
-    try {
-      await client.delete(id)
-      setAutoBlockRules(autoBlockRules.filter((r) => r._id !== id))
-      reloadData()
-    } catch (err) {
-      console.error('Error removing auto-block rule:', err)
-    }
-  }
-
-  // ---------------------------
-  // DAYS LOGIC (pop-up with toggles)
-  // ---------------------------
-  const [daysModalOpen, setDaysModalOpen] = useState(false)
-
-  // Remove a single day => immediate doc update
-  async function removeDay(dayFull) {
-    const newArr = selectedDays.filter((d) => d !== dayFull)
-    await saveDaysToSanity(newArr)
-  }
-
-  // Toggling inside the modal
-  function toggleDay(dayFull) {
-    setSelectedDays((prev) =>
-      prev.includes(dayFull)
-        ? prev.filter((d) => d !== dayFull)
-        : [...prev, dayFull]
-    )
-  }
-
-  async function handleSaveDaysModal() {
-    // Detect newly added days => remove timeExceptions for those
-    // so that re-adding a day overrides any previous unblocking
-    const oldDays = autoBlockDays?.daysOfWeek || []
-    const newlyAddedDays = selectedDays.filter((d) => !oldDays.includes(d))
-
-    await saveDaysToSanity(selectedDays, newlyAddedDays)
-    alert('Blocked days saved.')
-    setDaysModalOpen(false)
-  }
-
-  // Shared doc saver
-  async function saveDaysToSanity(daysArr, newlyAddedDays = []) {
-    try {
-      const docId = autoBlockDays?._id || 'autoBlockedDaysSingleton'
-      // build doc
-      const docToSave = {
-        _id: docId,
-        _type: 'autoBlockedDays',
-        daysOfWeek: daysArr,
-        timeExceptions: autoBlockDays?.timeExceptions || []
-      }
-
-      // --------------- OVERRIDE FIX ---------------
-      // For each newly added day, remove any timeExceptions that
-      // match that day in the future so re-applying day-block
-      // truly overrides older manual unblocking.
-      if (newlyAddedDays.length && docToSave.timeExceptions?.length) {
-        // filter out exceptions that match these day(s)
-        const filteredEx = docToSave.timeExceptions.filter((ex) => {
-          if (!ex.date) return true // keep if no date?
-
-          const exDayName = moment.tz(ex.date, 'Asia/Jerusalem').format('dddd')
-          // if it's a day that was newly added, remove that exception
-          if (newlyAddedDays.includes(exDayName)) {
-            return false
-          }
-          return true
-        })
-        docToSave.timeExceptions = filteredEx
-      }
-      // --------------- END OVERRIDE FIX ------------
-
-      // save doc
-      await client.createOrReplace(docToSave)
-      reloadData()
-    } catch (err) {
-      console.error('Error saving day-block doc:', err)
-      alert('Could not save blocked days. See console.')
-    }
-  }
-
-  // ---------------------------
-  // STYLES
-  // ---------------------------
-  const containerStyle = {
-    margin: '1rem auto',
-    padding: '1rem',
-    border: '2px solid #eee',
-    borderRadius: '8px',
-    backgroundColor: '#fafafa',
-    maxWidth: '600px',
-    fontSize: '1.2rem'
-  }
-
-  const toggleHeaderStyle = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    cursor: 'pointer',
-    padding: '0.5rem 0',
-    fontSize: '1.3rem',
-    fontWeight: 'bold'
-  }
-
-  const listItemStyle = {
-    marginBottom: '0.8rem',
-    padding: '0.8rem',
-    borderRadius: '6px',
-    background: '#f5f5f5',
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: '1rem'
-  }
-
-  const removeBtnBase = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    border: '1px solid #000',
-    borderRadius: '9999px',
-    padding: '0.5px 10px',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    background: '#eeeeee',
-    color: '#000000',
-    transition: 'background 0.3s, color 0.3s, border-color 0.3s'
-  }
-  const removeBtnHover = {
-    background: '#333',
-    color: '#fff'
-  }
-
-  const xIconStyle = {
-    marginLeft: '5px',
-    fontWeight: 'normal',
-    fontSize: '2rem'
-  }
-
-  const addBtnBase = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    border: 'none',
-    borderRadius: '9999px',
-    padding: '8px 16px',
-    fontSize: '1rem',
-    cursor: isAddDisabled ? 'default' : 'pointer',
-    background: isAddDisabled ? '#999' : '#444',
-    color: '#fff',
-    transition: 'background 0.3s'
-  }
-  const addBtnHover = {
-    background: isAddDisabled ? '#999' : '#222'
-  }
-
-  const selectStyle = {
-    padding: '6px 8px',
-    borderRadius: '4px',
-    border: '1px solid #ccc',
-    fontSize: '1rem'
-  }
-
-  const chipStyle = {
-    display: 'inline-block',
-    padding: '4px 8px',
-    background: '#ddd',
-    borderRadius: '4px',
-    marginRight: '6px',
-    fontSize: '1rem'
-  }
-
-  // ---------------------------
-  // RENDER
-  // ---------------------------
-  return (
-    <div style={containerStyle}>
-      {/* ================= HOURS TOGGLE ================= */}
-      <div
-        style={toggleHeaderStyle}
-        onClick={() => setShowHours((prev) => !prev)}
-      >
-        <span>Auto-Block Hours</span>
-        <span style={{ fontSize: '1rem' }}>
-          {showHours ? '▲ Hide' : '▼ Show'}
-        </span>
-      </div>
-      {showHours && (
-        <div style={{ marginBottom: '2rem' }}>
-          <ul style={{ listStyle: 'none', paddingLeft: 0, marginBottom: '1rem' }}>
-            {autoBlockRules.map((rule) => {
-              const isHovering = hoverRemoveId === rule._id
-              return (
-                <li key={rule._id} style={listItemStyle}>
-                  <span>
-                    <strong>Block:</strong>{' '}
-                    {format24HourTo12(rule.startHour)} – {format24HourTo12(rule.endHour)}
-                  </span>
-                  <button
-                    onClick={() => handleRemoveRule(rule._id)}
-                    onMouseEnter={() => setHoverRemoveId(rule._id)}
-                    onMouseLeave={() => setHoverRemoveId(null)}
-                    style={{
-                      ...removeBtnBase,
-                      ...(isHovering ? removeBtnHover : {})
-                    }}
-                  >
-                    Remove<span style={xIconStyle}>×</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: '0.8rem',
-              flexWrap: 'wrap',
-              alignItems: 'flex-end'
-            }}
-          >
-            <div>
-              <label
-                style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
-              >
-                Start Hour:
-              </label>
-              <select
-                value={startHour}
-                onChange={(e) => setStartHour(e.target.value)}
-                style={selectStyle}
-              >
-                <option value="">-- Start --</option>
-                {HOUR_OPTIONS_12H.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
-              >
-                End Hour:
-              </label>
-              <select
-                value={endHour}
-                onChange={(e) => setEndHour(e.target.value)}
-                style={selectStyle}
-              >
-                <option value="">-- End --</option>
-                {filteredEndOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <button
-                onClick={handleAddRule}
-                onMouseEnter={() => setHoverAdd(true)}
-                onMouseLeave={() => setHoverAdd(false)}
-                style={{
-                  ...addBtnBase,
-                  ...(hoverAdd ? addBtnHover : {})
-                }}
-                disabled={isAddDisabled}
-              >
-                Add Rule
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= DAYS TOGGLE ================= */}
-      <div
-        style={toggleHeaderStyle}
-        onClick={() => setShowDays((prev) => !prev)}
-      >
-        <span>Auto-Block Days</span>
-        <span style={{ fontSize: '1rem' }}>
-          {showDays ? '▲ Hide' : '▼ Show'}
-        </span>
-      </div>
-      {showDays && (
-        <div>
-          {/* Show existing days as chips */}
-          <div style={{ margin: '0.5rem 0' }}>
-            {(!autoBlockDays?.daysOfWeek || autoBlockDays.daysOfWeek.length === 0) ? (
-              <em>No days blocked</em>
-            ) : (
-              autoBlockDays.daysOfWeek.map((day) => (
-                <span key={day} style={chipStyle}>
-                  {DAY_SHORT_MAP[day] || day}
-                  <button
-                    onClick={() => removeDay(day)}
-                    style={{
-                      marginLeft: '6px',
-                      cursor: 'pointer',
-                      background: 'transparent',
-                      border: 'none',
-                      fontSize: '1rem'
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))
-            )}
-          </div>
-
-          {/* Button => opens modal with toggles */}
-          <button
-            onClick={() => setDaysModalOpen(true)}
-            style={{
-              padding: '10px 20px',
-              borderRadius: '6px',
-              border: '1px solid #555',
-              backgroundColor: '#eee',
-              cursor: 'pointer'
-            }}
-          >
-            Block Days
-          </button>
-
-          <Modal
-            isOpen={daysModalOpen}
-            onRequestClose={() => setDaysModalOpen(false)}
-            contentLabel="Block Days Modal"
-            style={{
-              overlay: {
-                backgroundColor:'rgba(0,0,0,0.4)',
-                zIndex:1000
-              },
-              content: {
-                top:'50%',
-                left:'50%',
-                transform:'translate(-50%,-50%)',
-                padding:'25px',
-                borderRadius:'8px',
-                background:'white',
-                width:'400px'
-              }
-            }}
-          >
-            <h3 style={{ marginBottom: '1rem' }}>Select which days to block</h3>
-            <div
-              style={{
-                display:'flex',
-                justifyContent:'center',
-                flexWrap:'wrap',
-                gap:'1rem',
-                marginBottom:'1.5rem'
-              }}
-            >
-              {DAY_TOGGLES.map(({ full, short }) => {
-                const active = selectedDays.includes(full)
-                return (
-                  <button
-                    key={full}
-                    onClick={() => toggleDay(full)}
-                    style={{
-                      minWidth:'45px',
-                      padding:'8px',
-                      borderRadius:'6px',
-                      border:'1px solid #444',
-                      background: active ? '#444' : '#fff',
-                      color: active ? '#fff' : '#444',
-                      cursor:'pointer',
-                      fontSize:'1rem'
-                    }}
-                  >
-                    {short}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem' }}>
-              <button
-                onClick={handleSaveDaysModal}
-                style={{
-                  backgroundColor:'#28a745',
-                  color:'#fff',
-                  border:'none',
-                  padding:'8px 12px',
-                  borderRadius:'4px',
-                  cursor:'pointer',
-                  fontSize:'1rem'
-                }}
-              >
-                Save
-              </button>
-              <button
-                onClick={() => setDaysModalOpen(false)}
-                style={{
-                  padding:'8px 12px',
-                  cursor:'pointer',
-                  fontSize:'1rem'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </Modal>
-        </div>
-      )}
-    </div>
-  )
 }
 
 // ---------------------------------------------------------------------
@@ -647,14 +110,17 @@ export default function AdminBlockCalendar() {
   // Utility: check if entire selection is blocked hour-by-hour
   function isRangeCompletelyBlocked(info) {
     const slotStart = new Date(info.start)
-    const slotEnd   = new Date(info.end)
+    const slotEnd = new Date(info.end)
     let cursor = slotStart
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
       const localHourStart = new Date(cursor.getTime())
-      const localHourEnd   = new Date(nextHour.getTime())
+      const localHourEnd = new Date(nextHour.getTime())
 
-      if (!isManuallyBlocked(localHourStart, localHourEnd) && !isAutoBlocked(localHourStart, localHourEnd)) {
+      if (
+        !isManuallyBlocked(localHourStart, localHourEnd) &&
+        !isAutoBlocked(localHourStart, localHourEnd)
+      ) {
         return false
       }
       cursor = nextHour
@@ -665,11 +131,12 @@ export default function AdminBlockCalendar() {
   function isManuallyBlocked(hStart, hEnd) {
     return blocks.some((b) => {
       const bStart = new Date(b.start).getTime()
-      const bEnd   = new Date(b.end).getTime()
+      const bEnd = new Date(b.end).getTime()
       return bStart === hStart.getTime() && bEnd === hEnd.getTime()
     })
   }
 
+  // High-level check for day-based or hour-based auto-block
   function isAutoBlocked(hStart, hEnd) {
     // 1) day-based
     if (autoBlockDays?.daysOfWeek?.length) {
@@ -687,16 +154,16 @@ export default function AdminBlockCalendar() {
   function isDayLevelExcepted(hStart, hEnd) {
     if (!autoBlockDays?.timeExceptions?.length) return false
     const startJerusalem = moment.tz(hStart, 'Asia/Jerusalem')
-    const endJerusalem   = moment.tz(hEnd,   'Asia/Jerusalem')
+    const endJerusalem = moment.tz(hEnd, 'Asia/Jerusalem')
     const dateStr = startJerusalem.format('YYYY-MM-DD')
 
     return autoBlockDays.timeExceptions.some((ex) => {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
 
-      const exDay   = startJerusalem.clone().startOf('day')
+      const exDay = startJerusalem.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
+      const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
 
       return startJerusalem.isBefore(exEnd) && endJerusalem.isAfter(exStart)
     })
@@ -704,15 +171,17 @@ export default function AdminBlockCalendar() {
 
   function doesRuleCoverHourRule(rule, hStart, hEnd) {
     const startJerusalem = moment.tz(hStart, 'Asia/Jerusalem')
-    const endJerusalem   = moment.tz(hEnd,   'Asia/Jerusalem')
+    const endJerusalem = moment.tz(hEnd, 'Asia/Jerusalem')
 
     const dayAnchor = startJerusalem.clone().startOf('day')
     const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-    const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
+    const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
 
+    // Must be within the rule’s hour range
     if (startJerusalem.isBefore(rStart) || endJerusalem.isAfter(rEnd)) {
       return false
     }
+    // Also ensure not excepted
     if (isHourRuleExcepted(rule, hStart, hEnd)) {
       return false
     }
@@ -721,7 +190,7 @@ export default function AdminBlockCalendar() {
 
   function isHourRuleExcepted(rule, hStart, hEnd) {
     const startJerusalem = moment.tz(hStart, 'Asia/Jerusalem')
-    const endJerusalem   = moment.tz(hEnd,   'Asia/Jerusalem')
+    const endJerusalem = moment.tz(hEnd, 'Asia/Jerusalem')
     const dateStr = startJerusalem.format('YYYY-MM-DD')
     const exceptions = rule.timeExceptions || []
 
@@ -729,17 +198,18 @@ export default function AdminBlockCalendar() {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
 
-      const exDay   = startJerusalem.clone().startOf('day')
+      const exDay = startJerusalem.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
+      const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
 
       return startJerusalem.isBefore(exEnd) && endJerusalem.isAfter(exStart)
     })
   }
 
+  // Blocking a new time range
   async function handleBlock(info) {
     const slotStart = new Date(info.start)
-    const slotEnd   = new Date(info.end)
+    const slotEnd = new Date(info.end)
     if (slotStart < new Date()) {
       alert('Cannot block a past slot.')
       return
@@ -750,13 +220,13 @@ export default function AdminBlockCalendar() {
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
       const localHourStart = new Date(cursor.getTime())
-      const localHourEnd   = new Date(nextHour.getTime())
+      const localHourEnd = new Date(nextHour.getTime())
 
       if (!isManuallyBlocked(localHourStart, localHourEnd)) {
         docs.push({
           _type: 'blocked',
           start: localHourStart.toISOString(),
-          end:   localHourEnd.toISOString()
+          end: localHourEnd.toISOString()
         })
       }
       cursor = nextHour
@@ -769,9 +239,10 @@ export default function AdminBlockCalendar() {
     fetchData()
   }
 
+  // Unblocking a time range => remove manual blocks + add exceptions if needed
   async function handleUnblock(info) {
     const slotStart = new Date(info.start)
-    const slotEnd   = new Date(info.end)
+    const slotEnd = new Date(info.end)
     if (slotStart < new Date()) {
       alert('Cannot unblock past time.')
       return
@@ -783,11 +254,11 @@ export default function AdminBlockCalendar() {
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
       const localHourStart = new Date(cursor.getTime())
-      const localHourEnd   = new Date(nextHour.getTime())
+      const localHourEnd = new Date(nextHour.getTime())
 
       const existing = blocks.find((b) => {
         const bStart = new Date(b.start).getTime()
-        const bEnd   = new Date(b.end).getTime()
+        const bEnd = new Date(b.end).getTime()
         return bStart === localHourStart.getTime() && bEnd === localHourEnd.getTime()
       })
       if (existing) {
@@ -796,26 +267,26 @@ export default function AdminBlockCalendar() {
       cursor = nextHour
     }
 
-    // 2) If covered by day/hour rules => add timeExceptions
+    // 2) Add timeExceptions to hour/day rules, if they cover this slot
     const patches = []
     let exCursor = new Date(slotStart)
     while (exCursor < slotEnd) {
       const nextHr = new Date(exCursor.getTime() + 3600000)
       const localSlotStart = new Date(exCursor.getTime())
-      const localSlotEnd   = new Date(nextHr.getTime())
+      const localSlotEnd = new Date(nextHr.getTime())
 
       // hour-based
       autoBlockRules.forEach((rule) => {
         if (doesRuleCoverHourRule(rule, localSlotStart, localSlotEnd)) {
           const dateStr = moment.tz(localSlotStart, 'Asia/Jerusalem').format('YYYY-MM-DD')
           const startHr = moment.tz(localSlotStart, 'Asia/Jerusalem').hour()
-          const endHr   = moment.tz(localSlotEnd,   'Asia/Jerusalem').hour()
+          const endHr = moment.tz(localSlotEnd, 'Asia/Jerusalem').hour()
 
           const ex = {
             _type: 'timeException',
             date: dateStr,
             startHour: String(startHr),
-            endHour:   String(endHr)
+            endHour: String(endHr)
           }
           patches.push(
             client
@@ -833,13 +304,13 @@ export default function AdminBlockCalendar() {
         if (autoBlockDays.daysOfWeek.includes(dayName)) {
           const dateStr = moment.tz(localSlotStart, 'Asia/Jerusalem').format('YYYY-MM-DD')
           const startHr = moment.tz(localSlotStart, 'Asia/Jerusalem').hour()
-          const endHr   = moment.tz(localSlotEnd,   'Asia/Jerusalem').hour()
+          const endHr = moment.tz(localSlotEnd, 'Asia/Jerusalem').hour()
 
           const ex = {
             _type: 'timeException',
             date: dateStr,
             startHour: String(startHr),
-            endHour:   String(endHr)
+            endHour: String(endHr)
           }
           patches.push(
             client
@@ -857,6 +328,7 @@ export default function AdminBlockCalendar() {
     fetchData()
   }
 
+  // Used by loadEvents() to build background "blocked" events from auto rules
   function getAutoBlockSlices(rule, dayStart, dayEnd) {
     const slices = []
     let cursorDay = moment.tz(dayStart, 'Asia/Jerusalem').startOf('day')
@@ -865,7 +337,7 @@ export default function AdminBlockCalendar() {
     while (cursorDay.isSameOrBefore(endOfDay, 'day')) {
       for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
         const sliceStart = cursorDay.clone().hour(h)
-        const sliceEnd   = sliceStart.clone().add(1, 'hour')
+        const sliceEnd = sliceStart.clone().add(1, 'hour')
         if (sliceEnd <= dayStart || sliceStart >= dayEnd) {
           continue
         }
@@ -903,7 +375,6 @@ export default function AdminBlockCalendar() {
       }
       current.setDate(current.getDate() + 1)
     }
-
     return mergeSlices(slices)
   }
 
@@ -914,6 +385,7 @@ export default function AdminBlockCalendar() {
     for (let i = 1; i < slices.length; i++) {
       const prev = merged[merged.length - 1]
       const curr = slices[i]
+      // If current slice starts exactly when previous ends => merge them
       if (prev[1].getTime() === curr[0].getTime()) {
         prev[1] = curr[1]
       } else {
@@ -923,6 +395,7 @@ export default function AdminBlockCalendar() {
     return merged
   }
 
+  // Check if a block is fully covered by manual blocks
   function fullyCoveredByManual(start, end) {
     let cursorCheck = new Date(start)
     while (cursorCheck < end) {
@@ -935,6 +408,7 @@ export default function AdminBlockCalendar() {
     return true
   }
 
+  // Called by FullCalendar to load events
   function loadEvents(fetchInfo, successCallback) {
     const { start, end } = fetchInfo
     const events = []
@@ -1004,6 +478,7 @@ export default function AdminBlockCalendar() {
     successCallback(events)
   }
 
+  // Only show text label for non-background events
   function handleEventContent(arg) {
     if (arg.event.display === 'background') {
       return null
@@ -1011,6 +486,7 @@ export default function AdminBlockCalendar() {
     return <div>{arg.event.title}</div>
   }
 
+  // Click a reservation => open modal
   function handleEventClick(clickInfo) {
     const r = reservations.find((x) => x._id === clickInfo.event.id)
     if (r) {
@@ -1028,20 +504,21 @@ export default function AdminBlockCalendar() {
     setSelectedReservation(null)
   }
 
+  // Simple password gate
   if (!authenticated) {
     return (
       <div
         style={{
-          display:'flex',
-          flexDirection:'column',
-          justifyContent:'center',
-          alignItems:'center',
-          height:'100vh',
-          padding:'1rem',
-          background:'#fff'
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          padding: '1rem',
+          background: '#fff'
         }}
       >
-        <h2 style={{ fontSize:'1.5rem', marginBottom:'1rem' }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
           Enter Admin Password
         </h2>
         <input
@@ -1049,7 +526,7 @@ export default function AdminBlockCalendar() {
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               if (e.target.value === ADMIN_PASSWORD) {
-                localStorage.setItem('isAdmin','true')
+                localStorage.setItem('isAdmin', 'true')
                 setAuthenticated(true)
               } else {
                 alert('Incorrect password')
@@ -1058,32 +535,32 @@ export default function AdminBlockCalendar() {
           }}
           placeholder="Admin password"
           style={{
-            width:'100%',
-            maxWidth:'300px',
-            padding:'12px',
-            fontSize:'1rem',
-            marginBottom:'1rem',
-            border:'1px solid #ccc',
-            borderRadius:'5px'
+            width: '100%',
+            maxWidth: '300px',
+            padding: '12px',
+            fontSize: '1rem',
+            marginBottom: '1rem',
+            border: '1px solid #ccc',
+            borderRadius: '5px'
           }}
         />
         <button
           onClick={() => {
             const input = document.querySelector('input[type="password"]')
             if (input.value === ADMIN_PASSWORD) {
-              localStorage.setItem('isAdmin','true')
+              localStorage.setItem('isAdmin', 'true')
               setAuthenticated(true)
             } else {
               alert('Incorrect password')
             }
           }}
           style={{
-            padding:'12px 24px',
-            fontSize:'1rem',
-            backgroundColor:'#1890ff',
-            color:'#fff',
-            border:'none',
-            borderRadius:'5px'
+            padding: '12px 24px',
+            fontSize: '1rem',
+            backgroundColor: '#1890ff',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '5px'
           }}
         >
           Submit
@@ -1094,7 +571,7 @@ export default function AdminBlockCalendar() {
 
   const now = new Date()
   const validRangeStart = new Date(now)
-  validRangeStart.setHours(0,0,0,0)
+  validRangeStart.setHours(0, 0, 0, 0)
   validRangeStart.setDate(validRangeStart.getDate() - 7)
 
   const validRangeEnd = new Date(now)
@@ -1102,10 +579,11 @@ export default function AdminBlockCalendar() {
 
   return (
     <div>
-      <h2 style={{ textAlign:'center', marginBottom:'1rem', fontSize:'1.8rem' }}>
+      <h2 style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1.8rem' }}>
         Admin Panel
       </h2>
 
+      {/* Auto-block subcomponent (moved out to AutoBlockControls.js) */}
       <AutoBlockControls
         autoBlockRules={autoBlockRules}
         setAutoBlockRules={setAutoBlockRules}
@@ -1146,7 +624,7 @@ export default function AdminBlockCalendar() {
         eventLongPressDelay={platformDelay}
         validRange={{
           start: validRangeStart.toISOString(),
-          end:   validRangeEnd.toISOString()
+          end: validRangeEnd.toISOString()
         }}
         selectable
         selectAllow={(selectInfo) => new Date(selectInfo.startStr) >= new Date()}
@@ -1184,25 +662,25 @@ export default function AdminBlockCalendar() {
         contentLabel="Reservation Info"
         style={{
           overlay: {
-            backgroundColor:'rgba(0,0,0,0.4)',
-            zIndex:1000
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            zIndex: 1000
           },
           content: {
-            top:'50%',
-            left:'50%',
-            transform:'translate(-50%,-50%)',
-            padding:'25px',
-            borderRadius:'8px',
-            background:'white',
-            width:'400px'
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%,-50%)',
+            padding: '25px',
+            borderRadius: '8px',
+            background: 'white',
+            width: '400px'
           }
         }}
       >
-        <h3 style={{ fontSize:'1.4rem', marginBottom:'0.5rem' }}>
+        <h3 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>
           Reservation Details
         </h3>
         {selectedReservation && (
-          <div style={{ fontSize:'1rem' }}>
+          <div style={{ fontSize: '1rem' }}>
             <p>
               <strong>Name:</strong> {selectedReservation.name}
             </p>
@@ -1211,18 +689,18 @@ export default function AdminBlockCalendar() {
             </p>
           </div>
         )}
-        <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
           <button
             onClick={handleDeleteReservation}
             style={{
-              marginRight:'10px',
-              color:'#fff',
-              background:'#d9534f',
-              border:'none',
-              padding:'8px 12px',
-              borderRadius:'4px',
-              cursor:'pointer',
-              fontSize:'1rem'
+              marginRight: '10px',
+              color: '#fff',
+              background: '#d9534f',
+              border: 'none',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '1rem'
             }}
           >
             Delete
@@ -1230,9 +708,9 @@ export default function AdminBlockCalendar() {
           <button
             onClick={() => setModalIsOpen(false)}
             style={{
-              padding:'8px 12px',
-              cursor:'pointer',
-              fontSize:'1rem'
+              padding: '8px 12px',
+              cursor: 'pointer',
+              fontSize: '1rem'
             }}
           >
             Close
