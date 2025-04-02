@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
+import { isIOS } from 'react-device-detect'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -578,6 +579,7 @@ export default function AdminBlockCalendar() {
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState(null)
   const calendarRef = useRef()
+  const platformDelay = isIOS ? 100 : 47
 
   // Fetch from Sanity
   async function fetchData() {
@@ -1139,9 +1141,9 @@ export default function AdminBlockCalendar() {
         height="auto"
         stickyHeaderDates
         stickyFooterScrollbar={false}
-        longPressDelay={100}
-        selectLongPressDelay={100}
-        eventLongPressDelay={100}
+        longPressDelay={platformDelay}
+        selectLongPressDelay={platformDelay}
+        eventLongPressDelay={platformDelay}
         validRange={{
           start: validRangeStart.toISOString(),
           end:   validRangeEnd.toISOString()
