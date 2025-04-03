@@ -147,7 +147,11 @@ export default function AdminBlockCalendar() {
         }}
       >
         <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
-          {t({ en: 'Enter Admin Password', de: 'Admin-Passwort eingeben' })}
+          {t({
+            en: 'Enter Admin Password',
+            de: 'Admin-Passwort eingeben',
+            es: 'Ingrese la contraseña de administrador'
+          })}
         </h2>
 
         {/* Custom LanguageDropdown for the login screen */}
@@ -163,11 +167,21 @@ export default function AdminBlockCalendar() {
                 localStorage.setItem('isAdmin', 'true')
                 setAuthenticated(true)
               } else {
-                alert(t({ en: 'Incorrect password', de: 'Falsches Passwort' }))
+                alert(
+                  t({
+                    en: 'Incorrect password',
+                    de: 'Falsches Passwort',
+                    es: 'Contraseña incorrecta'
+                  })
+                )
               }
             }
           }}
-          placeholder={t({ en: 'Admin password', de: 'Admin-Passwort' })}
+          placeholder={t({
+            en: 'Admin password',
+            de: 'Admin-Passwort',
+            es: 'Contraseña de administrador'
+          })}
           style={{
             width: '100%',
             maxWidth: '300px',
@@ -186,7 +200,13 @@ export default function AdminBlockCalendar() {
               localStorage.setItem('isAdmin', 'true')
               setAuthenticated(true)
             } else {
-              alert(t({ en: 'Incorrect password', de: 'Falsches Passwort' }))
+              alert(
+                t({
+                  en: 'Incorrect password',
+                  de: 'Falsches Passwort',
+                  es: 'Contraseña incorrecta'
+                })
+              )
             }
           }}
           style={{
@@ -198,7 +218,7 @@ export default function AdminBlockCalendar() {
             borderRadius: '5px'
           }}
         >
-          {t({ en: 'Submit', de: 'Abschicken' })}
+          {t({ en: 'Submit', de: 'Abschicken', es: 'Enviar' })}
         </button>
       </div>
     )
@@ -288,13 +308,17 @@ export default function AdminBlockCalendar() {
     return true
   }
 
-  // ---------- FIXED handleBlock to avoid "function in loop" warnings ----------
+  // ---------- FIX handleBlock for ESLint no-loop-func ----------
   async function handleBlock(info) {
     const slotStart = new Date(info.start)
     const slotEnd = new Date(info.end)
 
     if (slotStart < new Date()) {
-      alert(t({ en: 'Cannot block a past slot.', de: 'Kann kein vergangenes Zeitfenster blockieren.' }))
+      alert(t({
+        en: 'Cannot block a past slot.',
+        de: 'Kann kein vergangenes Zeitfenster blockieren.',
+        es: 'No se puede bloquear un intervalo pasado.'
+      }))
       return
     }
 
@@ -302,7 +326,6 @@ export default function AdminBlockCalendar() {
     let cursorLocal = slotStart
     while (cursorLocal < slotEnd) {
       const nextHour = new Date(cursorLocal.getTime() + 3600000)
-      // local copies:
       const startCopy = new Date(cursorLocal)
       const endCopy = new Date(nextHour)
 
@@ -317,21 +340,28 @@ export default function AdminBlockCalendar() {
     }
 
     if (!docs.length) {
-      alert(t({ en: 'All those hours are already blocked.', de: 'Alle diese Stunden sind bereits blockiert.' }))
+      alert(t({
+        en: 'All those hours are already blocked.',
+        de: 'Alle diese Stunden sind bereits blockiert.',
+        es: 'Todas esas horas ya están bloqueadas.'
+      }))
       return
     }
 
-    // create them outside the loop
     await Promise.all(docs.map((doc) => client.create(doc)))
     fetchData()
   }
 
-  // ---------- FIXED handleUnblock to avoid "function in loop" warnings ----------
+  // ---------- FIX handleUnblock for ESLint no-loop-func ----------
   async function handleUnblock(info) {
     const slotStart = new Date(info.start)
     const slotEnd = new Date(info.end)
     if (slotStart < new Date()) {
-      alert(t({ en: 'Cannot unblock past time.', de: 'Kann vergangene Zeit nicht freigeben.' }))
+      alert(t({
+        en: 'Cannot unblock past time.',
+        de: 'Kann vergangene Zeit nicht freigeben.',
+        es: 'No se puede desbloquear un tiempo pasado.'
+      }))
       return
     }
 
@@ -411,7 +441,6 @@ export default function AdminBlockCalendar() {
       exCursorLocal = nextHr
     }
 
-    // execute outside the loop
     await Promise.all([...deletions, ...patches])
     fetchData()
   }
@@ -576,11 +605,11 @@ export default function AdminBlockCalendar() {
 
   async function handleDeleteReservation() {
     if (!selectedReservation) return
-    if (
-      !window.confirm(
-        t({ en: 'Delete this reservation?', de: 'Diese Reservierung löschen?' })
-      )
-    ) {
+    if (!window.confirm(t({
+      en: 'Delete this reservation?',
+      de: 'Diese Reservierung löschen?',
+      es: '¿Eliminar esta reserva?'
+    }))) {
       return
     }
     await client.delete(selectedReservation._id)
@@ -606,7 +635,11 @@ export default function AdminBlockCalendar() {
       </div>
 
       <h2 style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1.8rem' }}>
-        {t({ en: 'Admin Panel', de: 'Admin-Bereich' })}
+        {t({
+          en: 'Admin Panel',
+          de: 'Admin-Bereich',
+          es: 'Panel de Administración'
+        })}
       </h2>
 
       {/* Auto-block subcomponent */}
@@ -621,7 +654,7 @@ export default function AdminBlockCalendar() {
       <FullCalendar
         ref={calendarRef}
         locales={allLocales}
-        locale={language === 'de' ? 'de' : 'en'}
+        locale={language === 'de' ? 'de' : language === 'es' ? 'es' : 'en'}
         plugins={[
           timeGridPlugin,
           scrollGridPlugin,
@@ -659,25 +692,19 @@ export default function AdminBlockCalendar() {
         select={(info) => {
           // If fully blocked => ask to unblock
           if (isRangeCompletelyBlocked(info)) {
-            if (
-              window.confirm(
-                t({
-                  en: 'Unblock this time slot?',
-                  de: 'Dieses Zeitfenster freigeben?'
-                })
-              )
-            ) {
+            if (window.confirm(t({
+              en: 'Unblock this time slot?',
+              de: 'Dieses Zeitfenster freigeben?',
+              es: '¿Desbloquear este intervalo de tiempo?'
+            }))) {
               handleUnblock(info)
             }
           } else {
-            if (
-              window.confirm(
-                t({
-                  en: 'Block this time slot?',
-                  de: 'Dieses Zeitfenster blockieren?'
-                })
-              )
-            ) {
+            if (window.confirm(t({
+              en: 'Block this time slot?',
+              de: 'Dieses Zeitfenster blockieren?',
+              es: '¿Bloquear este intervalo de tiempo?'
+            }))) {
               handleBlock(info)
             }
           }
@@ -697,7 +724,7 @@ export default function AdminBlockCalendar() {
           omitCommas: true
         }}
         slotLabelFormat={(dateInfo) => {
-          // Force "12 AM, 1 AM..." style for midnight/hour labels
+          // Force "12 AM, 1 AM..." style
           return moment(dateInfo.date).format('h A')
         }}
       />
@@ -705,7 +732,11 @@ export default function AdminBlockCalendar() {
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={() => setModalIsOpen(false)}
-        contentLabel={t({ en: 'Reservation Info', de: 'Reservierungsdetails' })}
+        contentLabel={t({
+          en: 'Reservation Info',
+          de: 'Reservierungsdetails',
+          es: 'Información de la reserva'
+        })}
         style={{
           overlay: {
             backgroundColor: 'rgba(0,0,0,0.4)',
@@ -723,16 +754,24 @@ export default function AdminBlockCalendar() {
         }}
       >
         <h3 style={{ fontSize: '1.4rem', marginBottom: '0.5rem' }}>
-          {t({ en: 'Reservation Details', de: 'Reservierungsdetails' })}
+          {t({
+            en: 'Reservation Details',
+            de: 'Reservierungsdetails',
+            es: 'Detalles de la reserva'
+          })}
         </h3>
         {selectedReservation && (
           <div style={{ fontSize: '1rem' }}>
             <p>
-              <strong>{t({ en: 'Name:', de: 'Name:' })}</strong>{' '}
+              <strong>
+                {t({ en: 'Name:', de: 'Name:', es: 'Nombre:' })}
+              </strong>{' '}
               {selectedReservation.name}
             </p>
             <p>
-              <strong>{t({ en: 'Phone:', de: 'Telefon:' })}</strong>{' '}
+              <strong>
+                {t({ en: 'Phone:', de: 'Telefon:', es: 'Teléfono:' })}
+              </strong>{' '}
               {selectedReservation.phone}
             </p>
           </div>
@@ -751,7 +790,7 @@ export default function AdminBlockCalendar() {
               fontSize: '1rem'
             }}
           >
-            {t({ en: 'Delete', de: 'Löschen' })}
+            {t({ en: 'Delete', de: 'Löschen', es: 'Eliminar' })}
           </button>
           <button
             onClick={() => setModalIsOpen(false)}
@@ -761,7 +800,7 @@ export default function AdminBlockCalendar() {
               fontSize: '1rem'
             }}
           >
-            {t({ en: 'Close', de: 'Schließen' })}
+            {t({ en: 'Close', de: 'Schließen', es: 'Cerrar' })}
           </button>
         </div>
       </Modal>
