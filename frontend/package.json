@@ -4,7 +4,7 @@
   "private": true,
   "dependencies": {
     "@fullcalendar/common": "^5.11.5",
-    "@fullcalendar/core": "^6.1.15",
+    "@fullcalendar/core": "^6.1.17",
     "@fullcalendar/daygrid": "^6.1.15",
     "@fullcalendar/interaction": "^6.1.15",
     "@fullcalendar/moment": "^6.1.15",

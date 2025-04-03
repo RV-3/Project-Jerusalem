@@ -1,7 +1,12 @@
+// AutoBlockControls.js
 import React, { useEffect, useState } from 'react'
 import Modal from 'react-modal'
 import moment from 'moment-timezone'
 import client from '../utils/sanityClient.js'
+
+// Import your language/translation hooks
+import { useLanguage } from '../LanguageContext'
+import useTranslate from '../useTranslate'
 
 // ---------------------------------------------------------------------
 // Constants & helper for converting 24-hour to 12-hour labels
@@ -42,26 +47,58 @@ function format24HourTo12(hourStr) {
   return found ? found.label : `${hourStr}:00`
 }
 
-// For short day labels displayed as chips
-const DAY_SHORT_MAP = {
-  Sunday: 'Su',
-  Monday: 'M',
-  Tuesday: 'T',
-  Wednesday: 'W',
-  Thursday: 'Th',
-  Friday: 'F',
-  Saturday: 'Sa'
-}
-
-// For toggles in the modal
+// We keep doc keys in English (Sunday, Monday, etc.)
+// but show German text when language === "de".
 const DAY_TOGGLES = [
-  { full: 'Sunday',    short: 'Su' },
-  { full: 'Monday',    short: 'Mo' },
-  { full: 'Tuesday',   short: 'Tu' },
-  { full: 'Wednesday', short: 'We' },
-  { full: 'Thursday',  short: 'Th' },
-  { full: 'Friday',    short: 'Fr' },
-  { full: 'Saturday',  short: 'Sa' }
+  {
+    docKey: 'Sunday',
+    labelEn: 'Sunday',
+    labelDe: 'Sonntag',
+    shortEn: 'Su',
+    shortDe: 'So'
+  },
+  {
+    docKey: 'Monday',
+    labelEn: 'Monday',
+    labelDe: 'Montag',
+    shortEn: 'Mo',
+    shortDe: 'Mo'
+  },
+  {
+    docKey: 'Tuesday',
+    labelEn: 'Tuesday',
+    labelDe: 'Dienstag',
+    shortEn: 'Tu',
+    shortDe: 'Di'
+  },
+  {
+    docKey: 'Wednesday',
+    labelEn: 'Wednesday',
+    labelDe: 'Mittwoch',
+    shortEn: 'We',
+    shortDe: 'Mi'
+  },
+  {
+    docKey: 'Thursday',
+    labelEn: 'Thursday',
+    labelDe: 'Donnerstag',
+    shortEn: 'Th',
+    shortDe: 'Do'
+  },
+  {
+    docKey: 'Friday',
+    labelEn: 'Friday',
+    labelDe: 'Freitag',
+    shortEn: 'Fr',
+    shortDe: 'Fr'
+  },
+  {
+    docKey: 'Saturday',
+    labelEn: 'Saturday',
+    labelDe: 'Samstag',
+    shortEn: 'Sa',
+    shortDe: 'Sa'
+  }
 ]
 
 // ---------------------------------------------------------------------
@@ -74,12 +111,17 @@ export function AutoBlockControls({
   setAutoBlockDays,
   reloadData
 }) {
+  // 1) Hooks for language & translation
+  const { language } = useLanguage()
+  const t = useTranslate()
+
   // Toggles for collapsing Hours/Days sections
   const [showHours, setShowHours] = useState(false)
   const [showDays, setShowDays] = useState(false)
 
   // Keep track of which days are blocked
   const [selectedDays, setSelectedDays] = useState([])
+
   useEffect(() => {
     if (autoBlockDays?.daysOfWeek) {
       setSelectedDays(autoBlockDays.daysOfWeek)
@@ -127,6 +169,12 @@ export function AutoBlockControls({
       reloadData()
     } catch (err) {
       console.error('Error adding auto-block rule:', err)
+      alert(
+        t({
+          en: 'Error adding auto-block rule. Check console.',
+          de: 'Fehler beim Hinzufügen einer automatischen Blockierungsregel. Siehe Konsole.'
+        })
+      )
     }
   }
 
@@ -137,6 +185,12 @@ export function AutoBlockControls({
       reloadData()
     } catch (err) {
       console.error('Error removing auto-block rule:', err)
+      alert(
+        t({
+          en: 'Error removing auto-block rule. Check console.',
+          de: 'Fehler beim Entfernen einer automatischen Blockierungsregel. Siehe Konsole.'
+        })
+      )
     }
   }
 
@@ -167,7 +221,9 @@ export function AutoBlockControls({
     const newlyAddedDays = selectedDays.filter((d) => !oldDays.includes(d))
 
     await saveDaysToSanity(selectedDays, newlyAddedDays)
-    alert('Blocked days saved.')
+    alert(
+      t({ en: 'Blocked days saved.', de: 'Blockierte Tage gespeichert.' })
+    )
     setDaysModalOpen(false)
   }
 
@@ -182,12 +238,10 @@ export function AutoBlockControls({
         timeExceptions: autoBlockDays?.timeExceptions || []
       }
 
-      // --------------- OVERRIDE FIX ---------------
-      // For each newly added day, remove any timeExceptions that match that day
+      // Remove any timeExceptions that match newly added days
       if (newlyAddedDays.length && docToSave.timeExceptions?.length) {
         const filteredEx = docToSave.timeExceptions.filter((ex) => {
           if (!ex.date) return true
-
           const exDayName = moment.tz(ex.date, 'Asia/Jerusalem').format('dddd')
           // if it's a newly added day, remove that exception
           if (newlyAddedDays.includes(exDayName)) {
@@ -197,13 +251,17 @@ export function AutoBlockControls({
         })
         docToSave.timeExceptions = filteredEx
       }
-      // --------------- END OVERRIDE FIX ------------
 
       await client.createOrReplace(docToSave)
       reloadData()
     } catch (err) {
       console.error('Error saving day-block doc:', err)
-      alert('Could not save blocked days. See console.')
+      alert(
+        t({
+          en: 'Could not save blocked days. See console.',
+          de: 'Blockierte Tage konnten nicht gespeichert werden. Siehe Konsole.'
+        })
+      )
     }
   }
 
@@ -302,15 +360,20 @@ export function AutoBlockControls({
   return (
     <div style={containerStyle}>
       {/* ================= HOURS TOGGLE ================= */}
-      <div
-        style={toggleHeaderStyle}
-        onClick={() => setShowHours((prev) => !prev)}
-      >
-        <span>Auto-Block Hours</span>
+      <div style={toggleHeaderStyle} onClick={() => setShowHours((prev) => !prev)}>
+        <span>
+          {t({
+            en: 'Auto-Block Hours',
+            de: 'Automatische Stundenblockierung'
+          })}
+        </span>
         <span style={{ fontSize: '1rem' }}>
-          {showHours ? '▲ Hide' : '▼ Show'}
+          {showHours
+            ? `▲ ${t({ en: 'Hide', de: 'Ausblenden' })}`
+            : `▼ ${t({ en: 'Show', de: 'Anzeigen' })}`}
         </span>
       </div>
+
       {showHours && (
         <div style={{ marginBottom: '2rem' }}>
           <ul style={{ listStyle: 'none', paddingLeft: 0, marginBottom: '1rem' }}>
@@ -319,7 +382,9 @@ export function AutoBlockControls({
               return (
                 <li key={rule._id} style={listItemStyle}>
                   <span>
-                    <strong>Block:</strong>{' '}
+                    <strong>
+                      {t({ en: 'Block:', de: 'Blockieren:' })}
+                    </strong>{' '}
                     {format24HourTo12(rule.startHour)} – {format24HourTo12(rule.endHour)}
                   </span>
                   <button
@@ -331,7 +396,8 @@ export function AutoBlockControls({
                       ...(isHovering ? removeBtnHover : {})
                     }}
                   >
-                    Remove<span style={xIconStyle}>×</span>
+                    {t({ en: 'Remove', de: 'Entfernen' })}
+                    <span style={xIconStyle}>×</span>
                   </button>
                 </li>
               )
@@ -350,14 +416,16 @@ export function AutoBlockControls({
               <label
                 style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
               >
-                Start Hour:
+                {t({ en: 'Start Hour:', de: 'Startstunde:' })}
               </label>
               <select
                 value={startHour}
                 onChange={(e) => setStartHour(e.target.value)}
                 style={selectStyle}
               >
-                <option value="">-- Start --</option>
+                <option value="">
+                  {t({ en: '-- Start --', de: '-- Start --' })}
+                </option>
                 {HOUR_OPTIONS_12H.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -370,14 +438,16 @@ export function AutoBlockControls({
               <label
                 style={{ display: 'block', fontWeight: '600', marginBottom: '4px' }}
               >
-                End Hour:
+                {t({ en: 'End Hour:', de: 'Endstunde:' })}
               </label>
               <select
                 value={endHour}
                 onChange={(e) => setEndHour(e.target.value)}
                 style={selectStyle}
               >
-                <option value="">-- End --</option>
+                <option value="">
+                  {t({ en: '-- End --', de: '-- Ende --' })}
+                </option>
                 {filteredEndOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
@@ -400,7 +470,7 @@ export function AutoBlockControls({
                 }}
                 disabled={isAddDisabled}
               >
-                Add Rule
+                {t({ en: 'Add Rule', de: 'Regel hinzufügen' })}
               </button>
             </div>
           </div>
@@ -408,39 +478,57 @@ export function AutoBlockControls({
       )}
 
       {/* ================= DAYS TOGGLE ================= */}
-      <div
-        style={toggleHeaderStyle}
-        onClick={() => setShowDays((prev) => !prev)}
-      >
-        <span>Auto-Block Days</span>
+      <div style={toggleHeaderStyle} onClick={() => setShowDays((prev) => !prev)}>
+        <span>
+          {t({
+            en: 'Auto-Block Days',
+            de: 'Automatische Tagesblockierung'
+          })}
+        </span>
         <span style={{ fontSize: '1rem' }}>
-          {showDays ? '▲ Hide' : '▼ Show'}
+          {showDays
+            ? `▲ ${t({ en: 'Hide', de: 'Ausblenden' })}`
+            : `▼ ${t({ en: 'Show', de: 'Anzeigen' })}`}
         </span>
       </div>
+
       {showDays && (
         <div>
           {/* Show existing days as chips */}
           <div style={{ margin: '0.5rem 0' }}>
-            {(!autoBlockDays?.daysOfWeek || autoBlockDays.daysOfWeek.length === 0) ? (
-              <em>No days blocked</em>
+            {!autoBlockDays?.daysOfWeek || autoBlockDays.daysOfWeek.length === 0 ? (
+              <em>
+                {t({ en: 'No days blocked', de: 'Keine Tage blockiert' })}
+              </em>
             ) : (
-              autoBlockDays.daysOfWeek.map((day) => (
-                <span key={day} style={chipStyle}>
-                  {DAY_SHORT_MAP[day] || day}
-                  <button
-                    onClick={() => removeDay(day)}
-                    style={{
-                      marginLeft: '6px',
-                      cursor: 'pointer',
-                      background: 'transparent',
-                      border: 'none',
-                      fontSize: '1rem'
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))
+              autoBlockDays.daysOfWeek.map((day) => {
+                // find matching day object
+                const toggleObj = DAY_TOGGLES.find((x) => x.docKey === day)
+                // label for the chip
+                const shortLabel = toggleObj
+                  ? language === 'de'
+                    ? toggleObj.shortDe
+                    : toggleObj.shortEn
+                  : day
+
+                return (
+                  <span key={day} style={chipStyle}>
+                    {shortLabel}
+                    <button
+                      onClick={() => removeDay(day)}
+                      style={{
+                        marginLeft: '6px',
+                        cursor: 'pointer',
+                        background: 'transparent',
+                        border: 'none',
+                        fontSize: '1rem'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                )
+              })
             )}
           </div>
 
@@ -455,13 +543,13 @@ export function AutoBlockControls({
               cursor: 'pointer'
             }}
           >
-            Block Days
+            {t({ en: 'Block Days', de: 'Tage blockieren' })}
           </button>
 
           <Modal
             isOpen={daysModalOpen}
             onRequestClose={() => setDaysModalOpen(false)}
-            contentLabel="Block Days Modal"
+            contentLabel={t({ en: 'Block Days Modal', de: 'Tage blockieren Modal' })}
             style={{
               overlay: {
                 backgroundColor: 'rgba(0,0,0,0.4)',
@@ -478,7 +566,12 @@ export function AutoBlockControls({
               }
             }}
           >
-            <h3 style={{ marginBottom: '1rem' }}>Select which days to block</h3>
+            <h3 style={{ marginBottom: '1rem' }}>
+              {t({
+                en: 'Select which days to block',
+                de: 'Wählen Sie, welche Tage blockiert werden sollen'
+              })}
+            </h3>
             <div
               style={{
                 display: 'flex',
@@ -488,12 +581,13 @@ export function AutoBlockControls({
                 marginBottom: '1.5rem'
               }}
             >
-              {DAY_TOGGLES.map(({ full, short }) => {
-                const active = selectedDays.includes(full)
+              {DAY_TOGGLES.map(({ docKey, shortEn, shortDe }) => {
+                const active = selectedDays.includes(docKey)
+                const shortLabel = language === 'de' ? shortDe : shortEn
                 return (
                   <button
-                    key={full}
-                    onClick={() => toggleDay(full)}
+                    key={docKey}
+                    onClick={() => toggleDay(docKey)}
                     style={{
                       minWidth: '45px',
                       padding: '8px',
@@ -505,7 +599,7 @@ export function AutoBlockControls({
                       fontSize: '1rem'
                     }}
                   >
-                    {short}
+                    {shortLabel}
                   </button>
                 )
               })}
@@ -524,7 +618,7 @@ export function AutoBlockControls({
                   fontSize: '1rem'
                 }}
               >
-                Save
+                {t({ en: 'Save', de: 'Speichern' })}
               </button>
               <button
                 onClick={() => setDaysModalOpen(false)}
@@ -534,7 +628,7 @@ export function AutoBlockControls({
                   fontSize: '1rem'
                 }}
               >
-                Cancel
+                {t({ en: 'Cancel', de: 'Abbrechen' })}
               </button>
             </div>
           </Modal>

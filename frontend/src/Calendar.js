@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
+import allLocales from '@fullcalendar/core/locales-all'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -9,13 +10,18 @@ import moment from 'moment-timezone'
 import momentPlugin from '@fullcalendar/moment'
 import momentTimezonePlugin from '@fullcalendar/moment-timezone'
 
+// Sanity client + Modal
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
 import './Calendar.css'
 
+// Our custom translation
+import useTranslate from './useTranslate'
+import { useLanguage } from './LanguageContext'
+
 Modal.setAppElement('#root')
 
-/** Return the "next top-of-hour" in Jerusalem as a Moment, so we forbid selections earlier than that. */
+/** Return the "next top-of-hour" in Jerusalem as a Moment, so we forbid earlier selections. */
 function getJerusalemNextHourMoment() {
   const nowJer = moment.tz('Asia/Jerusalem')
   if (nowJer.minute() !== 0 || nowJer.second() !== 0) {
@@ -25,12 +31,11 @@ function getJerusalemNextHourMoment() {
 }
 
 // -----------------------------------
-// HELPER to see if an hour is in a doc’s timeExceptions
-// (shared logic for day-based or hour-based rules).
+// HELPER: see if an hour is in a doc’s timeExceptions
 // -----------------------------------
 function isHourExcepted(exceptions = [], hStart, hEnd) {
   const startJer = moment.tz(hStart, 'Asia/Jerusalem')
-  const endJer   = moment.tz(hEnd,   'Asia/Jerusalem')
+  const endJer   = moment.tz(hEnd, 'Asia/Jerusalem')
   const dateStr  = startJer.format('YYYY-MM-DD')
 
   return exceptions.some((ex) => {
@@ -53,14 +58,14 @@ function isHourExcepted(exceptions = [], hStart, hEnd) {
 // -----------------------------------
 function doesHourRuleCover(rule, hStart, hEnd) {
   const startJer = moment.tz(hStart, 'Asia/Jerusalem')
-  const endJer   = moment.tz(hEnd,   'Asia/Jerusalem')
+  const endJer   = moment.tz(hEnd, 'Asia/Jerusalem')
 
-  // Anchor day to midnight in Jerusalem
+  // Anchor day to midnight
   const dayAnchor = startJer.clone().startOf('day')
   const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
   const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
 
-  // Must be inside [rStart..rEnd) and not excepted
+  // Must be inside [rStart..rEnd), no exceptions
   if (startJer.isBefore(rStart) || endJer.isAfter(rEnd)) return false
   if (isHourExcepted(rule.timeExceptions, hStart, hEnd)) return false
   return true
@@ -68,12 +73,12 @@ function doesHourRuleCover(rule, hStart, hEnd) {
 
 /**
  * Expand an hour-based auto-block rule into hour slices
- * skipping any timeExceptions. Then merge contiguous slices.
+ * skipping any timeExceptions, then merge.
  */
 function getHourRuleSlices(rule, viewStart, viewEnd) {
   const slices = []
   let dayCursor = moment.tz(viewStart, 'Asia/Jerusalem').startOf('day')
-  const dayEnd  = moment.tz(viewEnd,   'Asia/Jerusalem').endOf('day')
+  const dayEnd  = moment.tz(viewEnd, 'Asia/Jerusalem').endOf('day')
 
   while (dayCursor.isSameOrBefore(dayEnd, 'day')) {
     for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
@@ -97,15 +102,12 @@ function getHourRuleSlices(rule, viewStart, viewEnd) {
 
 // -----------------------------------
 // For DAY-based rules
-// (was a duplicate "isDayCovered" here; removed)
 // -----------------------------------
-
-/** Expand day-based blocks into hour slices (0..24), skipping timeExceptions. */
 function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
   if (!dayDoc?.daysOfWeek?.length) return []
   const slices = []
   let current = moment.tz(viewStart, 'Asia/Jerusalem').startOf('day')
-  const limit = moment.tz(viewEnd,   'Asia/Jerusalem').endOf('day')
+  const limit = moment.tz(viewEnd, 'Asia/Jerusalem').endOf('day')
 
   while (current.isBefore(limit)) {
     const dayName = current.format('dddd')
@@ -149,8 +151,6 @@ function mergeSlices(slices) {
 
 /**
  * Build one big list of background events for hour-based AND day-based rules.
- * - day-based => getDayBlockSlices
- * - hour-based => getHourRuleSlices
  */
 function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, viewEnd) {
   const events = []
@@ -164,7 +164,7 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
         start: s,
         end: e,
         display: 'background',
-        color: '#ffcccc' // or grey
+        color: '#ffcccc'
       })
     })
   }
@@ -190,10 +190,15 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
 // MAIN Calendar
 // -----------------------------------
 export default function Calendar() {
-  const [events, setEvents] = useState([])                // reservations
-  const [blockedTimes, setBlockedTimes] = useState([])     // manual-block docs
-  const [autoBlockHours, setAutoBlockHours] = useState([]) // "autoBlockedHours"
-  const [autoBlockDays, setAutoBlockDays] = useState(null) // "autoBlockedDays" doc
+  // 1) Current language from context
+  const { language } = useLanguage()
+  // 2) Inline string translator
+  const t = useTranslate()
+
+  const [events, setEvents] = useState([])
+  const [blockedTimes, setBlockedTimes] = useState([])
+  const [autoBlockHours, setAutoBlockHours] = useState([])
+  const [autoBlockDays, setAutoBlockDays] = useState(null)
   const [pastBlockEvent, setPastBlockEvent] = useState(null)
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
@@ -202,9 +207,9 @@ export default function Calendar() {
   const calendarRef = useRef(null)
   const platformDelay = isIOS ? 100 : 47
 
-  // 1) FETCH data from Sanity
+  // 3) Fetch data from Sanity (reservations, blocks) once
   useEffect(() => {
-    // a) Reservations
+    // Reservations
     client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) => {
         const parsed = data.map((res) => ({
@@ -217,7 +222,7 @@ export default function Calendar() {
       })
       .catch((err) => console.error('Error fetching reservations:', err))
 
-    // b) Manual blocks
+    // Manual blocks
     client.fetch(`*[_type == "blocked"]{_id, start, end}`)
       .then((data) => {
         const blocks = data.map((item) => ({
@@ -229,19 +234,17 @@ export default function Calendar() {
       })
       .catch((err) => console.error('Error fetching blocked times:', err))
 
-    // c) Hour-based autoBlock
+    // Hour-based autoBlock
     client.fetch(`*[_type == "autoBlockedHours"]{
       _id,
       startHour,
       endHour,
       timeExceptions[]{ date, startHour, endHour }
     }`)
-      .then((rules) => {
-        setAutoBlockHours(rules)
-      })
+      .then((rules) => setAutoBlockHours(rules))
       .catch((err) => console.error('Error fetching auto-block hours:', err))
 
-    // d) Day-based autoBlock
+    // Day-based autoBlock
     client.fetch(`*[_type == "autoBlockedDays"]{
       _id,
       daysOfWeek,
@@ -249,67 +252,57 @@ export default function Calendar() {
     }`)
       .then((daysDocs) => {
         if (daysDocs.length) {
-          setAutoBlockDays(daysDocs[0]) // if you only have one doc
+          setAutoBlockDays(daysDocs[0]) // one doc
         }
       })
       .catch((err) => console.error('Error fetching autoBlockedDays:', err))
   }, [])
 
-  // 2) Check time blocked by manual
+  // 4) Manual block check
   function isTimeBlockedByManual(start, end) {
     const sJer = moment.tz(start, 'Asia/Jerusalem')
-    const eJer = moment.tz(end,   'Asia/Jerusalem')
+    const eJer = moment.tz(end, 'Asia/Jerusalem')
     return blockedTimes.some((b) => {
       const bStart = moment.tz(b.start, 'Asia/Jerusalem')
-      const bEnd   = moment.tz(b.end,   'Asia/Jerusalem')
-      // overlap check
+      const bEnd   = moment.tz(b.end, 'Asia/Jerusalem')
       return sJer.isBefore(bEnd) && eJer.isAfter(bStart)
     })
   }
 
-  // 3) Check time blocked by day-based or hour-based
+  // 5) Auto-block check
   function isTimeBlockedByAuto(start, end) {
-    // day-based check
     if (autoBlockDays && autoBlockDays.daysOfWeek?.length) {
       if (isDayCovered(autoBlockDays, start, end)) {
         return true
       }
     }
-    // hour-based check
     return autoBlockHours.some((rule) => doesHourRuleCover(rule, start, end))
   }
 
-  // (SECOND) day-based coverage check: (this is the one actually used)
   function isDayCovered(dayDoc, hStart, hEnd) {
     const dayName = moment.tz(hStart, 'Asia/Jerusalem').format('dddd')
     if (!dayDoc.daysOfWeek?.includes(dayName)) return false
-    // check timeExceptions
     if (isHourExcepted(dayDoc.timeExceptions || [], hStart, hEnd)) {
       return false
     }
     return true
   }
 
-  // 4) Check if a timeslot is already reserved
+  // 6) Already-reserved check
   function isSlotReserved(slotStart, slotEnd) {
     const sJer = moment.tz(slotStart, 'Asia/Jerusalem')
-    const eJer = moment.tz(slotEnd,   'Asia/Jerusalem')
+    const eJer = moment.tz(slotEnd, 'Asia/Jerusalem')
     return events.some((evt) => {
-      if (
-        evt.id.startsWith('auto-') ||
-        evt.id.startsWith('blocked-') ||
-        evt.id === 'past-block'
-      ) {
+      if (evt.id.startsWith('auto-') || evt.id.startsWith('blocked-') || evt.id === 'past-block') {
         return false
       }
       const evtStart = moment.tz(evt.start, 'Asia/Jerusalem')
-      const evtEnd   = moment.tz(evt.end,   'Asia/Jerusalem')
-      // overlap check
+      const evtEnd   = moment.tz(evt.end, 'Asia/Jerusalem')
       return sJer.isBefore(evtEnd) && eJer.isAfter(evtStart)
     })
   }
 
-  // 5) Past-block overlay
+  // 7) Past-block overlay
   useEffect(() => {
     function updatePastBlockEvent() {
       const nowJer = moment.tz('Asia/Jerusalem')
@@ -327,7 +320,7 @@ export default function Calendar() {
     return () => clearInterval(interval)
   }, [])
 
-  // 6) Handle user selection => open modal if free
+  // 8) On user select => open modal
   const handleSelect = (info) => {
     const { startStr, endStr } = info
     if (isTimeBlockedByManual(startStr, endStr)) return
@@ -338,7 +331,7 @@ export default function Calendar() {
     setModalIsOpen(true)
   }
 
-  // 7) Submit reservation => store in Sanity
+  // 9) Submit reservation => store in Sanity
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name || !formData.phone || !selectedInfo) return
@@ -352,7 +345,7 @@ export default function Calendar() {
         end: selectedInfo.end
       }
       const created = await client.create(reservationDoc)
-      // Show in local state so it appears right away
+      // Show instantly in local state
       setEvents((prev) => [
         ...prev,
         {
@@ -367,13 +360,18 @@ export default function Calendar() {
       setSelectedInfo(null)
     } catch (err) {
       console.error('Error creating reservation:', err)
-      alert('Failed to create reservation. Please try again.')
+      alert(
+        t({
+          en: 'Failed to create reservation. Please try again.',
+          de: 'Fehler beim Erstellen der Reservierung. Bitte erneut versuchen.'
+        })
+      )
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  // 8) Format chosen times in modal
+  // Format chosen times in the modal
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
     const calendarApi = calendarRef.current?.getApi()
@@ -381,7 +379,6 @@ export default function Calendar() {
     const startTxt = calendarApi.formatDate(selectedInfo.start, {
       timeZone: 'Asia/Jerusalem',
       hour: 'numeric',
-      minute: '2-digit',
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -390,17 +387,17 @@ export default function Calendar() {
     const endTxt = calendarApi.formatDate(selectedInfo.end, {
       timeZone: 'Asia/Jerusalem',
       hour: 'numeric',
-      minute: '2-digit'
+
     })
     return `${startTxt} - ${endTxt}`
   }
 
-  // 9) FullCalendar loads events
+  // Called when FullCalendar loads events
   function loadEvents(fetchInfo, successCallback) {
     const { start, end } = fetchInfo
     const loaded = []
 
-    // A) Normal reservations
+    // Normal reservations
     events.forEach((evt) => {
       loaded.push({
         id: evt.id,
@@ -411,7 +408,7 @@ export default function Calendar() {
       })
     })
 
-    // B) Manual blocks => background
+    // Manual blocks => background
     blockedTimes.forEach((b, i) => {
       loaded.push({
         id: `blocked-${i}`,
@@ -422,11 +419,11 @@ export default function Calendar() {
       })
     })
 
-    // C) Build day+hour auto-block expansions => background
+    // Auto-block expansions
     const autoEvents = buildAutoBlockAllEvents(autoBlockHours, autoBlockDays, start, end)
     loaded.push(...autoEvents)
 
-    // D) Past-block overlay
+    // Past-block overlay
     if (pastBlockEvent) {
       loaded.push(pastBlockEvent)
     }
@@ -439,6 +436,17 @@ export default function Calendar() {
       <div>
         <FullCalendar
           ref={calendarRef}
+          // Provide all locales
+          locales={allLocales}
+          // Switch locale based on language, but...
+          locale={language === 'de' ? 'de' : 'en'}
+
+          // ...force a custom format for the slot labels (no "Uhr"):
+          slotLabelFormat={(dateInfo) => {
+            // This ALWAYS uses an English-style 12h format with AM/PM
+            return moment(dateInfo.date).format('h A') 
+          }}
+
           plugins={[
             timeGridPlugin,
             scrollGridPlugin,
@@ -472,36 +480,34 @@ export default function Calendar() {
           themeSystem="standard"
           validRange={{
             start: moment().tz('Asia/Jerusalem').subtract(7, 'days').format(),
-            end:   moment().tz('Asia/Jerusalem').add(30, 'days').format()
+            end: moment().tz('Asia/Jerusalem').add(30, 'days').format()
           }}
           events={loadEvents}
           select={handleSelect}
           selectAllow={(selectInfo) => {
             const selStart = moment.tz(selectInfo.startStr, 'Asia/Jerusalem')
-            const selEnd   = moment.tz(selectInfo.endStr,   'Asia/Jerusalem')
+            const selEnd   = moment.tz(selectInfo.endStr, 'Asia/Jerusalem')
 
             // 1) Forbid times < next hour
             const nextHour = getJerusalemNextHourMoment()
             if (selStart.isBefore(nextHour)) return false
 
-            // 2) Forbid if blocked/reserved
+            // 2) If it's blocked or reserved, forbid
             if (isTimeBlockedByManual(selStart, selEnd)) return false
             if (isTimeBlockedByAuto(selStart, selEnd)) return false
             if (isSlotReserved(selStart, selEnd)) return false
 
             // 3) Must be exactly 1 hour
             const duration = selEnd.diff(selStart, 'hours', true)
-            const isExactlyOneHour = (duration === 1)
+            const isExactlyOneHour = duration === 1
 
-            // 4) Typically require same day...
+            // 4) Typically require same day, but let 23:00 -> 00:00 pass
             let sameDay = selStart.isSame(selEnd, 'day')
-            // 4b) ...But if it ends exactly at midnight, allow (23:00 -> 00:00).
             if (!sameDay && isExactlyOneHour) {
               if (selEnd.hour() === 0 && selEnd.minute() === 0 && selEnd.second() === 0) {
                 sameDay = true
               }
             }
-
             return sameDay && isExactlyOneHour
           }}
           allDaySlot={false}
@@ -509,7 +515,7 @@ export default function Calendar() {
           slotMinTime="00:00:00"
           slotMaxTime="24:00:00"
           headerToolbar={{
-            left: 'prev,next today',
+            left: 'prev,next',
             center: 'title',
             right: ''
           }}
@@ -534,7 +540,7 @@ export default function Calendar() {
           setModalIsOpen(false)
           setIsSubmitting(false)
         }}
-        contentLabel="Reservation Form"
+        contentLabel={t({ en: 'Reservation Form', de: 'Reservierungsformular' })}
         style={{
           overlay: { backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000 },
           content: {
@@ -551,28 +557,24 @@ export default function Calendar() {
           }
         }}
       >
-        <h2>Reserve a Time Slot</h2>
+        <h2>{t({ en: 'Reserve a Time Slot', de: 'Zeitfenster reservieren' })}</h2>
         <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>
           {formatSelectedTime()}
         </p>
         <form onSubmit={handleSubmit}>
-          <label>Name:</label>
+          <label>{t({ en: 'Name:', de: 'Name:' })}</label>
           <input
             type="text"
             value={formData.name}
-            onChange={(e) =>
-              setFormData({ ...formData, name: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
             style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
           />
-          <label>Phone:</label>
+          <label>{t({ en: 'Phone:', de: 'Telefon:' })}</label>
           <input
             type="tel"
             value={formData.phone}
-            onChange={(e) =>
-              setFormData({ ...formData, phone: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             required
             style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
           />
@@ -582,13 +584,15 @@ export default function Calendar() {
               disabled={isSubmitting}
               style={{ marginRight: '10px' }}
             >
-              {isSubmitting ? 'Reserving...' : 'Reserve'}
+              {isSubmitting
+                ? t({ en: 'Reserving...', de: 'Reservieren...' })
+                : t({ en: 'Reserve', de: 'Reservieren' })}
             </button>
             <button
               type="button"
               onClick={() => setModalIsOpen(false)}
             >
-              Cancel
+              {t({ en: 'Cancel', de: 'Abbrechen' })}
             </button>
           </div>
         </form>
