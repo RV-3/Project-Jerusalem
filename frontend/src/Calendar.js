@@ -11,7 +11,6 @@ import moment from 'moment-timezone'
 import momentPlugin from '@fullcalendar/moment'
 import momentTimezonePlugin from '@fullcalendar/moment-timezone'
 
-// Sanity client + Modal
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
 import './Calendar.css'
@@ -41,15 +40,12 @@ function isHourExcepted(exceptions = [], hStart, hEnd) {
 
   return exceptions.some((ex) => {
     if (!ex.date) return false
-    // Must match same day
     if (ex.date.slice(0, 10) !== dateStr) return false
 
-    // Build the exception start/end
     const exDay   = startJer.clone().startOf('day')
     const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
     const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
 
-    // Overlap check
     return startJer.isBefore(exEnd) && endJer.isAfter(exStart)
   })
 }
@@ -78,11 +74,9 @@ function getHourRuleSlices(rule, viewStart, viewEnd) {
       const sliceStart = dayCursor.clone().hour(h)
       const sliceEnd   = sliceStart.clone().add(1, 'hour')
 
-      // skip if outside overall range
       if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
         continue
       }
-      // skip if excepted
       if (isHourExcepted(rule.timeExceptions, sliceStart.toDate(), sliceEnd.toDate())) {
         continue
       }
@@ -192,7 +186,7 @@ export default function Calendar() {
   const calendarRef = useRef(null)
   const platformDelay = isIOS ? 100 : 47
 
-  // 1) Fetch data from Sanity on mount
+  // Fetch data on mount
   useEffect(() => {
     // a) Reservations
     client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
@@ -243,7 +237,6 @@ export default function Calendar() {
       .catch((err) => console.error('Error fetching autoBlockedDays:', err))
   }, [])
 
-  // 2) Check time blocked by manual blocks
   function isTimeBlockedByManual(start, end) {
     const sJer = moment.tz(start, 'Asia/Jerusalem')
     const eJer = moment.tz(end, 'Asia/Jerusalem')
@@ -254,7 +247,6 @@ export default function Calendar() {
     })
   }
 
-  // 3) Check time blocked by auto rules
   function isTimeBlockedByAuto(start, end) {
     if (autoBlockDays && autoBlockDays.daysOfWeek?.length) {
       if (isDayCovered(autoBlockDays, start, end)) {
@@ -273,7 +265,6 @@ export default function Calendar() {
     return true
   }
 
-  // 4) Check if a timeslot is already reserved
   function isSlotReserved(slotStart, slotEnd) {
     const sJer = moment.tz(slotStart, 'Asia/Jerusalem')
     const eJer = moment.tz(slotEnd, 'Asia/Jerusalem')
@@ -291,7 +282,7 @@ export default function Calendar() {
     })
   }
 
-  // 5) Past-block overlay
+  // Past-block overlay
   useEffect(() => {
     function updatePastBlockEvent() {
       const nowJer = moment.tz('Asia/Jerusalem')
@@ -309,7 +300,6 @@ export default function Calendar() {
     return () => clearInterval(interval)
   }, [])
 
-  // 6) Handle user selection => open modal
   const handleSelect = (info) => {
     const { startStr, endStr } = info
     if (isTimeBlockedByManual(startStr, endStr)) return
@@ -320,7 +310,6 @@ export default function Calendar() {
     setModalIsOpen(true)
   }
 
-  // 7) Submit reservation => store in Sanity
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name || !formData.phone || !selectedInfo) return
@@ -360,7 +349,6 @@ export default function Calendar() {
     }
   }
 
-  // 8) Format chosen times in modal
   const formatSelectedTime = () => {
     if (!selectedInfo) return ''
     const calendarApi = calendarRef.current?.getApi()
@@ -380,7 +368,6 @@ export default function Calendar() {
     return `${startTxt} - ${endTxt}`
   }
 
-  // 9) FullCalendar loads events
   function loadEvents(fetchInfo, successCallback) {
     const { start, end } = fetchInfo
     const loaded = []
@@ -422,11 +409,22 @@ export default function Calendar() {
   return (
     <>
       <div>
+        {/* 1) "Powered by Legio Fidelis" with an Instagram link */}
+        <div style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1rem' }}>
+    Powered by{' '}
+    <a
+      href="https://instagram.com/Legio.Fidelis"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}
+    >
+      @Legio.Fidelis
+    </a>
+  </div>
+
         <FullCalendar
           ref={calendarRef}
-          // Provide all locales
           locales={allLocales}
-          // Switch locale based on language, now includes Spanish
           locale={
             language === 'de'
               ? 'de'
@@ -434,11 +432,9 @@ export default function Calendar() {
                 ? 'es'
                 : 'en'
           }
-
           slotLabelFormat={(dateInfo) => {
             return moment(dateInfo.date).format('h A')
           }}
-
           plugins={[
             timeGridPlugin,
             scrollGridPlugin,
@@ -480,20 +476,16 @@ export default function Calendar() {
             const selStart = moment.tz(selectInfo.startStr, 'Asia/Jerusalem')
             const selEnd   = moment.tz(selectInfo.endStr, 'Asia/Jerusalem')
 
-            // 1) Forbid times < next hour
             const nextHour = getJerusalemNextHourMoment()
             if (selStart.isBefore(nextHour)) return false
 
-            // 2) If it's blocked or reserved, forbid
             if (isTimeBlockedByManual(selStart, selEnd)) return false
             if (isTimeBlockedByAuto(selStart, selEnd)) return false
             if (isSlotReserved(selStart, selEnd)) return false
 
-            // 3) Must be exactly 1 hour
             const duration = selEnd.diff(selStart, 'hours', true)
             const isExactlyOneHour = duration === 1
 
-            // 4) Typically require same day, but let 23:00 -> 00:00 pass
             let sameDay = selStart.isSame(selEnd, 'day')
             if (!sameDay && isExactlyOneHour) {
               if (selEnd.hour() === 0 && selEnd.minute() === 0 && selEnd.second() === 0) {
@@ -512,7 +504,6 @@ export default function Calendar() {
             right: ''
           }}
           eventContent={(arg) => {
-            // Hide text for background/past-block/auto-block events
             if (
               arg.event.id.startsWith('blocked-') ||
               arg.event.id === 'past-block' ||
