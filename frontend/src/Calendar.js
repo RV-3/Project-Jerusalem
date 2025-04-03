@@ -410,17 +410,47 @@ export default function Calendar() {
     <>
       <div>
         {/* 1) "Powered by Legio Fidelis" with an Instagram link */}
-        <div style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1rem' }}>
-    Powered by{' '}
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+  <img
+    src="/assets/ladyofgrace.png"
+    alt="Legio Fidelis"
+    style={{
+      maxWidth: '80px',
+      marginBottom: '0.4rem',
+      display: 'block',
+      marginLeft: 'auto',
+      marginRight: 'auto'
+    }}
+  />
+  <div style={{ fontSize: '1.3rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.4rem' }}>
+    <span>Connect</span>
     <a
       href="https://instagram.com/Legio.Fidelis"
       target="_blank"
       rel="noopener noreferrer"
-      style={{ textDecoration: 'none', color: 'inherit', fontWeight: 'bold' }}
+      style={{
+        textDecoration: 'none',
+        color: 'inherit',
+        fontWeight: 'bold',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.35rem'
+      }}
     >
+      <img
+        src="/assets/instagram.png"
+        alt="Instagram"
+        style={{
+          width: '30px',
+          height: '30px',
+          objectFit: 'contain',
+          verticalAlign: 'middle'
+        }}
+      />
       @Legio.Fidelis
     </a>
   </div>
+</div>
 
         <FullCalendar
           ref={calendarRef}
