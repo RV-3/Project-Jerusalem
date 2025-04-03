@@ -30,7 +30,11 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "start:jerusalem": "env-cmd -f .env.jerusalem react-scripts start",
+    "build:jerusalem": "env-cmd -f .env.jerusalem react-scripts build",
+    "start:donaufeld": "env-cmd -f .env.donaufeld react-scripts start",
+    "build:donaufeld": "env-cmd -f .env.donaufeld react-scripts build"
   },
   "eslintConfig": {
     "extends": [
@@ -49,5 +53,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "env-cmd": "^10.1.0"
   }
 }

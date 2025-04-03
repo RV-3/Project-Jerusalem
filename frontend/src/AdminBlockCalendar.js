@@ -1,6 +1,7 @@
 // AdminBlockCalendar.js
 import React, { useEffect, useState, useRef } from 'react'
 import FullCalendar from '@fullcalendar/react'
+import { TIMEZONE } from './config'
 import allLocales from '@fullcalendar/core/locales-all'
 import { isIOS } from 'react-device-detect'
 import timeGridPlugin from '@fullcalendar/timegrid'
@@ -24,7 +25,7 @@ const ADMIN_PASSWORD = 'admin123'
 
 // Helper for "x days ago at midnight in Jerusalem"
 function getJerusalemMidnightXDaysAgo(daysAgo) {
-  return moment.tz('Asia/Jerusalem')
+  return moment.tz(TIMEZONE)
     .startOf('day')
     .subtract(daysAgo, 'days')
     .toDate()
@@ -237,8 +238,8 @@ export default function AdminBlockCalendar() {
 
   function isDayLevelExcepted(hStart, hEnd) {
     if (!autoBlockDays?.timeExceptions?.length) return false
-    const sJer = moment.tz(hStart, 'Asia/Jerusalem')
-    const eJer = moment.tz(hEnd, 'Asia/Jerusalem')
+    const sJer = moment.tz(hStart, TIMEZONE)
+    const eJer = moment.tz(hEnd, TIMEZONE)
     const dateStr = sJer.format('YYYY-MM-DD')
 
     return autoBlockDays.timeExceptions.some((ex) => {
@@ -252,8 +253,8 @@ export default function AdminBlockCalendar() {
   }
 
   function isHourRuleExcepted(rule, hStart, hEnd) {
-    const sJer = moment.tz(hStart, 'Asia/Jerusalem')
-    const eJer = moment.tz(hEnd, 'Asia/Jerusalem')
+    const sJer = moment.tz(hStart, TIMEZONE)
+    const eJer = moment.tz(hEnd, TIMEZONE)
     const dateStr = sJer.format('YYYY-MM-DD')
     const exceptions = rule.timeExceptions || []
 
@@ -268,8 +269,8 @@ export default function AdminBlockCalendar() {
   }
 
   function doesRuleCoverHourRule(rule, hStart, hEnd) {
-    const sJer = moment.tz(hStart, 'Asia/Jerusalem')
-    const eJer = moment.tz(hEnd, 'Asia/Jerusalem')
+    const sJer = moment.tz(hStart, TIMEZONE)
+    const eJer = moment.tz(hEnd, TIMEZONE)
     const dayAnchor = sJer.clone().startOf('day')
     const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
     const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
@@ -282,7 +283,7 @@ export default function AdminBlockCalendar() {
   function isAutoBlocked(hStart, hEnd) {
     // Day-based
     if (autoBlockDays?.daysOfWeek?.length) {
-      const dayName = moment.tz(hStart, 'Asia/Jerusalem').format('dddd')
+      const dayName = moment.tz(hStart, TIMEZONE).format('dddd')
       if (autoBlockDays.daysOfWeek.includes(dayName)) {
         if (!isDayLevelExcepted(hStart, hEnd)) {
           return true
@@ -395,9 +396,9 @@ export default function AdminBlockCalendar() {
       // hour-based
       autoBlockRules.forEach((rule) => {
         if (doesRuleCoverHourRule(rule, startCopy, endCopy)) {
-          const dateStr = moment.tz(startCopy, 'Asia/Jerusalem').format('YYYY-MM-DD')
-          const startHr = moment.tz(startCopy, 'Asia/Jerusalem').hour()
-          const endHr = moment.tz(endCopy, 'Asia/Jerusalem').hour()
+          const dateStr = moment.tz(startCopy, TIMEZONE).format('YYYY-MM-DD')
+          const startHr = moment.tz(startCopy, TIMEZONE).hour()
+          const endHr = moment.tz(endCopy, TIMEZONE).hour()
 
           const ex = {
             _type: 'timeException',
@@ -417,11 +418,11 @@ export default function AdminBlockCalendar() {
 
       // day-based
       if (autoBlockDays?.daysOfWeek?.length) {
-        const dayName = moment.tz(startCopy, 'Asia/Jerusalem').format('dddd')
+        const dayName = moment.tz(startCopy, TIMEZONE).format('dddd')
         if (autoBlockDays.daysOfWeek.includes(dayName)) {
-          const dateStr = moment.tz(startCopy, 'Asia/Jerusalem').format('YYYY-MM-DD')
-          const startHr = moment.tz(startCopy, 'Asia/Jerusalem').hour()
-          const endHr = moment.tz(endCopy, 'Asia/Jerusalem').hour()
+          const dateStr = moment.tz(startCopy, TIMEZONE).format('YYYY-MM-DD')
+          const startHr = moment.tz(startCopy, TIMEZONE).hour()
+          const endHr = moment.tz(endCopy, TIMEZONE).hour()
 
           const ex = {
             _type: 'timeException',
@@ -519,8 +520,8 @@ export default function AdminBlockCalendar() {
 
   function getAutoBlockSlices(rule, dayStart, dayEnd) {
     const slices = []
-    let cursorDay = moment.tz(dayStart, 'Asia/Jerusalem').startOf('day')
-    const endOfDay = moment.tz(dayEnd, 'Asia/Jerusalem').endOf('day')
+    let cursorDay = moment.tz(dayStart, TIMEZONE).startOf('day')
+    const endOfDay = moment.tz(dayEnd, TIMEZONE).endOf('day')
 
     while (cursorDay.isSameOrBefore(endOfDay, 'day')) {
       for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
@@ -542,11 +543,11 @@ export default function AdminBlockCalendar() {
     let current = new Date(rangeStart)
     current.setHours(0, 0, 0, 0)
     while (current < rangeEnd) {
-      const dayName = moment.tz(current, 'Asia/Jerusalem').format('dddd')
+      const dayName = moment.tz(current, TIMEZONE).format('dddd')
       if (dayDoc.daysOfWeek.includes(dayName)) {
         for (let h = 0; h < 24; h++) {
           const sliceStart = moment
-            .tz(current, 'Asia/Jerusalem')
+            .tz(current, TIMEZONE)
             .hour(h)
             .toDate()
           const sliceEnd = new Date(sliceStart.getTime() + 3600000)
@@ -662,7 +663,7 @@ export default function AdminBlockCalendar() {
           momentPlugin,
           momentTimezonePlugin
         ]}
-        timeZone="Asia/Jerusalem"
+        timeZone={TIMEZONE}
         initialView="timeGrid30Day"
         views={{
           timeGrid30Day: {

@@ -1,12 +1,14 @@
 import React from 'react'
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import Calendar from './Calendar'
+import LiveClock from './utils/LiveClock'
+import { TIMEZONE } from './config'
 import AdminBlockCalendar from './AdminBlockCalendar'
-import JerusalemClock from './utils/JerusalemCLock'
-import useTranslate from './useTranslate' // <--- import this
+import useTranslate from './useTranslate'
+import { PARISH_NAME } from './config' // 👈 import from config.js
 
 function App() {
-  const t = useTranslate() // create translation function
+  const t = useTranslate()
 
   return (
     <Router>
@@ -21,14 +23,12 @@ function App() {
             marginBottom: '1.5rem'
           }}
         >
-          24/7 JERUSALEM
+          {PARISH_NAME} {/* 👈 dynamic parish name */}
         </h2>
 
-        {/* 2) Place the clock below the heading */}
         <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-          <JerusalemClock />
+          <LiveClock timezone={TIMEZONE} />
         </div>
-
 
         <nav style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <Link to="/" style={{ marginRight: '1rem' }}>

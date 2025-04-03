@@ -3,14 +3,13 @@ import React, { useEffect, useState, useRef } from 'react'
 import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
 import allLocales from '@fullcalendar/core/locales-all'
+import { TIMEZONE } from './config'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
-
 import moment from 'moment-timezone'
 import momentPlugin from '@fullcalendar/moment'
 import momentTimezonePlugin from '@fullcalendar/moment-timezone'
-
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
 import './Calendar.css'
@@ -23,7 +22,7 @@ Modal.setAppElement('#root')
 
 /** Return the "next top-of-hour" in Jerusalem as a Moment, so we forbid earlier selections. */
 function getJerusalemNextHourMoment() {
-  const nowJer = moment.tz('Asia/Jerusalem')
+  const nowJer = moment.tz(TIMEZONE)
   if (nowJer.minute() !== 0 || nowJer.second() !== 0) {
     nowJer.add(1, 'hour').startOf('hour')
   }
@@ -34,8 +33,8 @@ function getJerusalemNextHourMoment() {
 // HELPER: see if an hour is in a doc’s timeExceptions
 // -----------------------------------
 function isHourExcepted(exceptions = [], hStart, hEnd) {
-  const startJer = moment.tz(hStart, 'Asia/Jerusalem')
-  const endJer   = moment.tz(hEnd, 'Asia/Jerusalem')
+  const startJer = moment.tz(hStart, TIMEZONE)
+  const endJer   = moment.tz(hEnd, TIMEZONE)
   const dateStr  = startJer.format('YYYY-MM-DD')
 
   return exceptions.some((ex) => {
@@ -52,8 +51,8 @@ function isHourExcepted(exceptions = [], hStart, hEnd) {
 
 // For hour-based rules
 function doesHourRuleCover(rule, hStart, hEnd) {
-  const startJer = moment.tz(hStart, 'Asia/Jerusalem')
-  const endJer   = moment.tz(hEnd, 'Asia/Jerusalem')
+  const startJer = moment.tz(hStart, TIMEZONE)
+  const endJer   = moment.tz(hEnd, TIMEZONE)
 
   const dayAnchor = startJer.clone().startOf('day')
   const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
@@ -66,8 +65,8 @@ function doesHourRuleCover(rule, hStart, hEnd) {
 
 function getHourRuleSlices(rule, viewStart, viewEnd) {
   const slices = []
-  let dayCursor = moment.tz(viewStart, 'Asia/Jerusalem').startOf('day')
-  const dayEnd  = moment.tz(viewEnd, 'Asia/Jerusalem').endOf('day')
+  let dayCursor = moment.tz(viewStart, TIMEZONE).startOf('day')
+  const dayEnd  = moment.tz(viewEnd, TIMEZONE).endOf('day')
 
   while (dayCursor.isSameOrBefore(dayEnd, 'day')) {
     for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
@@ -91,8 +90,8 @@ function getHourRuleSlices(rule, viewStart, viewEnd) {
 function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
   if (!dayDoc?.daysOfWeek?.length) return []
   const slices = []
-  let current = moment.tz(viewStart, 'Asia/Jerusalem').startOf('day')
-  const limit = moment.tz(viewEnd, 'Asia/Jerusalem').endOf('day')
+  let current = moment.tz(viewStart, TIMEZONE).startOf('day')
+  const limit = moment.tz(viewEnd, TIMEZONE).endOf('day')
 
   while (current.isBefore(limit)) {
     const dayName = current.format('dddd')
@@ -238,11 +237,11 @@ export default function Calendar() {
   }, [])
 
   function isTimeBlockedByManual(start, end) {
-    const sJer = moment.tz(start, 'Asia/Jerusalem')
-    const eJer = moment.tz(end, 'Asia/Jerusalem')
+    const sJer = moment.tz(start, TIMEZONE)
+    const eJer = moment.tz(end, TIMEZONE)
     return blockedTimes.some((b) => {
-      const bStart = moment.tz(b.start, 'Asia/Jerusalem')
-      const bEnd   = moment.tz(b.end, 'Asia/Jerusalem')
+      const bStart = moment.tz(b.start, TIMEZONE)
+      const bEnd   = moment.tz(b.end, TIMEZONE)
       return sJer.isBefore(bEnd) && eJer.isAfter(bStart)
     })
   }
@@ -257,7 +256,7 @@ export default function Calendar() {
   }
 
   function isDayCovered(dayDoc, hStart, hEnd) {
-    const dayName = moment.tz(hStart, 'Asia/Jerusalem').format('dddd')
+    const dayName = moment.tz(hStart, TIMEZONE).format('dddd')
     if (!dayDoc.daysOfWeek?.includes(dayName)) return false
     if (isHourExcepted(dayDoc.timeExceptions || [], hStart, hEnd)) {
       return false
@@ -266,8 +265,8 @@ export default function Calendar() {
   }
 
   function isSlotReserved(slotStart, slotEnd) {
-    const sJer = moment.tz(slotStart, 'Asia/Jerusalem')
-    const eJer = moment.tz(slotEnd, 'Asia/Jerusalem')
+    const sJer = moment.tz(slotStart, TIMEZONE)
+    const eJer = moment.tz(slotEnd, TIMEZONE)
     return events.some((evt) => {
       if (
         evt.id.startsWith('auto-') ||
@@ -276,8 +275,8 @@ export default function Calendar() {
       ) {
         return false
       }
-      const evtStart = moment.tz(evt.start, 'Asia/Jerusalem')
-      const evtEnd   = moment.tz(evt.end, 'Asia/Jerusalem')
+      const evtStart = moment.tz(evt.start, TIMEZONE)
+      const evtEnd   = moment.tz(evt.end, TIMEZONE)
       return sJer.isBefore(evtEnd) && eJer.isAfter(evtStart)
     })
   }
@@ -285,7 +284,7 @@ export default function Calendar() {
   // Past-block overlay
   useEffect(() => {
     function updatePastBlockEvent() {
-      const nowJer = moment.tz('Asia/Jerusalem')
+      const nowJer = moment.tz(TIMEZONE)
       const startOfTodayJer = nowJer.clone().startOf('day')
       setPastBlockEvent({
         id: 'past-block',
@@ -354,7 +353,7 @@ export default function Calendar() {
     const calendarApi = calendarRef.current?.getApi()
     if (!calendarApi) return ''
     const startTxt = calendarApi.formatDate(selectedInfo.start, {
-      timeZone: 'Asia/Jerusalem',
+      timeZone: TIMEZONE,
       hour: 'numeric',
       day: 'numeric',
       month: 'short',
@@ -362,7 +361,7 @@ export default function Calendar() {
       weekday: 'long'
     })
     const endTxt = calendarApi.formatDate(selectedInfo.end, {
-      timeZone: 'Asia/Jerusalem',
+      timeZone: TIMEZONE,
       hour: 'numeric'
     })
     return `${startTxt} - ${endTxt}`
@@ -447,7 +446,7 @@ export default function Calendar() {
           verticalAlign: 'middle'
         }}
       />
-      @Legio.Fidelis
+  <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
     </a>
   </div>
 </div>
@@ -472,7 +471,7 @@ export default function Calendar() {
             momentPlugin,
             momentTimezonePlugin
           ]}
-          timeZone="Asia/Jerusalem"
+          timeZone={TIMEZONE}
           initialView="timeGrid30Day"
           views={{
             timeGrid30Day: {
@@ -497,14 +496,14 @@ export default function Calendar() {
           selectable
           themeSystem="standard"
           validRange={{
-            start: moment().tz('Asia/Jerusalem').subtract(7, 'days').format(),
-            end: moment().tz('Asia/Jerusalem').add(30, 'days').format()
+            start: moment().tz(TIMEZONE).subtract(7, 'days').format(),
+            end: moment().tz(TIMEZONE).add(30, 'days').format()
           }}
           events={loadEvents}
           select={handleSelect}
           selectAllow={(selectInfo) => {
-            const selStart = moment.tz(selectInfo.startStr, 'Asia/Jerusalem')
-            const selEnd   = moment.tz(selectInfo.endStr, 'Asia/Jerusalem')
+            const selStart = moment.tz(selectInfo.startStr, TIMEZONE)
+            const selEnd   = moment.tz(selectInfo.endStr, TIMEZONE)
 
             const nextHour = getJerusalemNextHourMoment()
             if (selStart.isBefore(nextHour)) return false
