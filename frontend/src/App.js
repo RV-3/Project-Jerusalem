@@ -3,11 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
 import Calendar from './Calendar'
 import AdminBlockCalendar from './AdminBlockCalendar'
 import JerusalemClock from './utils/JerusalemCLock'
-import { useLanguage } from './LanguageContext'
 import useTranslate from './useTranslate' // <--- import this
 
 function App() {
-  const { language, setLanguage } = useLanguage()
   const t = useTranslate() // create translation function
 
   return (

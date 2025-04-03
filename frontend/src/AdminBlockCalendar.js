@@ -686,7 +686,7 @@ export default function AdminBlockCalendar() {
         eventContent={handleEventContent}
         eventClick={handleEventClick}
         headerToolbar={{
-          left: 'prev,next today',
+          left: 'prev,next',
           center: 'title',
           right: ''
         }}
