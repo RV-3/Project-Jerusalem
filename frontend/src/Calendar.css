@@ -52,16 +52,17 @@ td.fc-timegrid-slot.fc-timegrid-slot-lane {
 
   /* Let’s put it well below FullCalendar’s sticky header row
      so it won't overlap day-of-week titles (adjust as needed). */
-  top: 50px;
+  top: 20px;
 
   /* Appear above normal content if needed */
   z-index: 999;
 
-
+  /* White background so it doesn't show the calendar behind it */
+  background-color: #fff;
 
   /* Spacing, etc. */
-  margin-bottom: 1.5rem;
-  padding: 1rem 0;
+  margin-bottom: 0rem;
+  padding: .2rem 0;
 }
 
 /* Responsive adjustments if needed */
