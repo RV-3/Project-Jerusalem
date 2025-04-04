@@ -63,6 +63,17 @@ td.fc-timegrid-slot.fc-timegrid-slot-lane {
   /* Spacing, etc. */
   margin-bottom: 0rem;
   padding: .2rem 0;
+
+/* Limit horizontal size so it doesn’t block the left column */
+width: fit-content;
+max-width: calc(100% - 80px); /* Leaves space for time labels on the left */
+margin-left: auto;
+margin-right: auto;
+
+background-color: #fff;
+border-radius: 6px;
+box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+
 }
 
 /* Responsive adjustments if needed */
