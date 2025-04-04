@@ -60,20 +60,11 @@ td.fc-timegrid-slot.fc-timegrid-slot-lane {
   margin-left: 54.5px;            /* Leaves space for the hour labels */
   width: calc(100% - 80px);     /* Fills the rest of the screen */
 
-  background-color: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(5px);
+  background: linear-gradient(to right, #ffffff, #f5f5f5);
   border-radius: 0;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 
-.sticky-connect-content {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-
-  /* Shift text to the left inside the full-width white bar */
-  padding-left: 1.5rem;
-}
 
 /* Responsive adjustments if needed */
 @media (max-width: 768px) {
