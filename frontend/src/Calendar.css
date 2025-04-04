@@ -57,7 +57,7 @@ td.fc-timegrid-slot.fc-timegrid-slot-lane {
   margin: 0;
 
   /* Align to the right and cut off left side to avoid time labels */
-  margin-left: 45px;            /* Leaves space for the hour labels */
+  margin-left: 48px;            /* Leaves space for the hour labels */
   width: calc(100% - 80px);     /* Fills the rest of the screen */
 
   background-color: #fff;
