@@ -425,7 +425,7 @@ export default function Calendar() {
       <div className="sticky-connect">
         <div
           style={{
-            fontSize: '1.3rem',
+            fontSize: '1.15rem',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
