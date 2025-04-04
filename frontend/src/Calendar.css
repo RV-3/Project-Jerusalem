@@ -49,32 +49,22 @@ td.fc-timegrid-slot.fc-timegrid-slot-lane {
 .sticky-connect {
   position: -webkit-sticky; /* Safari support */
   position: sticky;
-
-  /* Let’s put it well below FullCalendar’s sticky header row
-     so it won't overlap day-of-week titles (adjust as needed). */
-  top: 20px;
-
-  /* Appear above normal content if needed */
+  top: 50px; /* Adjust as needed to sit just under the day headers */
   z-index: 999;
 
-  /* White background so it doesn't show the calendar behind it */
+  /* Slim spacing around the text */
+  padding: 0.2rem 1rem;
+  margin: 0;
+
+  /* Align to the right and cut off left side to avoid time labels */
+  margin-left: 80px;            /* Leaves space for the hour labels */
+  width: calc(100% - 80px);     /* Fills the rest of the screen */
+
   background-color: #fff;
-
-  /* Spacing, etc. */
-  margin-bottom: 0rem;
-  padding: .2rem 0;
-
-/* Limit horizontal size so it doesn’t block the left column */
-width: fit-content;
-max-width: calc(100% - 80px); /* Leaves space for time labels on the left */
-margin-left: auto;
-margin-right: auto;
-
-background-color: #fff;
-border-radius: 6px;
-box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-
+  border-radius: 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
+
 
 /* Responsive adjustments if needed */
 @media (max-width: 768px) {
