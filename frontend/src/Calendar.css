@@ -40,8 +40,32 @@ td.fc-timegrid-slot.fc-timegrid-slot-lane {
   background-color: transparent !important;
 }
 
+/* (Optional) Sunday column styling */
+.fc-sunday-col {
+  background-color: #fffaf2; /* subtle highlight for Sunday columns */
+}
 
-/* You can keep your responsive rules if needed */
+/* Sticky “Connect” text only (NOT the image) */
+.sticky-connect {
+  position: -webkit-sticky; /* Safari support */
+  position: sticky;
+
+  /* Let’s put it well below FullCalendar’s sticky header row
+     so it won't overlap day-of-week titles (adjust as needed). */
+  top: 120px;
+
+  /* Appear above normal content if needed */
+  z-index: 999;
+
+  /* White background so it doesn't show the calendar behind it */
+  background-color: #fff;
+
+  /* Spacing, etc. */
+  margin-bottom: 1.5rem;
+  padding: 1rem 0;
+}
+
+/* Responsive adjustments if needed */
 @media (max-width: 768px) {
   .fc .fc-timegrid-slot {
     height: 3.5em !important;

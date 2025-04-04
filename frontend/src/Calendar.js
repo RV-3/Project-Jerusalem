@@ -20,7 +20,6 @@ import { useLanguage } from './LanguageContext'
 
 Modal.setAppElement('#root')
 
-/** Return the "next top-of-hour" in Jerusalem as a Moment, so we forbid earlier selections. */
 function getJerusalemNextHourMoment() {
   const nowJer = moment.tz(TIMEZONE)
   if (nowJer.minute() !== 0 || nowJer.second() !== 0) {
@@ -29,9 +28,9 @@ function getJerusalemNextHourMoment() {
   return nowJer
 }
 
-// -----------------------------------
-// HELPER: see if an hour is in a doc’s timeExceptions
-// -----------------------------------
+// --------------------
+// HELPER: exceptions
+// --------------------
 function isHourExcepted(exceptions = [], hStart, hEnd) {
   const startJer = moment.tz(hStart, TIMEZONE)
   const endJer   = moment.tz(hEnd, TIMEZONE)
@@ -49,7 +48,6 @@ function isHourExcepted(exceptions = [], hStart, hEnd) {
   })
 }
 
-// For hour-based rules
 function doesHourRuleCover(rule, hStart, hEnd) {
   const startJer = moment.tz(hStart, TIMEZONE)
   const endJer   = moment.tz(hEnd, TIMEZONE)
@@ -166,9 +164,6 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
   return events
 }
 
-// -----------------------------------
-// MAIN Calendar
-// -----------------------------------
 export default function Calendar() {
   const { language } = useLanguage()
   const t = useTranslate()
@@ -188,7 +183,8 @@ export default function Calendar() {
   // Fetch data on mount
   useEffect(() => {
     // a) Reservations
-    client.fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
+    client
+      .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
       .then((data) => {
         const parsed = data.map((res) => ({
           id: res._id,
@@ -201,7 +197,8 @@ export default function Calendar() {
       .catch((err) => console.error('Error fetching reservations:', err))
 
     // b) Manual blocks
-    client.fetch(`*[_type == "blocked"]{_id, start, end}`)
+    client
+      .fetch(`*[_type == "blocked"]{_id, start, end}`)
       .then((data) => {
         const blocks = data.map((item) => ({
           _id: item._id,
@@ -213,21 +210,23 @@ export default function Calendar() {
       .catch((err) => console.error('Error fetching blocked times:', err))
 
     // c) Hour-based autoBlock
-    client.fetch(`*[_type == "autoBlockedHours"]{
-      _id,
-      startHour,
-      endHour,
-      timeExceptions[]{ date, startHour, endHour }
-    }`)
+    client
+      .fetch(`*[_type == "autoBlockedHours"]{
+        _id,
+        startHour,
+        endHour,
+        timeExceptions[]{ date, startHour, endHour }
+      }`)
       .then((rules) => setAutoBlockHours(rules))
       .catch((err) => console.error('Error fetching auto-block hours:', err))
 
     // d) Day-based autoBlock
-    client.fetch(`*[_type == "autoBlockedDays"]{
-      _id,
-      daysOfWeek,
-      timeExceptions[]{ date, startHour, endHour }
-    }`)
+    client
+      .fetch(`*[_type == "autoBlockedDays"]{
+        _id,
+        daysOfWeek,
+        timeExceptions[]{ date, startHour, endHour }
+      }`)
       .then((daysDocs) => {
         if (daysDocs.length) {
           setAutoBlockDays(daysDocs[0])
@@ -407,50 +406,63 @@ export default function Calendar() {
 
   return (
     <>
-      <div>
-        {/* 1) "Powered by Legio Fidelis" with an Instagram link */}
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-  <img
-    src="/assets/ladyofgrace.png"
-    alt="Legio Fidelis"
-    style={{
-      maxWidth: '80px',
-      marginBottom: '0.4rem',
-      display: 'block',
-      marginLeft: 'auto',
-      marginRight: 'auto'
-    }}
-  />
-  <div style={{ fontSize: '1.3rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.4rem' }}>
-    <span>Connect</span>
-    <a
-      href="https://instagram.com/Legio.Fidelis"
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{
-        textDecoration: 'none',
-        color: 'inherit',
-        fontWeight: 'bold',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '0.35rem'
-      }}
-    >
-      <img
-        src="/assets/instagram.png"
-        alt="Instagram"
-        style={{
-          width: '30px',
-          height: '30px',
-          objectFit: 'contain',
-          verticalAlign: 'middle'
-        }}
-      />
-  <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
-    </a>
-  </div>
-</div>
+      {/* 1) Static image at the very top (non-sticky) */}
+      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+        <img
+          src="/assets/ladyofgrace.png"
+          alt="Legio Fidelis"
+          style={{
+            maxWidth: '80px',
+            marginBottom: '0.4rem',
+            display: 'block',
+            marginLeft: 'auto',
+            marginRight: 'auto'
+          }}
+        />
+      </div>
 
+      {/* 2) Sticky Connect text, only the text floats */}
+      <div className="sticky-connect">
+        <div
+          style={{
+            fontSize: '1.3rem',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '0.4rem'
+          }}
+        >
+          <span>Connect</span>
+          <a
+            href="https://instagram.com/Legio.Fidelis"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              textDecoration: 'none',
+              color: 'inherit',
+              fontWeight: 'bold',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
+          >
+            <img
+              src="/assets/instagram.png"
+              alt="Instagram"
+              style={{
+                width: '30px',
+                height: '30px',
+                objectFit: 'contain',
+                verticalAlign: 'middle'
+              }}
+            />
+            <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
+          </a>
+        </div>
+      </div>
+
+      {/* 3) The FullCalendar below everything */}
+      <div>
         <FullCalendar
           ref={calendarRef}
           locales={allLocales}
@@ -517,7 +529,11 @@ export default function Calendar() {
 
             let sameDay = selStart.isSame(selEnd, 'day')
             if (!sameDay && isExactlyOneHour) {
-              if (selEnd.hour() === 0 && selEnd.minute() === 0 && selEnd.second() === 0) {
+              if (
+                selEnd.hour() === 0 &&
+                selEnd.minute() === 0 &&
+                selEnd.second() === 0
+              ) {
                 sameDay = true
               }
             }
@@ -531,6 +547,12 @@ export default function Calendar() {
             left: 'prev,next',
             center: 'title',
             right: ''
+          }}
+          slotLaneClassNames={(arg) => {
+            if (arg.date.getDay() === 0) {
+              return ['fc-sunday-col']
+            }
+            return []
           }}
           eventContent={(arg) => {
             if (
@@ -594,9 +616,7 @@ export default function Calendar() {
           <input
             type="text"
             value={formData.name}
-            onChange={(e) =>
-              setFormData({ ...formData, name: e.target.value })
-            }
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
             style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
           />
@@ -634,10 +654,7 @@ export default function Calendar() {
                     es: 'Reservar'
                   })}
             </button>
-            <button
-              type="button"
-              onClick={() => setModalIsOpen(false)}
-            >
+            <button type="button" onClick={() => setModalIsOpen(false)}>
               {t({
                 en: 'Cancel',
                 de: 'Abbrechen',

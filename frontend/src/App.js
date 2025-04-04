@@ -5,7 +5,7 @@ import LiveClock from './utils/LiveClock'
 import { TIMEZONE } from './config'
 import AdminBlockCalendar from './AdminBlockCalendar'
 import useTranslate from './useTranslate'
-import { PARISH_NAME } from './config' // 👈 import from config.js
+import { PARISH_NAME } from './config' 
 
 function App() {
   const t = useTranslate()
