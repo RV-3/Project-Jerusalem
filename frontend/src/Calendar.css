@@ -49,7 +49,7 @@ td.fc-timegrid-slot.fc-timegrid-slot-lane {
 .sticky-connect {
   position: -webkit-sticky; /* Safari support */
   position: sticky;
-  top: 23px; /* Adjust as needed to sit just under the day headers */
+  top: 24px; /* Adjust as needed to sit just under the day headers */
   z-index: 999;
 
   /* Slim spacing around the text */
