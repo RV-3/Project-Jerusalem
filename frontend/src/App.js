@@ -5,7 +5,7 @@ import LiveClock from './utils/LiveClock'
 import { TIMEZONE } from './config'
 import AdminBlockCalendar from './AdminBlockCalendar'
 import useTranslate from './useTranslate'
-import { PARISH_NAME } from './config' 
+import { PARISH_NAME } from './config'
 
 function App() {
   const t = useTranslate()
@@ -32,10 +32,10 @@ function App() {
 
         <nav style={{ textAlign: 'center', marginBottom: '1rem' }}>
           <Link to="/" style={{ marginRight: '1rem' }}>
-            {t({ en: 'Main Calendar', de: 'Hauptkalender' })}
+            {t({ en: 'Main Calendar', de: 'Hauptkalender', es: 'Calendario Principal' })}
           </Link>
           <Link to="/admin">
-            {t({ en: 'Admin Panel', de: 'Admin-Bereich' })}
+            {t({ en: 'Admin Panel', de: 'Admin-Bereich', es: 'Panel de Administracion' })}
           </Link>
         </nav>
 
