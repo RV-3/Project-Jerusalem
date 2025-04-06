@@ -178,7 +178,7 @@ export default function Calendar() {
   const [formData, setFormData] = useState({ name: '', phone: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const calendarRef = useRef(null)
-  const platformDelay = isIOS ? 100 : 47
+  const platformDelay = isIOS ? 85 : 47
 
   // Fetch data on mount
   useEffect(() => {
@@ -434,7 +434,7 @@ export default function Calendar() {
         >
           <span>Connect</span>
           <a
-            href="https://instagram.com/Legio.Fidelis"
+            href="https://instagram.com/legio.fidelis"
             target="_blank"
             rel="noopener noreferrer"
             style={{
