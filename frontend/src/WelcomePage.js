@@ -52,7 +52,7 @@ const WelcomePage = () => {
           marginBottom: "2.5rem",
         }}
       >
-        Choose an adoration chapel to continue. Experience perpetual prayer
+        Choose an adoration chapel to experience perpetual prayer
       </p>
 
       <Link
