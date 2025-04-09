@@ -1,22 +1,26 @@
 // CalendarPasswordPanel.js
 import React, { useState } from 'react'
-import useTranslate from '../useTranslate' // adjust path to your useTranslate
-// (If you need language context or other hooks, import them too)
+import useTranslate from '../useTranslate' // adjust this import if needed
 
 export default function CalendarPasswordPanel({
-  currentCalendarPassword,   // (string) from parent
-  onSavePassword,            // (function) parent-supplied logic to save
-  onRemovePassword           // (function) parent-supplied logic to remove
+  currentCalendarPassword,
+  onSavePassword,
+  onRemovePassword
 }) {
   const t = useTranslate()
+
   const [panelOpen, setPanelOpen] = useState(false)
   const [newPassword, setNewPassword] = useState('')
 
-  // When saving a new password, we call parent prop onSavePassword
-  // and pass the newPassword. Parent handles the actual createOrReplace logic.
   function handleClickSave() {
     if (!newPassword.trim()) {
-      alert(t({ en: 'Please enter a password', de: 'Bitte ein Passwort eingeben', es: 'Ingrese una contraseña' }))
+      alert(
+        t({
+          en: 'Please enter a new password.',
+          de: 'Bitte geben Sie ein neues Passwort ein.',
+          es: 'Por favor ingrese una nueva contraseña.'
+        })
+      )
       return
     }
     onSavePassword(newPassword)
@@ -27,14 +31,14 @@ export default function CalendarPasswordPanel({
     <div
       style={{
         width: '100%',
-        maxWidth: '600px',
+        maxWidth: '500px',
         margin: '0 auto 1.5rem auto',
         border: '1px solid #ccc',
         borderRadius: '8px',
         background: '#fff'
       }}
     >
-      {/* Clickable header */}
+      {/* Collapsible header */}
       <div
         onClick={() => setPanelOpen(!panelOpen)}
         style={{
@@ -46,28 +50,60 @@ export default function CalendarPasswordPanel({
           borderBottom: panelOpen ? '1px solid #ccc' : 'none'
         }}
       >
-        <strong>Calendar Password Options</strong>
+        <strong>
+          {t({
+            en: 'Calendar Password',
+            de: 'Kalenderpasswort',
+            es: 'Contraseña del Calendario'
+          })}
+        </strong>
         <span>
-          {panelOpen ? '▲ Hide' : '▼ Show'}
+          {panelOpen
+            ? t({ en: '▲ Hide', de: '▲ Verbergen', es: '▲ Ocultar' })
+            : t({ en: '▼ Show', de: '▼ Anzeigen', es: '▼ Mostrar' })}
         </span>
       </div>
 
       {panelOpen && (
         <div style={{ padding: '0.75rem 1rem' }}>
-          {/* 1) Display the current password or (none) */}
+          {/* 1) Current Password */}
           <p style={{ margin: '0.5rem 0' }}>
-            <strong>Current Password:</strong>{' '}
-            {currentCalendarPassword ? currentCalendarPassword : <em>(none)</em>}
+            <strong>
+              {t({
+                en: 'Current Password:',
+                de: 'Aktuelles Passwort:',
+                es: 'Contraseña Actual:'
+              })}
+            </strong>{' '}
+            {currentCalendarPassword ? (
+              currentCalendarPassword
+            ) : (
+              <em>
+                {t({
+                  en: '(none)',
+                  de: '(kein)',
+                  es: '(ninguna)'
+                })}
+              </em>
+            )}
           </p>
 
-          {/* 2) Input for new password */}
+          {/* 2) New Password Input */}
           <div style={{ margin: '0.75rem 0' }}>
             <label style={{ marginRight: '0.5rem' }}>
-              {t({ en: 'Set New Password:', de: 'Neues Passwort eingeben:', es: 'Ingrese nueva contraseña:' })}
+              {t({
+                en: 'Set New Password:',
+                de: 'Neues Passwort setzen:',
+                es: 'Establecer nueva contraseña:'
+              })}
             </label>
             <input
               type="text"
-              placeholder={t({ en: '(enter new password)', de: '(Neues Passwort)', es: '(ingrese nueva contraseña)' })}
+              placeholder={t({
+                en: '(enter new password)',
+                de: '(neues Passwort eingeben)',
+                es: '(ingresar nueva contraseña)'
+              })}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               style={{
@@ -78,7 +114,7 @@ export default function CalendarPasswordPanel({
             />
           </div>
 
-          {/* 3) Save & Remove buttons */}
+          {/* 3) Buttons: Save & Remove */}
           <div style={{ marginTop: '0.5rem' }}>
             <button
               className="modern-button"
