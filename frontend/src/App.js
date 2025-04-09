@@ -1,14 +1,15 @@
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom'
-import Calendar from './Calendar'
-import LiveClock from './utils/LiveClock'
-import { TIMEZONE } from './config'
-import AdminBlockCalendar from './AdminBlockCalendar'
-import useTranslate from './useTranslate'
-import { PARISH_NAME } from './config'
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import Calendar from './Calendar';
+import LiveClock from './utils/LiveClock';
+import { TIMEZONE } from './config';
+import AdminBlockCalendar from './AdminBlockCalendar';
+import useTranslate from './useTranslate';
+import { PARISH_NAME } from './config';
+import WelcomePage from './chapels/WelcomePage'; // Make sure this exists
 
 function App() {
-  const t = useTranslate()
+  const t = useTranslate();
 
   return (
     <Router>
@@ -23,7 +24,7 @@ function App() {
             marginBottom: '1.5rem'
           }}
         >
-          {PARISH_NAME} {/* 👈 dynamic parish name */}
+          {PARISH_NAME}
         </h2>
 
         <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
@@ -31,7 +32,7 @@ function App() {
         </div>
 
         <nav style={{ textAlign: 'center', marginBottom: '1rem' }}>
-          <Link to="/" style={{ marginRight: '1rem' }}>
+          <Link to="/jerusalem" style={{ marginRight: '1rem' }}>
             {t({ en: 'Main Calendar', de: 'Hauptkalender', es: 'Calendario Principal' })}
           </Link>
           <Link to="/admin">
@@ -40,12 +41,13 @@ function App() {
         </nav>
 
         <Routes>
-          <Route path="/" element={<Calendar />} />
+          <Route path="/" element={<WelcomePage />} />
+          <Route path="/jerusalem" element={<Calendar />} />
           <Route path="/admin" element={<AdminBlockCalendar />} />
         </Routes>
       </div>
     </Router>
-  )
+  );
 }
 
-export default App
+export default App;
