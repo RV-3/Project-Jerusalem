@@ -168,6 +168,33 @@ export default function Calendar() {
   const { language } = useLanguage()
   const t = useTranslate()
 
+  // ---------------------------------------------------------------------
+  // [NEW] Password gate state + effect
+  // ---------------------------------------------------------------------
+  const [isUnlocked, setIsUnlocked] = useState(false)
+  const [enteredPw, setEnteredPw] = useState("")
+
+  useEffect(() => {
+    const storedPw = localStorage.getItem('calendarPagePassword')
+    const granted = localStorage.getItem('calendarAccessGranted')
+    // If no password is set or we've already unlocked, skip gate
+    if (!storedPw || granted === 'true') {
+      setIsUnlocked(true)
+    }
+  }, [])
+
+  function handleCheckPassword() {
+    const storedPw = localStorage.getItem('calendarPagePassword') || ""
+    if (enteredPw === storedPw) {
+      localStorage.setItem('calendarAccessGranted', 'true')
+      setIsUnlocked(true)
+    } else {
+      alert("Incorrect password")
+      setEnteredPw("")
+    }
+  }
+  // ---------------------------------------------------------------------
+
   const [events, setEvents] = useState([])
   const [blockedTimes, setBlockedTimes] = useState([])
   const [autoBlockHours, setAutoBlockHours] = useState([])
@@ -180,8 +207,10 @@ export default function Calendar() {
   const calendarRef = useRef(null)
   const platformDelay = isIOS ? 85 : 47
 
-  // Fetch data on mount
+  // Fetch data only if unlocked
   useEffect(() => {
+    if (!isUnlocked) return
+
     // a) Reservations
     client
       .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
@@ -233,7 +262,7 @@ export default function Calendar() {
         }
       })
       .catch((err) => console.error('Error fetching autoBlockedDays:', err))
-  }, [])
+  }, [isUnlocked])
 
   function isTimeBlockedByManual(start, end) {
     const sJer = moment.tz(start, TIMEZONE)
@@ -280,8 +309,10 @@ export default function Calendar() {
     })
   }
 
-  // Past-block overlay
+  // Past-block overlay updates only if unlocked
   useEffect(() => {
+    if (!isUnlocked) return
+
     function updatePastBlockEvent() {
       const nowJer = moment.tz(TIMEZONE)
       const startOfTodayJer = nowJer.clone().startOf('day')
@@ -296,9 +327,10 @@ export default function Calendar() {
     updatePastBlockEvent()
     const interval = setInterval(updatePastBlockEvent, 60 * 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isUnlocked])
 
   const handleSelect = (info) => {
+    if (!isUnlocked) return
     const { startStr, endStr } = info
     if (isTimeBlockedByManual(startStr, endStr)) return
     if (isTimeBlockedByAuto(startStr, endStr)) return
@@ -367,6 +399,12 @@ export default function Calendar() {
   }
 
   function loadEvents(fetchInfo, successCallback) {
+    if (!isUnlocked) {
+      // Return no events if locked
+      successCallback([])
+      return
+    }
+
     const { start, end } = fetchInfo
     const loaded = []
 
@@ -404,6 +442,57 @@ export default function Calendar() {
     successCallback(loaded)
   }
 
+  // ---------------------------------------------------------------------
+  // RETURN: If locked, show password prompt; otherwise show your calendar
+  // ---------------------------------------------------------------------
+  if (!isUnlocked) {
+    return (
+      <div
+        style={{
+          width: '100vw',
+          height: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#fff',
+          padding: '1rem'
+        }}
+      >
+        <h2 style={{ marginBottom: '1rem' }}>Enter Calendar Password</h2>
+        <input
+          type="password"
+          placeholder="Password"
+          value={enteredPw}
+          onChange={(e) => setEnteredPw(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleCheckPassword()
+          }}
+          style={{
+            marginBottom: '1rem',
+            padding: '8px',
+            fontSize: '1rem',
+            borderRadius: '4px',
+            border: '1px solid #ccc'
+          }}
+        />
+        <button
+          onClick={handleCheckPassword}
+          style={{
+            padding: '8px 16px',
+            fontSize: '1rem',
+            cursor: 'pointer'
+          }}
+        >
+          Submit
+        </button>
+      </div>
+    )
+  }
+
+  // ---------------------------------------------------------------------
+  // If unlocked => render the original Calendar UI exactly as before
+  // ---------------------------------------------------------------------
   return (
     <>
       {/* 1) Static image at the very top (non-sticky) */}

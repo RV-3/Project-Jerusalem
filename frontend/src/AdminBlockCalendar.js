@@ -44,6 +44,22 @@ export default function AdminBlockCalendar() {
     localStorage.getItem('isAdmin') === 'true'
   )
 
+  // ---------------------------------------------------------------------
+  // [NEW] State hooks for setting calendar password
+  // ---------------------------------------------------------------------
+  const [showPasswordInput, setShowPasswordInput] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+
+  // [NEW] Handler to save calendar password to localStorage
+  function handleSavePassword() {
+    localStorage.setItem('calendarPagePassword', newPassword)
+    localStorage.removeItem('calendarAccessGranted') // Reset old "unlocked" flag
+    setNewPassword("")
+    setShowPasswordInput(false)
+    alert("Calendar password saved. Reload the calendar page to apply.")
+  }
+  // ---------------------------------------------------------------------
+
   // Data state
   const [blocks, setBlocks] = useState([])
   const [reservations, setReservations] = useState([])
@@ -642,6 +658,31 @@ export default function AdminBlockCalendar() {
           es: 'Panel de Administración'
         })}
       </h2>
+
+      {/* 
+        [NEW] Password-setting button + input 
+        (Placed below "Admin Panel" title)
+      */}
+      <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+        {!showPasswordInput && (
+          <button onClick={() => setShowPasswordInput(true)}>
+            Set Calendar Password
+          </button>
+        )}
+        {showPasswordInput && (
+          <div>
+            <input
+              type="text"
+              placeholder="New Calendar Password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              style={{ marginRight: '0.5rem' }}
+            />
+            <button onClick={handleSavePassword}>Confirm</button>
+          </div>
+        )}
+      </div>
+      {/* End of new password UI */}
 
       {/* Auto-block subcomponent */}
       <AutoBlockControls
