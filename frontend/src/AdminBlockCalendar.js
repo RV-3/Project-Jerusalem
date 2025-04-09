@@ -7,91 +7,132 @@ import { isIOS } from 'react-device-detect'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import LanguageDropdown from './LanguageDropdown' // (adjust path as needed)
-
+import LanguageDropdown from './LanguageDropdown' // adjust path if needed
 import moment from 'moment-timezone'
 import momentPlugin from '@fullcalendar/moment'
 import momentTimezonePlugin from '@fullcalendar/moment-timezone'
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
-
 import { useLanguage } from './LanguageContext'
 import useTranslate from './useTranslate'
 import { AutoBlockControls } from './admin/AutoBlockControls.js'
 
-Modal.setAppElement('#root') // ensure modals work properly
+// [NEW] import the separate password panel
+import CalendarPasswordPanel from './admin/CalendarPasswordPanel.js'
+
+Modal.setAppElement('#root')
 
 const ADMIN_PASSWORD = 'admin123'
 
-// Helper for "x days ago at midnight in Jerusalem"
+// Helper: "x days ago at midnight in Jerusalem"
 function getJerusalemMidnightXDaysAgo(daysAgo) {
-  return moment.tz(TIMEZONE)
-    .startOf('day')
-    .subtract(daysAgo, 'days')
-    .toDate()
+  return moment.tz(TIMEZONE).startOf('day').subtract(daysAgo, 'days').toDate()
 }
 
-// ---------------------------------------------------------------------
-// MAIN AdminBlockCalendar COMPONENT
-// ---------------------------------------------------------------------
 export default function AdminBlockCalendar() {
-  // Global language & translations
+  // ---------------------------------------------------------
+  // 1) Global Language / Auth
+  // ---------------------------------------------------------
   const { language } = useLanguage()
   const t = useTranslate()
-
-  // Simple admin auth state
   const [authenticated, setAuthenticated] = useState(
     localStorage.getItem('isAdmin') === 'true'
   )
 
-  // ---------------------------------------------------------------------
-  // [NEW] State hooks for setting calendar password
-  // ---------------------------------------------------------------------
-  const [showPasswordInput, setShowPasswordInput] = useState(false)
-  const [newPassword, setNewPassword] = useState("")
+  // ---------------------------------------------------------
+  // 2) Calendar Password Admin (Now referencing child)
+  // ---------------------------------------------------------
+  const [currentCalendarPassword, setCurrentCalendarPassword] = useState('')
 
-  // [NEW] Handler to save calendar password to localStorage
-  function handleSavePassword() {
-    localStorage.setItem('calendarPagePassword', newPassword)
-    localStorage.removeItem('calendarAccessGranted') // Reset old "unlocked" flag
-    setNewPassword("")
-    setShowPasswordInput(false)
-    alert("Calendar password saved. Reload the calendar page to apply.")
+  // fetch the current password doc from Sanity
+  async function fetchCalendarPassword() {
+    try {
+      const result = await client.fetch(`*[_type == "calendarPassword"][0]{password}`)
+      const pw = result?.password || ''
+      setCurrentCalendarPassword(pw)
+    } catch (err) {
+      console.error('Error fetching calendar password:', err)
+      setCurrentCalendarPassword('')
+    }
   }
-  // ---------------------------------------------------------------------
 
-  // Data state
+  // called by child panel => handle saving new password
+  async function handleSavePassword(newPw) {
+    try {
+      await client.createOrReplace({
+        _id: 'calendarPassword',
+        _type: 'calendarPassword',
+        password: newPw
+      })
+      alert('Password saved to Sanity.')
+      setCurrentCalendarPassword(newPw)
+    } catch (err) {
+      console.error('Error saving password:', err)
+      alert('Failed to save password.')
+    }
+  }
+
+  // called by child panel => handle removing existing password
+  async function handleRemovePassword() {
+    if (!window.confirm('Are you sure you want to remove the calendar password?')) {
+      return
+    }
+    try {
+      await client.createOrReplace({
+        _id: 'calendarPassword',
+        _type: 'calendarPassword',
+        password: ''
+      })
+      alert('Password removed.')
+      setCurrentCalendarPassword('')
+    } catch (err) {
+      console.error('Error removing password:', err)
+      alert('Failed to remove password.')
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 3) Data: Blocks, Reservations, AutoBlock
+  // ---------------------------------------------------------
   const [blocks, setBlocks] = useState([])
   const [reservations, setReservations] = useState([])
   const [autoBlockRules, setAutoBlockRules] = useState([])
   const [autoBlockDays, setAutoBlockDays] = useState(null)
   const [pastBlockEvent, setPastBlockEvent] = useState(null)
 
-  // UI state
-  const [modalIsOpen, setModalIsOpen] = useState(false)
-  const [selectedReservation, setSelectedReservation] = useState(null)
+  // ---------------------------------------------------------
+  // 4) UI State
+  // ---------------------------------------------------------
   const calendarRef = useRef()
   const platformDelay = isIOS ? 100 : 47
+  const [modalIsOpen, setModalIsOpen] = useState(false)
+  const [selectedReservation, setSelectedReservation] = useState(null)
 
-  // ---------------------------------------------------------------------
-  // 1) FETCH DATA
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------
+  // 5) Fetch Data if Authenticated
+  // ---------------------------------------------------------
+  useEffect(() => {
+    if (authenticated) {
+      fetchData()
+    }
+  }, [authenticated])
+
   async function fetchData() {
     const calendarApi = calendarRef.current?.getApi()
     const currentViewDate = calendarApi?.getDate()
 
     try {
-      // Manual blocks
+      // 1) Manual blocks
       const blocksData = await client.fetch(`*[_type == "blocked"]{_id, start, end}`)
       setBlocks(blocksData)
 
-      // Reservations
+      // 2) Reservations
       const resData = await client.fetch(
         `*[_type == "reservation"]{_id, name, phone, start, end}`
       )
       setReservations(resData)
 
-      // Hour-based auto-block
+      // 3) Hour-based autoBlock
       const autoData = await client.fetch(`
         *[_type == "autoBlockedHours"]{
           _id,
@@ -102,7 +143,7 @@ export default function AdminBlockCalendar() {
       `)
       setAutoBlockRules(autoData)
 
-      // Day-based auto-block
+      // 4) Day-based autoBlock
       const daysDoc = await client.fetch(`
         *[_type == "autoBlockedDays"]{
           _id,
@@ -112,6 +153,9 @@ export default function AdminBlockCalendar() {
       `)
       setAutoBlockDays(daysDoc.length ? daysDoc[0] : null)
 
+      // 5) Also fetch the password doc
+      await fetchCalendarPassword()
+
       if (calendarApi && currentViewDate) {
         calendarApi.gotoDate(currentViewDate)
       }
@@ -120,16 +164,9 @@ export default function AdminBlockCalendar() {
     }
   }
 
-  // Fetch data once authenticated
-  useEffect(() => {
-    if (authenticated) {
-      fetchData()
-    }
-  }, [authenticated])
-
-  // ---------------------------------------------------------------------
-  // 2) PAST-BLOCK OVERLAY (last 7 days => now)
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------
+  // 6) Past-block overlay
+  // ---------------------------------------------------------
   useEffect(() => {
     function updatePastBlockEvent() {
       const earliest = getJerusalemMidnightXDaysAgo(7)
@@ -147,20 +184,20 @@ export default function AdminBlockCalendar() {
     return () => clearInterval(interval)
   }, [])
 
-  // ---------------------------------------------------------------------
-  // AUTH SCREEN (password check)
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------
+  // 7) Admin Auth Screen
+  // ---------------------------------------------------------
   if (!authenticated) {
     return (
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
           alignItems: 'center',
+          justifyContent: 'center',
           height: '100vh',
-          padding: '1rem',
-          background: '#fff'
+          background: '#fff',
+          padding: '1rem'
         }}
       >
         <h2 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>
@@ -171,7 +208,6 @@ export default function AdminBlockCalendar() {
           })}
         </h2>
 
-        {/* Custom LanguageDropdown for the login screen */}
         <div style={{ marginBottom: '1rem' }}>
           <LanguageDropdown />
         </div>
@@ -180,18 +216,7 @@ export default function AdminBlockCalendar() {
           type="password"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              if (e.target.value === ADMIN_PASSWORD) {
-                localStorage.setItem('isAdmin', 'true')
-                setAuthenticated(true)
-              } else {
-                alert(
-                  t({
-                    en: 'Incorrect password',
-                    de: 'Falsches Passwort',
-                    es: 'Contraseña incorrecta'
-                  })
-                )
-              }
+              attemptAdminLogin(e.target.value)
             }
           }}
           placeholder={t({
@@ -209,46 +234,80 @@ export default function AdminBlockCalendar() {
             borderRadius: '5px'
           }}
         />
-
         <button
+          className="modern-button"
           onClick={() => {
             const input = document.querySelector('input[type="password"]')
-            if (input.value === ADMIN_PASSWORD) {
-              localStorage.setItem('isAdmin', 'true')
-              setAuthenticated(true)
-            } else {
-              alert(
-                t({
-                  en: 'Incorrect password',
-                  de: 'Falsches Passwort',
-                  es: 'Contraseña incorrecta'
-                })
-              )
-            }
-          }}
-          style={{
-            padding: '12px 24px',
-            fontSize: '1rem',
-            backgroundColor: '#1890ff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '5px'
+            attemptAdminLogin(input.value)
           }}
         >
           {t({ en: 'Submit', de: 'Abschicken', es: 'Enviar' })}
         </button>
+
+        <style>{`
+          .modern-button {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(
+              135deg,
+              #2A2A2A 0%,
+              #1D1D1D 100%
+            );
+            color: #fff;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+          }
+          .modern-button:hover {
+            background: linear-gradient(
+              135deg,
+              #343434 0%,
+              #232323 100%
+            );
+            transform: scale(1.02);
+          }
+          .modern-button:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          }
+          .modern-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+          }
+        `}</style>
       </div>
     )
   }
 
-  // ---------------------------------------------------------------------
-  // BLOCKING/UNBLOCKING LOGIC
-  // ---------------------------------------------------------------------
+  function attemptAdminLogin(val) {
+    if (val === ADMIN_PASSWORD) {
+      localStorage.setItem('isAdmin', 'true')
+      setAuthenticated(true)
+    } else {
+      alert(
+        t({
+          en: 'Incorrect password',
+          de: 'Falsches Passwort',
+          es: 'Contraseña incorrecta'
+        })
+      )
+    }
+  }
+
+  // ---------------------------------------------------------
+  // 8) BLOCKING / UNBLOCKING LOGIC
+  // ---------------------------------------------------------
   function isManuallyBlocked(hStart, hEnd) {
+    const bStartTime = new Date(hStart).getTime()
+    const bEndTime = new Date(hEnd).getTime()
     return blocks.some((b) => {
-      const bStart = new Date(b.start).getTime()
-      const bEnd = new Date(b.end).getTime()
-      return bStart === hStart.getTime() && bEnd === hEnd.getTime()
+      const blockStart = new Date(b.start).getTime()
+      const blockEnd = new Date(b.end).getTime()
+      return blockStart === bStartTime && blockEnd === bEndTime
     })
   }
 
@@ -257,7 +316,6 @@ export default function AdminBlockCalendar() {
     const sJer = moment.tz(hStart, TIMEZONE)
     const eJer = moment.tz(hEnd, TIMEZONE)
     const dateStr = sJer.format('YYYY-MM-DD')
-
     return autoBlockDays.timeExceptions.some((ex) => {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
@@ -273,7 +331,6 @@ export default function AdminBlockCalendar() {
     const eJer = moment.tz(hEnd, TIMEZONE)
     const dateStr = sJer.format('YYYY-MM-DD')
     const exceptions = rule.timeExceptions || []
-
     return exceptions.some((ex) => {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
@@ -290,14 +347,13 @@ export default function AdminBlockCalendar() {
     const dayAnchor = sJer.clone().startOf('day')
     const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
     const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
-
     if (sJer.isBefore(rStart) || eJer.isAfter(rEnd)) return false
     if (isHourRuleExcepted(rule, hStart, hEnd)) return false
     return true
   }
 
   function isAutoBlocked(hStart, hEnd) {
-    // Day-based
+    // day-based
     if (autoBlockDays?.daysOfWeek?.length) {
       const dayName = moment.tz(hStart, TIMEZONE).format('dddd')
       if (autoBlockDays.daysOfWeek.includes(dayName)) {
@@ -306,14 +362,13 @@ export default function AdminBlockCalendar() {
         }
       }
     }
-    // Hour-based
+    // hour-based
     return autoBlockRules.some((rule) => doesRuleCoverHourRule(rule, hStart, hEnd))
   }
 
   function isRangeCompletelyBlocked(info) {
     const slotStart = new Date(info.start)
     const slotEnd = new Date(info.end)
-
     let cursor = slotStart
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
@@ -325,27 +380,25 @@ export default function AdminBlockCalendar() {
     return true
   }
 
-  // ---------- FIX handleBlock for ESLint no-loop-func ----------
   async function handleBlock(info) {
     const slotStart = new Date(info.start)
     const slotEnd = new Date(info.end)
-
     if (slotStart < new Date()) {
-      alert(t({
-        en: 'Cannot block a past slot.',
-        de: 'Kann kein vergangenes Zeitfenster blockieren.',
-        es: 'No se puede bloquear un intervalo pasado.'
-      }))
+      alert(
+        t({
+          en: 'Cannot block a past slot.',
+          de: 'Kann kein vergangenes Zeitfenster blockieren.',
+          es: 'No se puede bloquear un intervalo pasado.'
+        })
+      )
       return
     }
-
     const docs = []
     let cursorLocal = slotStart
     while (cursorLocal < slotEnd) {
       const nextHour = new Date(cursorLocal.getTime() + 3600000)
       const startCopy = new Date(cursorLocal)
       const endCopy = new Date(nextHour)
-
       if (!isManuallyBlocked(startCopy, endCopy)) {
         docs.push({
           _type: 'blocked',
@@ -355,30 +408,31 @@ export default function AdminBlockCalendar() {
       }
       cursorLocal = nextHour
     }
-
     if (!docs.length) {
-      alert(t({
-        en: 'All those hours are already blocked.',
-        de: 'Alle diese Stunden sind bereits blockiert.',
-        es: 'Todas esas horas ya están bloqueadas.'
-      }))
+      alert(
+        t({
+          en: 'All those hours are already blocked.',
+          de: 'Alle diese Stunden sind bereits blockiert.',
+          es: 'Todas esas horas ya están bloqueadas.'
+        })
+      )
       return
     }
-
     await Promise.all(docs.map((doc) => client.create(doc)))
     fetchData()
   }
 
-  // ---------- FIX handleUnblock for ESLint no-loop-func ----------
   async function handleUnblock(info) {
     const slotStart = new Date(info.start)
     const slotEnd = new Date(info.end)
     if (slotStart < new Date()) {
-      alert(t({
-        en: 'Cannot unblock past time.',
-        de: 'Kann vergangene Zeit nicht freigeben.',
-        es: 'No se puede desbloquear un tiempo pasado.'
-      }))
+      alert(
+        t({
+          en: 'Cannot unblock past time.',
+          de: 'Kann vergangene Zeit nicht freigeben.',
+          es: 'No se puede desbloquear un tiempo pasado.'
+        })
+      )
       return
     }
 
@@ -389,7 +443,6 @@ export default function AdminBlockCalendar() {
       const nextHour = new Date(cursorLocal.getTime() + 3600000)
       const startCopy = new Date(cursorLocal)
       const endCopy = new Date(nextHour)
-
       const existing = blocks.find((b) => {
         const bStart = new Date(b.start).getTime()
         const bEnd = new Date(b.end).getTime()
@@ -415,7 +468,6 @@ export default function AdminBlockCalendar() {
           const dateStr = moment.tz(startCopy, TIMEZONE).format('YYYY-MM-DD')
           const startHr = moment.tz(startCopy, TIMEZONE).hour()
           const endHr = moment.tz(endCopy, TIMEZONE).hour()
-
           const ex = {
             _type: 'timeException',
             date: dateStr,
@@ -439,7 +491,6 @@ export default function AdminBlockCalendar() {
           const dateStr = moment.tz(startCopy, TIMEZONE).format('YYYY-MM-DD')
           const startHr = moment.tz(startCopy, TIMEZONE).hour()
           const endHr = moment.tz(endCopy, TIMEZONE).hour()
-
           const ex = {
             _type: 'timeException',
             date: dateStr,
@@ -462,9 +513,75 @@ export default function AdminBlockCalendar() {
     fetchData()
   }
 
-  // ---------------------------------------------------------------------
-  // 5) FULLCALENDAR LOAD EVENTS
-  // ---------------------------------------------------------------------
+  // ---------------------------------------------------------
+  // 9) FullCalendar
+  // ---------------------------------------------------------
+  function getAutoBlockSlices(rule, dayStart, dayEnd) {
+    const slices = []
+    let cursorDay = moment.tz(dayStart, TIMEZONE).startOf('day')
+    const endOfDay = moment.tz(dayEnd, TIMEZONE).endOf('day')
+    while (cursorDay.isSameOrBefore(endOfDay, 'day')) {
+      for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
+        const sliceStart = cursorDay.clone().hour(h)
+        const sliceEnd = sliceStart.clone().add(1, 'hour')
+        if (sliceEnd <= dayStart || sliceStart >= dayEnd) continue
+        if (isHourRuleExcepted(rule, sliceStart.toDate(), sliceEnd.toDate())) continue
+        slices.push([sliceStart.toDate(), sliceEnd.toDate()])
+      }
+      cursorDay.add(1, 'day').startOf('day')
+    }
+    return mergeSlices(slices)
+  }
+
+  function getDayBlockSlices(dayDoc, rangeStart, rangeEnd) {
+    const slices = []
+    if (!dayDoc.daysOfWeek?.length) return slices
+    let current = new Date(rangeStart)
+    current.setHours(0, 0, 0, 0)
+    while (current < rangeEnd) {
+      const dayName = moment.tz(current, TIMEZONE).format('dddd')
+      if (dayDoc.daysOfWeek.includes(dayName)) {
+        for (let h = 0; h < 24; h++) {
+          const sliceStart = moment.tz(current, TIMEZONE).hour(h).toDate()
+          const sliceEnd = new Date(sliceStart.getTime() + 3600000)
+          if (sliceEnd <= rangeStart || sliceStart >= rangeEnd) continue
+          if (isDayLevelExcepted(sliceStart, sliceEnd)) continue
+          slices.push([sliceStart, sliceEnd])
+        }
+      }
+      current.setDate(current.getDate() + 1)
+    }
+    return mergeSlices(slices)
+  }
+
+  function mergeSlices(slices) {
+    if (!slices.length) return []
+    slices.sort((a, b) => a[0] - b[0])
+    const merged = [slices[0]]
+    for (let i = 1; i < slices.length; i++) {
+      const prev = merged[merged.length - 1]
+      const curr = slices[i]
+      if (prev[1].getTime() === curr[0].getTime()) {
+        prev[1] = curr[1]
+      } else {
+        merged.push(curr)
+      }
+    }
+    return merged
+  }
+
+  function fullyCoveredByManual(start, end) {
+    let cursorCheck = new Date(start)
+    while (cursorCheck < end) {
+      const nxt = new Date(cursorCheck.getTime() + 3600000)
+      if (!isManuallyBlocked(cursorCheck, nxt)) {
+        return false
+      }
+      cursorCheck = nxt
+    }
+    return true
+  }
+
   function loadEvents(fetchInfo, successCallback) {
     const { start, end } = fetchInfo
     const evts = []
@@ -534,84 +651,11 @@ export default function AdminBlockCalendar() {
     successCallback(evts)
   }
 
-  function getAutoBlockSlices(rule, dayStart, dayEnd) {
-    const slices = []
-    let cursorDay = moment.tz(dayStart, TIMEZONE).startOf('day')
-    const endOfDay = moment.tz(dayEnd, TIMEZONE).endOf('day')
-
-    while (cursorDay.isSameOrBefore(endOfDay, 'day')) {
-      for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
-        const sliceStart = cursorDay.clone().hour(h)
-        const sliceEnd = sliceStart.clone().add(1, 'hour')
-        if (sliceEnd <= dayStart || sliceStart >= dayEnd) continue
-        if (isHourRuleExcepted(rule, sliceStart.toDate(), sliceEnd.toDate())) continue
-        slices.push([sliceStart.toDate(), sliceEnd.toDate()])
-      }
-      cursorDay.add(1, 'day').startOf('day')
-    }
-    return mergeSlices(slices)
-  }
-
-  function getDayBlockSlices(dayDoc, rangeStart, rangeEnd) {
-    const slices = []
-    if (!dayDoc.daysOfWeek?.length) return slices
-
-    let current = new Date(rangeStart)
-    current.setHours(0, 0, 0, 0)
-    while (current < rangeEnd) {
-      const dayName = moment.tz(current, TIMEZONE).format('dddd')
-      if (dayDoc.daysOfWeek.includes(dayName)) {
-        for (let h = 0; h < 24; h++) {
-          const sliceStart = moment
-            .tz(current, TIMEZONE)
-            .hour(h)
-            .toDate()
-          const sliceEnd = new Date(sliceStart.getTime() + 3600000)
-          if (sliceEnd <= rangeStart || sliceStart >= rangeEnd) continue
-          if (isDayLevelExcepted(sliceStart, sliceEnd)) continue
-          slices.push([sliceStart, sliceEnd])
-        }
-      }
-      current.setDate(current.getDate() + 1)
-    }
-    return mergeSlices(slices)
-  }
-
-  function mergeSlices(slices) {
-    if (!slices.length) return []
-    slices.sort((a, b) => a[0] - b[0])
-    const merged = [slices[0]]
-    for (let i = 1; i < slices.length; i++) {
-      const prev = merged[merged.length - 1]
-      const curr = slices[i]
-      if (prev[1].getTime() === curr[0].getTime()) {
-        prev[1] = curr[1]
-      } else {
-        merged.push(curr)
-      }
-    }
-    return merged
-  }
-
-  function fullyCoveredByManual(start, end) {
-    let cursorCheck = new Date(start)
-    while (cursorCheck < end) {
-      const nxt = new Date(cursorCheck.getTime() + 3600000)
-      if (!isManuallyBlocked(cursorCheck, nxt)) {
-        return false
-      }
-      cursorCheck = nxt
-    }
-    return true
-  }
-
-  // 6) Event content (hide background text)
   function handleEventContent(arg) {
     if (arg.event.display === 'background') return null
     return <div>{arg.event.title}</div>
   }
 
-  // 7) Reservation click => open modal
   function handleEventClick(clickInfo) {
     const r = reservations.find((x) => x._id === clickInfo.event.id)
     if (r) {
@@ -622,11 +666,15 @@ export default function AdminBlockCalendar() {
 
   async function handleDeleteReservation() {
     if (!selectedReservation) return
-    if (!window.confirm(t({
-      en: 'Delete this reservation?',
-      de: 'Diese Reservierung löschen?',
-      es: '¿Eliminar esta reserva?'
-    }))) {
+    if (
+      !window.confirm(
+        t({
+          en: 'Delete this reservation?',
+          de: 'Diese Reservierung löschen?',
+          es: '¿Eliminar esta reserva?'
+        })
+      )
+    ) {
       return
     }
     await client.delete(selectedReservation._id)
@@ -635,7 +683,9 @@ export default function AdminBlockCalendar() {
     setSelectedReservation(null)
   }
 
-  // 8) Admin main content
+  // ---------------------------------------------------------
+  // 10) Render the Admin Panel
+  // ---------------------------------------------------------
   const now = new Date()
   const validRangeStart = new Date(now)
   validRangeStart.setHours(0, 0, 0, 0)
@@ -646,11 +696,12 @@ export default function AdminBlockCalendar() {
 
   return (
     <div style={{ padding: '1rem' }}>
-      {/* LanguageDropdown at top of admin panel */}
+      {/* [A] LanguageDropdown at top */}
       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
         <LanguageDropdown />
       </div>
 
+      {/* [B] Admin Panel Title */}
       <h2 style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1.8rem' }}>
         {t({
           en: 'Admin Panel',
@@ -659,32 +710,14 @@ export default function AdminBlockCalendar() {
         })}
       </h2>
 
-      {/* 
-        [NEW] Password-setting button + input 
-        (Placed below "Admin Panel" title)
-      */}
-      <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        {!showPasswordInput && (
-          <button onClick={() => setShowPasswordInput(true)}>
-            Set Calendar Password
-          </button>
-        )}
-        {showPasswordInput && (
-          <div>
-            <input
-              type="text"
-              placeholder="New Calendar Password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              style={{ marginRight: '0.5rem' }}
-            />
-            <button onClick={handleSavePassword}>Confirm</button>
-          </div>
-        )}
-      </div>
-      {/* End of new password UI */}
+      {/* [C] Our new CalendarPasswordPanel */}
+      <CalendarPasswordPanel
+        currentCalendarPassword={currentCalendarPassword}
+        onSavePassword={handleSavePassword}
+        onRemovePassword={handleRemovePassword}
+      />
 
-      {/* Auto-block subcomponent */}
+      {/* [D] AutoBlockControls */}
       <AutoBlockControls
         autoBlockRules={autoBlockRules}
         setAutoBlockRules={setAutoBlockRules}
@@ -693,6 +726,7 @@ export default function AdminBlockCalendar() {
         reloadData={fetchData}
       />
 
+      {/* [E] FullCalendar */}
       <FullCalendar
         ref={calendarRef}
         locales={allLocales}
@@ -732,21 +766,28 @@ export default function AdminBlockCalendar() {
         selectable
         selectAllow={(selectInfo) => new Date(selectInfo.startStr) >= new Date()}
         select={(info) => {
-          // If fully blocked => ask to unblock
           if (isRangeCompletelyBlocked(info)) {
-            if (window.confirm(t({
-              en: 'Unblock this time slot?',
-              de: 'Dieses Zeitfenster freigeben?',
-              es: '¿Desbloquear este intervalo de tiempo?'
-            }))) {
+            if (
+              window.confirm(
+                t({
+                  en: 'Unblock this time slot?',
+                  de: 'Dieses Zeitfenster freigeben?',
+                  es: '¿Desbloquear este intervalo de tiempo?'
+                })
+              )
+            ) {
               handleUnblock(info)
             }
           } else {
-            if (window.confirm(t({
-              en: 'Block this time slot?',
-              de: 'Dieses Zeitfenster blockieren?',
-              es: '¿Bloquear este intervalo de tiempo?'
-            }))) {
+            if (
+              window.confirm(
+                t({
+                  en: 'Block this time slot?',
+                  de: 'Dieses Zeitfenster blockieren?',
+                  es: '¿Bloquear este intervalo de tiempo?'
+                })
+              )
+            ) {
               handleBlock(info)
             }
           }
@@ -765,12 +806,10 @@ export default function AdminBlockCalendar() {
           day: 'numeric',
           omitCommas: true
         }}
-        slotLabelFormat={(dateInfo) => {
-          // Force "12 AM, 1 AM..." style
-          return moment(dateInfo.date).format('h A')
-        }}
+        slotLabelFormat={(dateInfo) => moment(dateInfo.date).format('h A')}
       />
 
+      {/* [F] Reservation Modal */}
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={() => setModalIsOpen(false)}
@@ -780,14 +819,11 @@ export default function AdminBlockCalendar() {
           es: 'Información de la reserva'
         })}
         style={{
-          overlay: {
-            backgroundColor: 'rgba(0,0,0,0.4)',
-            zIndex: 1000
-          },
+          overlay: { backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 1000 },
           content: {
             top: '50%',
             left: '50%',
-            transform: 'translate(-50%,-50%)',
+            transform: 'translate(-50%, -50%)',
             padding: '25px',
             borderRadius: '8px',
             background: 'white',
@@ -805,47 +841,82 @@ export default function AdminBlockCalendar() {
         {selectedReservation && (
           <div style={{ fontSize: '1rem' }}>
             <p>
-              <strong>
-                {t({ en: 'Name:', de: 'Name:', es: 'Nombre:' })}
-              </strong>{' '}
+              <strong>{t({ en: 'Name:', de: 'Name:', es: 'Nombre:' })}</strong>{' '}
               {selectedReservation.name}
             </p>
             <p>
-              <strong>
-                {t({ en: 'Phone:', de: 'Telefon:', es: 'Teléfono:' })}
-              </strong>{' '}
+              <strong>{t({ en: 'Phone:', de: 'Telefon:', es: 'Teléfono:' })}</strong>{' '}
               {selectedReservation.phone}
             </p>
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
           <button
+            className="modern-button modern-button--danger"
             onClick={handleDeleteReservation}
-            style={{
-              marginRight: '10px',
-              color: '#fff',
-              background: '#d9534f',
-              border: 'none',
-              padding: '8px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
+            style={{ marginRight: '10px' }}
           >
             {t({ en: 'Delete', de: 'Löschen', es: 'Eliminar' })}
           </button>
           <button
+            className="modern-button"
             onClick={() => setModalIsOpen(false)}
-            style={{
-              padding: '8px 12px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
           >
             {t({ en: 'Close', de: 'Schließen', es: 'Cerrar' })}
           </button>
         </div>
       </Modal>
+
+      {/* [G] Shared button styles */}
+      <style>{`
+        .modern-button {
+          display: inline-block;
+          padding: 0.7rem 1.3rem;
+          border: none;
+          border-radius: 12px;
+          background: linear-gradient(
+            135deg,
+            #2A2A2A 0%,
+            #1D1D1D 100%
+          );
+          color: #fff;
+          font-weight: 600;
+          font-size: 0.9rem;
+          cursor: pointer;
+          transition: background 0.3s ease, transform 0.2s ease;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.25);
+        }
+        .modern-button:hover {
+          background: linear-gradient(
+            135deg,
+            #343434 0%,
+            #232323 100%
+          );
+          transform: scale(1.02);
+        }
+        .modern-button:active {
+          transform: scale(0.98);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+        .modern-button:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .modern-button--danger {
+          background: linear-gradient(
+            135deg,
+            #a42b2b 0%,
+            #741f1f 100%
+          ) !important;
+        }
+        .modern-button--danger:hover {
+          background: linear-gradient(
+            135deg,
+            #bb3b3b 0%,
+            #8f2727 100%
+          ) !important;
+        }
+      `}</style>
     </div>
   )
 }

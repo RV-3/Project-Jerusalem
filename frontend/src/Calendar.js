@@ -112,7 +112,6 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
   return mergeSlices(slices)
 }
 
-// Merge contiguous hour slices
 function mergeSlices(slices) {
   if (!slices.length) return []
   slices.sort((a, b) => a[0] - b[0])
@@ -169,32 +168,54 @@ export default function Calendar() {
   const t = useTranslate()
 
   // ---------------------------------------------------------------------
-  // [NEW] Password gate state + effect
+  // [1] Password gate hooks
   // ---------------------------------------------------------------------
+  const [calendarPassword, setCalendarPassword] = useState('')
+  const [enteredPw, setEnteredPw] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
-  const [enteredPw, setEnteredPw] = useState("")
 
   useEffect(() => {
-    const storedPw = localStorage.getItem('calendarPagePassword')
-    const granted = localStorage.getItem('calendarAccessGranted')
-    // If no password is set or we've already unlocked, skip gate
-    if (!storedPw || granted === 'true') {
-      setIsUnlocked(true)
+    const fetchPassword = async () => {
+      try {
+        const result = await client.fetch(`*[_type == "calendarPassword"][0]{password}`)
+        const pw = result?.password || ''
+
+        setCalendarPassword(pw)
+
+        // If there's no password in Sanity, just unlock
+        if (!pw) {
+          setIsUnlocked(true)
+          return
+        }
+
+        // Otherwise check localStorage
+        const cachedPw = localStorage.getItem('calendarUserPw')
+        if (cachedPw && cachedPw === pw) {
+          setIsUnlocked(true)
+        }
+      } catch (err) {
+        console.error('Failed to fetch password:', err)
+        // fallback: unlock if fetch fails
+        setIsUnlocked(true)
+      }
     }
+    fetchPassword()
   }, [])
 
-  function handleCheckPassword() {
-    const storedPw = localStorage.getItem('calendarPagePassword') || ""
-    if (enteredPw === storedPw) {
-      localStorage.setItem('calendarAccessGranted', 'true')
+  const handleCheckPassword = () => {
+    if (enteredPw === calendarPassword) {
       setIsUnlocked(true)
+      // Store the correct password in localStorage
+      localStorage.setItem('calendarUserPw', enteredPw)
     } else {
-      alert("Incorrect password")
-      setEnteredPw("")
+      alert('Incorrect password')
+      setEnteredPw('')
     }
   }
-  // ---------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------
+  // [2] Calendar logic & data Hooks
+  // ---------------------------------------------------------------------
   const [events, setEvents] = useState([])
   const [blockedTimes, setBlockedTimes] = useState([])
   const [autoBlockHours, setAutoBlockHours] = useState([])
@@ -264,6 +285,30 @@ export default function Calendar() {
       .catch((err) => console.error('Error fetching autoBlockedDays:', err))
   }, [isUnlocked])
 
+  // Past-block overlay
+  useEffect(() => {
+    if (!isUnlocked) return
+
+    function updatePastBlockEvent() {
+      const nowJer = moment.tz(TIMEZONE)
+      const startOfTodayJer = nowJer.clone().startOf('day')
+      setPastBlockEvent({
+        id: 'past-block',
+        start: startOfTodayJer.toISOString(),
+        end: nowJer.toISOString(),
+        display: 'background',
+        color: '#ffcccc'
+      })
+    }
+
+    updatePastBlockEvent()
+    const interval = setInterval(updatePastBlockEvent, 60 * 1000)
+    return () => clearInterval(interval)
+  }, [isUnlocked])
+
+  // ---------------------------------------------------------------------
+  // Utility checks
+  // ---------------------------------------------------------------------
   function isTimeBlockedByManual(start, end) {
     const sJer = moment.tz(start, TIMEZONE)
     const eJer = moment.tz(end, TIMEZONE)
@@ -275,11 +320,13 @@ export default function Calendar() {
   }
 
   function isTimeBlockedByAuto(start, end) {
+    // day-based
     if (autoBlockDays && autoBlockDays.daysOfWeek?.length) {
       if (isDayCovered(autoBlockDays, start, end)) {
         return true
       }
     }
+    // hour-based
     return autoBlockHours.some((rule) => doesHourRuleCover(rule, start, end))
   }
 
@@ -309,26 +356,9 @@ export default function Calendar() {
     })
   }
 
-  // Past-block overlay updates only if unlocked
-  useEffect(() => {
-    if (!isUnlocked) return
-
-    function updatePastBlockEvent() {
-      const nowJer = moment.tz(TIMEZONE)
-      const startOfTodayJer = nowJer.clone().startOf('day')
-      setPastBlockEvent({
-        id: 'past-block',
-        start: startOfTodayJer.toISOString(),
-        end: nowJer.toISOString(),
-        display: 'background',
-        color: '#ffcccc'
-      })
-    }
-    updatePastBlockEvent()
-    const interval = setInterval(updatePastBlockEvent, 60 * 1000)
-    return () => clearInterval(interval)
-  }, [isUnlocked])
-
+  // ---------------------------------------------------------------------
+  // Calendar interactions
+  // ---------------------------------------------------------------------
   const handleSelect = (info) => {
     if (!isUnlocked) return
     const { startStr, endStr } = info
@@ -443,316 +473,292 @@ export default function Calendar() {
   }
 
   // ---------------------------------------------------------------------
-  // RETURN: If locked, show password prompt; otherwise show your calendar
-  // ---------------------------------------------------------------------
-  if (!isUnlocked) {
-    return (
-      <div
-        style={{
-          width: '100vw',
-          height: '100vh',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#fff',
-          padding: '1rem'
-        }}
-      >
-        <h2 style={{ marginBottom: '1rem' }}>Enter Calendar Password</h2>
-        <input
-          type="password"
-          placeholder="Password"
-          value={enteredPw}
-          onChange={(e) => setEnteredPw(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleCheckPassword()
-          }}
-          style={{
-            marginBottom: '1rem',
-            padding: '8px',
-            fontSize: '1rem',
-            borderRadius: '4px',
-            border: '1px solid #ccc'
-          }}
-        />
-        <button
-          onClick={handleCheckPassword}
-          style={{
-            padding: '8px 16px',
-            fontSize: '1rem',
-            cursor: 'pointer'
-          }}
-        >
-          Submit
-        </button>
-      </div>
-    )
-  }
-
-  // ---------------------------------------------------------------------
-  // If unlocked => render the original Calendar UI exactly as before
+  // Render: Password locked vs. Calendar
   // ---------------------------------------------------------------------
   return (
     <>
-      {/* 1) Static image at the very top (non-sticky) */}
-      <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-        <img
-          src="/assets/ladyofgrace.png"
-          alt="Legio Fidelis"
-          style={{
-            maxWidth: '80px',
-            marginBottom: '0.4rem',
-            display: 'block',
-            marginLeft: 'auto',
-            marginRight: 'auto'
-          }}
-        />
-      </div>
-
-      {/* 2) Sticky Connect text, only the text floats */}
-      <div className="sticky-connect">
-        <div
-          style={{
-            fontSize: '1.15rem',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: '0.4rem'
-          }}
-        >
-          <span>Connect</span>
-          <a
-            href="https://instagram.com/legio.fidelis"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              textDecoration: 'none',
-              color: 'inherit',
-              fontWeight: 'bold',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.35rem'
-            }}
-          >
+      {/* If locked, show password UI */}
+      {!isUnlocked ? (
+        <div style={{ padding: '2rem', textAlign: 'center' }}>
+          <h2>Enter Calendar Password</h2>
+          <input
+            type="password"
+            value={enteredPw}
+            onChange={(e) => setEnteredPw(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleCheckPassword()}
+            style={{ padding: '8px', marginBottom: '1rem', width: '200px' }}
+          />
+          <br />
+          <button onClick={handleCheckPassword}>Submit</button>
+        </div>
+      ) : (
+        // If unlocked, show full Calendar
+        <>
+          {/* 1) Static image */}
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <img
-              src="/assets/instagram.png"
-              alt="Instagram"
+              src="/assets/ladyofgrace.png"
+              alt="Legio Fidelis"
               style={{
-                width: '30px',
-                height: '30px',
-                objectFit: 'contain',
-                verticalAlign: 'middle'
+                maxWidth: '80px',
+                marginBottom: '0.4rem',
+                display: 'block',
+                marginLeft: 'auto',
+                marginRight: 'auto'
               }}
             />
-            <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
-          </a>
-        </div>
-      </div>
-
-      {/* 3) The FullCalendar below everything */}
-      <div>
-        <FullCalendar
-          ref={calendarRef}
-          locales={allLocales}
-          locale={
-            language === 'de'
-              ? 'de'
-              : language === 'es'
-                ? 'es'
-                : 'en'
-          }
-          slotLabelFormat={(dateInfo) => {
-            return moment(dateInfo.date).format('h A')
-          }}
-          plugins={[
-            timeGridPlugin,
-            scrollGridPlugin,
-            interactionPlugin,
-            momentPlugin,
-            momentTimezonePlugin
-          ]}
-          timeZone={TIMEZONE}
-          initialView="timeGrid30Day"
-          views={{
-            timeGrid30Day: {
-              type: 'timeGrid',
-              duration: { days: 30 },
-              dayCount: 30,
-              buttonText: '30 days'
-            }
-          }}
-          dayMinWidth={200}
-          dayHeaderFormat={{
-            weekday: 'short',
-            month: 'numeric',
-            day: 'numeric',
-            omitCommas: true
-          }}
-          stickyHeaderDates
-          stickyFooterScrollbar={false}
-          longPressDelay={platformDelay}
-          selectLongPressDelay={platformDelay}
-          eventLongPressDelay={platformDelay}
-          selectable
-          themeSystem="standard"
-          validRange={{
-            start: moment().tz(TIMEZONE).subtract(7, 'days').format(),
-            end: moment().tz(TIMEZONE).add(30, 'days').format()
-          }}
-          events={loadEvents}
-          select={handleSelect}
-          selectAllow={(selectInfo) => {
-            const selStart = moment.tz(selectInfo.startStr, TIMEZONE)
-            const selEnd   = moment.tz(selectInfo.endStr, TIMEZONE)
-
-            const nextHour = getJerusalemNextHourMoment()
-            if (selStart.isBefore(nextHour)) return false
-
-            if (isTimeBlockedByManual(selStart, selEnd)) return false
-            if (isTimeBlockedByAuto(selStart, selEnd)) return false
-            if (isSlotReserved(selStart, selEnd)) return false
-
-            const duration = selEnd.diff(selStart, 'hours', true)
-            const isExactlyOneHour = duration === 1
-
-            let sameDay = selStart.isSame(selEnd, 'day')
-            if (!sameDay && isExactlyOneHour) {
-              if (
-                selEnd.hour() === 0 &&
-                selEnd.minute() === 0 &&
-                selEnd.second() === 0
-              ) {
-                sameDay = true
-              }
-            }
-            return sameDay && isExactlyOneHour
-          }}
-          allDaySlot={false}
-          slotDuration="01:00:00"
-          slotMinTime="00:00:00"
-          slotMaxTime="24:00:00"
-          headerToolbar={{
-            left: 'prev,next',
-            center: 'title',
-            right: ''
-          }}
-          slotLaneClassNames={(arg) => {
-            if (arg.date.getDay() === 0) {
-              return ['fc-sunday-col']
-            }
-            return []
-          }}
-          eventContent={(arg) => {
-            if (
-              arg.event.id.startsWith('blocked-') ||
-              arg.event.id === 'past-block' ||
-              arg.event.id.startsWith('auto-')
-            ) {
-              return null
-            }
-            return <div>{arg.event.title}</div>
-          }}
-          height="auto"
-        />
-      </div>
-
-      <Modal
-        isOpen={modalIsOpen}
-        onRequestClose={() => {
-          setModalIsOpen(false)
-          setIsSubmitting(false)
-        }}
-        contentLabel={t({
-          en: 'Reservation Form',
-          de: 'Reservierungsformular',
-          es: 'Formulario de Reserva'
-        })}
-        style={{
-          overlay: { backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000 },
-          content: {
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            padding: '30px',
-            borderRadius: '10px',
-            background: 'white',
-            maxWidth: '400px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflowY: 'auto'
-          }
-        }}
-      >
-        <h2>
-          {t({
-            en: 'Reserve a Time Slot',
-            de: 'Zeitfenster reservieren',
-            es: 'Reservar un intervalo de tiempo'
-          })}
-        </h2>
-        <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>
-          {formatSelectedTime()}
-        </p>
-        <form onSubmit={handleSubmit}>
-          <label>
-            {t({
-              en: 'Name:',
-              de: 'Name:',
-              es: 'Nombre:'
-            })}
-          </label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            required
-            style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
-          />
-          <label>
-            {t({
-              en: 'Phone:',
-              de: 'Telefon:',
-              es: 'Teléfono:'
-            })}
-          </label>
-          <input
-            type="tel"
-            value={formData.phone}
-            onChange={(e) =>
-              setFormData({ ...formData, phone: e.target.value })
-            }
-            required
-            style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{ marginRight: '10px' }}
-            >
-              {isSubmitting
-                ? t({
-                    en: 'Reserving...',
-                    de: 'Reservieren...',
-                    es: 'Reservando...'
-                  })
-                : t({
-                    en: 'Reserve',
-                    de: 'Reservieren',
-                    es: 'Reservar'
-                  })}
-            </button>
-            <button type="button" onClick={() => setModalIsOpen(false)}>
-              {t({
-                en: 'Cancel',
-                de: 'Abbrechen',
-                es: 'Cancelar'
-              })}
-            </button>
           </div>
-        </form>
-      </Modal>
+
+          {/* 2) Sticky Connect text */}
+          <div className="sticky-connect">
+            <div
+              style={{
+                fontSize: '1.15rem',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <span>Connect</span>
+              <a
+                href="https://instagram.com/legio.fidelis"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  fontWeight: 'bold',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <img
+                  src="/assets/instagram.png"
+                  alt="Instagram"
+                  style={{
+                    width: '30px',
+                    height: '30px',
+                    objectFit: 'contain',
+                    verticalAlign: 'middle'
+                  }}
+                />
+                <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
+              </a>
+            </div>
+          </div>
+
+          {/* 3) The FullCalendar */}
+          <div>
+            <FullCalendar
+              ref={calendarRef}
+              locales={allLocales}
+              locale={
+                language === 'de'
+                  ? 'de'
+                  : language === 'es'
+                  ? 'es'
+                  : 'en'
+              }
+              slotLabelFormat={(dateInfo) => moment(dateInfo.date).format('h A')}
+              plugins={[
+                timeGridPlugin,
+                scrollGridPlugin,
+                interactionPlugin,
+                momentPlugin,
+                momentTimezonePlugin
+              ]}
+              timeZone={TIMEZONE}
+              initialView="timeGrid30Day"
+              views={{
+                timeGrid30Day: {
+                  type: 'timeGrid',
+                  duration: { days: 30 },
+                  dayCount: 30,
+                  buttonText: '30 days'
+                }
+              }}
+              dayMinWidth={200}
+              dayHeaderFormat={{
+                weekday: 'short',
+                month: 'numeric',
+                day: 'numeric',
+                omitCommas: true
+              }}
+              stickyHeaderDates
+              stickyFooterScrollbar={false}
+              longPressDelay={platformDelay}
+              selectLongPressDelay={platformDelay}
+              eventLongPressDelay={platformDelay}
+              selectable
+              themeSystem="standard"
+              validRange={{
+                start: moment().tz(TIMEZONE).subtract(7, 'days').format(),
+                end: moment().tz(TIMEZONE).add(30, 'days').format()
+              }}
+              events={loadEvents}
+              select={handleSelect}
+              selectAllow={(selectInfo) => {
+                const selStart = moment.tz(selectInfo.startStr, TIMEZONE)
+                const selEnd   = moment.tz(selectInfo.endStr, TIMEZONE)
+
+                const nextHour = getJerusalemNextHourMoment()
+                if (selStart.isBefore(nextHour)) return false
+
+                if (isTimeBlockedByManual(selStart, selEnd)) return false
+                if (isTimeBlockedByAuto(selStart, selEnd)) return false
+                if (isSlotReserved(selStart, selEnd)) return false
+
+                const duration = selEnd.diff(selStart, 'hours', true)
+                const isExactlyOneHour = duration === 1
+
+                let sameDay = selStart.isSame(selEnd, 'day')
+                if (!sameDay && isExactlyOneHour) {
+                  // crossing midnight edge-case
+                  if (
+                    selEnd.hour() === 0 &&
+                    selEnd.minute() === 0 &&
+                    selEnd.second() === 0
+                  ) {
+                    sameDay = true
+                  }
+                }
+                return sameDay && isExactlyOneHour
+              }}
+              allDaySlot={false}
+              slotDuration="01:00:00"
+              slotMinTime="00:00:00"
+              slotMaxTime="24:00:00"
+              headerToolbar={{
+                left: 'prev,next',
+                center: 'title',
+                right: ''
+              }}
+              slotLaneClassNames={(arg) => {
+                if (arg.date.getDay() === 0) {
+                  return ['fc-sunday-col']
+                }
+                return []
+              }}
+              eventContent={(arg) => {
+                if (
+                  arg.event.id.startsWith('blocked-') ||
+                  arg.event.id === 'past-block' ||
+                  arg.event.id.startsWith('auto-')
+                ) {
+                  return null
+                }
+                return <div>{arg.event.title}</div>
+              }}
+              height="auto"
+            />
+          </div>
+
+          {/* Reservation modal */}
+          <Modal
+            isOpen={modalIsOpen}
+            onRequestClose={() => {
+              setModalIsOpen(false)
+              setIsSubmitting(false)
+            }}
+            contentLabel={t({
+              en: 'Reservation Form',
+              de: 'Reservierungsformular',
+              es: 'Formulario de Reserva'
+            })}
+            style={{
+              overlay: { backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000 },
+              content: {
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                padding: '30px',
+                borderRadius: '10px',
+                background: 'white',
+                maxWidth: '400px',
+                width: '90%',
+                maxHeight: '90vh',
+                overflowY: 'auto'
+              }
+            }}
+          >
+            <h2>
+              {t({
+                en: 'Reserve a Time Slot',
+                de: 'Zeitfenster reservieren',
+                es: 'Reservar un intervalo de tiempo'
+              })}
+            </h2>
+            <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>
+              {formatSelectedTime()}
+            </p>
+            <form onSubmit={handleSubmit}>
+              <label>
+                {t({
+                  en: 'Name:',
+                  de: 'Name:',
+                  es: 'Nombre:'
+                })}
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                required
+                style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
+              />
+              <label>
+                {t({
+                  en: 'Phone:',
+                  de: 'Telefon:',
+                  es: 'Teléfono:'
+                })}
+              </label>
+              <input
+                type="tel"
+                value={formData.phone}
+                onChange={(e) =>
+                  setFormData({ ...formData, phone: e.target.value })
+                }
+                required
+                style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  style={{ marginRight: '10px' }}
+                >
+                  {isSubmitting
+                    ? t({
+                        en: 'Reserving...',
+                        de: 'Reservieren...',
+                        es: 'Reservando...'
+                      })
+                    : t({
+                        en: 'Reserve',
+                        de: 'Reservieren',
+                        es: 'Reservar'
+                      })}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalIsOpen(false)}
+                >
+                  {t({
+                    en: 'Cancel',
+                    de: 'Abbrechen',
+                    es: 'Cancelar'
+                  })}
+                </button>
+              </div>
+            </form>
+          </Modal>
+        </>
+      )}
     </>
   )
 }
