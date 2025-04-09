@@ -5,11 +5,11 @@ const WelcomePage = () => {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        width: "100vw",
-        margin: 0,
-        padding: 0,
-        overflowX: "hidden",
+        position: "absolute",              // 🔧 fills entire screen
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         background: "linear-gradient(135deg, #0f0f23 0%, #1b1b2f 100%)",
         display: "flex",
         flexDirection: "column",
@@ -18,6 +18,8 @@ const WelcomePage = () => {
         color: "#f4f4f5",
         fontFamily: "'Inter', sans-serif",
         textAlign: "center",
+        padding: "2rem",
+        zIndex: 0,
       }}
     >
       <h1
@@ -50,7 +52,7 @@ const WelcomePage = () => {
           marginBottom: "2.5rem",
         }}
       >
-        Choose an adoration chapel to continue. Experience perpetual prayer
+        Choose an adoration chapel to continue. Experience perpetual prayer with the Eucharist
       </p>
 
       <Link
