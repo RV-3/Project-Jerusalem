@@ -6,7 +6,7 @@ import { TIMEZONE } from './config';
 import AdminBlockCalendar from './AdminBlockCalendar';
 import useTranslate from './useTranslate';
 import { PARISH_NAME } from './config';
-import WelcomePage from './chapels/WelcomePage';
+import WelcomePage from './WelcomePage';
 
 function AppContent() {
   const t = useTranslate();
