@@ -1,5 +1,5 @@
 // AdminBlockCalendar.js
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import FullCalendar from '@fullcalendar/react'
 import { TIMEZONE } from './config'
 import allLocales from '@fullcalendar/core/locales-all'
@@ -18,7 +18,7 @@ import useTranslate from './useTranslate'
 import { AutoBlockControls } from './admin/AutoBlockControls.js'
 
 // [NEW] import the separate password panel
-import CalendarPasswordPanel from './admin/CalendarPasswordPanel.js'
+import CalendarPasswordPanel from './admin/CalendarPasswordPanel'
 
 Modal.setAppElement('#root')
 
@@ -40,12 +40,12 @@ export default function AdminBlockCalendar() {
   )
 
   // ---------------------------------------------------------
-  // 2) Calendar Password Admin (Now referencing child)
+  // 2) Calendar Password Admin
   // ---------------------------------------------------------
   const [currentCalendarPassword, setCurrentCalendarPassword] = useState('')
 
   // fetch the current password doc from Sanity
-  async function fetchCalendarPassword() {
+  const fetchCalendarPassword = useCallback(async () => {
     try {
       const result = await client.fetch(`*[_type == "calendarPassword"][0]{password}`)
       const pw = result?.password || ''
@@ -54,10 +54,10 @@ export default function AdminBlockCalendar() {
       console.error('Error fetching calendar password:', err)
       setCurrentCalendarPassword('')
     }
-  }
+  }, [])
 
   // called by child panel => handle saving new password
-  async function handleSavePassword(newPw) {
+  const handleSavePassword = useCallback(async (newPw) => {
     try {
       await client.createOrReplace({
         _id: 'calendarPassword',
@@ -70,10 +70,10 @@ export default function AdminBlockCalendar() {
       console.error('Error saving password:', err)
       alert('Failed to save password.')
     }
-  }
+  }, [])
 
   // called by child panel => handle removing existing password
-  async function handleRemovePassword() {
+  const handleRemovePassword = useCallback(async () => {
     if (!window.confirm('Are you sure you want to remove the calendar password?')) {
       return
     }
@@ -89,7 +89,7 @@ export default function AdminBlockCalendar() {
       console.error('Error removing password:', err)
       alert('Failed to remove password.')
     }
-  }
+  }, [])
 
   // ---------------------------------------------------------
   // 3) Data: Blocks, Reservations, AutoBlock
@@ -109,15 +109,9 @@ export default function AdminBlockCalendar() {
   const [selectedReservation, setSelectedReservation] = useState(null)
 
   // ---------------------------------------------------------
-  // 5) Fetch Data if Authenticated
+  // 5) If Auth => fetch data
   // ---------------------------------------------------------
-  useEffect(() => {
-    if (authenticated) {
-      fetchData()
-    }
-  }, [authenticated])
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     const calendarApi = calendarRef.current?.getApi()
     const currentViewDate = calendarApi?.getDate()
 
@@ -153,7 +147,7 @@ export default function AdminBlockCalendar() {
       `)
       setAutoBlockDays(daysDoc.length ? daysDoc[0] : null)
 
-      // 5) Also fetch the password doc
+      // 5) password doc
       await fetchCalendarPassword()
 
       if (calendarApi && currentViewDate) {
@@ -162,7 +156,14 @@ export default function AdminBlockCalendar() {
     } catch (err) {
       console.error('Error loading data from Sanity:', err)
     }
-  }
+  }, [fetchCalendarPassword]) // depends on fetchCalendarPassword
+
+  // Now we can safely list fetchData in the effect dependencies
+  useEffect(() => {
+    if (authenticated) {
+      fetchData()
+    }
+  }, [authenticated, fetchData])
 
   // ---------------------------------------------------------
   // 6) Past-block overlay
@@ -643,7 +644,7 @@ export default function AdminBlockCalendar() {
       })
     })
 
-    // Past-block
+    // Past-block overlay
     if (pastBlockEvent) {
       evts.push(pastBlockEvent)
     }
@@ -696,12 +697,11 @@ export default function AdminBlockCalendar() {
 
   return (
     <div style={{ padding: '1rem' }}>
-      {/* [A] LanguageDropdown at top */}
+      {/* LanguageDropdown at top */}
       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
         <LanguageDropdown />
       </div>
 
-      {/* [B] Admin Panel Title */}
       <h2 style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1.8rem' }}>
         {t({
           en: 'Admin Panel',
@@ -710,14 +710,14 @@ export default function AdminBlockCalendar() {
         })}
       </h2>
 
-      {/* [C] Our new CalendarPasswordPanel */}
+      {/* Our separate CalendarPasswordPanel */}
       <CalendarPasswordPanel
         currentCalendarPassword={currentCalendarPassword}
         onSavePassword={handleSavePassword}
         onRemovePassword={handleRemovePassword}
       />
 
-      {/* [D] AutoBlockControls */}
+      {/* Auto-block subcomponent */}
       <AutoBlockControls
         autoBlockRules={autoBlockRules}
         setAutoBlockRules={setAutoBlockRules}
@@ -726,7 +726,6 @@ export default function AdminBlockCalendar() {
         reloadData={fetchData}
       />
 
-      {/* [E] FullCalendar */}
       <FullCalendar
         ref={calendarRef}
         locales={allLocales}
@@ -809,7 +808,6 @@ export default function AdminBlockCalendar() {
         slotLabelFormat={(dateInfo) => moment(dateInfo.date).format('h A')}
       />
 
-      {/* [F] Reservation Modal */}
       <Modal
         isOpen={modalIsOpen}
         onRequestClose={() => setModalIsOpen(false)}
@@ -867,7 +865,7 @@ export default function AdminBlockCalendar() {
         </div>
       </Modal>
 
-      {/* [G] Shared button styles */}
+      {/* Shared button styles */}
       <style>{`
         .modern-button {
           display: inline-block;
