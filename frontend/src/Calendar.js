@@ -23,17 +23,16 @@ Modal.setAppElement('#root')
 /** [A] Check if a 1-hour slot is in timeExceptions */
 function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
   const start = moment.tz(hStart, tz)
-  const end = moment.tz(hEnd, tz)
+  const end   = moment.tz(hEnd, tz)
   const dateStr = start.format('YYYY-MM-DD')
 
   return exceptions.some((ex) => {
     if (!ex.date) return false
-    // compare by date portion:
     if (ex.date.slice(0, 10) !== dateStr) return false
 
     const exDay = start.clone().startOf('day')
     const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-    const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
+    const exEnd   = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
     return start.isBefore(exEnd) && end.isAfter(exStart)
   })
 }
@@ -44,7 +43,7 @@ function doesHourRuleCover(rule, hStart, hEnd, tz) {
   const e = moment.tz(hEnd, tz)
   const dayAnchor = s.clone().startOf('day')
   const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-  const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
+  const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
 
   if (s.isBefore(rStart) || e.isAfter(rEnd)) return false
   if (isHourExcepted(rule.timeExceptions, hStart, hEnd, tz)) return false
@@ -56,12 +55,12 @@ function doesHourRuleCover(rule, hStart, hEnd, tz) {
 function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   const slices = []
   let dayCursor = moment.tz(viewStart, tz).startOf('day')
-  const dayEnd = moment.tz(viewEnd, tz).endOf('day')
+  const dayEnd  = moment.tz(viewEnd, tz).endOf('day')
 
   while (dayCursor.isSameOrBefore(dayEnd, 'day')) {
     for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
       const sliceStart = dayCursor.clone().hour(h)
-      const sliceEnd = sliceStart.clone().add(1, 'hour')
+      const sliceEnd   = sliceStart.clone().add(1, 'hour')
 
       if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
         continue
@@ -88,7 +87,7 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
     if (dayDoc.daysOfWeek.includes(dayName)) {
       for (let h = 0; h < 24; h++) {
         const sliceStart = current.clone().hour(h)
-        const sliceEnd = sliceStart.clone().add(1, 'hour')
+        const sliceEnd   = sliceStart.clone().add(1, 'hour')
         if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
           continue
         }
@@ -166,6 +165,9 @@ export default function Calendar() {
   const [enteredPw, setEnteredPw] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
 
+  // Track a "loading" state to avoid flashing the password input
+  const [loading, setLoading] = useState(true)
+
   // Data
   const [events, setEvents] = useState([])
   const [blockedTimes, setBlockedTimes] = useState([])
@@ -181,12 +183,15 @@ export default function Calendar() {
   const [formData, setFormData] = useState({ name: '', phone: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // ---- Use the chapel timezone if available, else fallback
+  // Use the chapel timezone if available, else fallback
   const activeTZ = chapel?.timezone || TIMEZONE
 
   // 1) Fetch data
   const fetchData = useCallback(async () => {
     try {
+      // Start loading
+      setLoading(true)
+
       // 1) Chapel doc
       const chapelDoc = await client.fetch(
         `*[_type == "chapel" && slug.current == $slug][0]`,
@@ -194,6 +199,7 @@ export default function Calendar() {
       )
       if (!chapelDoc) {
         console.warn('No chapel found for slug:', chapelSlug)
+        setLoading(false)
         return
       }
       setChapel(chapelDoc)
@@ -209,62 +215,69 @@ export default function Calendar() {
       const pw = pwDoc?.password || ''
       setCalendarPassword(pw)
 
-      // If no password, or localStorage has the correct one => unlocked
+      let unlocked = false
       if (!pw) {
-        setIsUnlocked(true)
+        // no password => automatically unlocked
+        unlocked = true
       } else {
         const cachedPw = localStorage.getItem(`calendarUserPw-${chapelDoc._id}`)
         if (cachedPw && cachedPw === pw) {
-          setIsUnlocked(true)
+          // user had correct pw in local storage
+          unlocked = true
         }
       }
+      setIsUnlocked(unlocked)
 
-      // 3) reservations, blocks, autoBlocks
-      const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
-        client.fetch(
-          `*[_type=="reservation" && chapel._ref == $chapelId]{_id, name, phone, start, end}`,
-          { chapelId: chapelDoc._id }
-        ),
-        client.fetch(
-          `*[_type=="blocked" && chapel._ref == $chapelId]{_id, start, end}`,
-          { chapelId: chapelDoc._id }
-        ),
-        client.fetch(
-          `*[_type=="autoBlockedHours" && chapel._ref == $chapelId]{
-            _id,
-            startHour,
-            endHour,
-            timeExceptions[]{ date, startHour, endHour }
-          }`,
-          { chapelId: chapelDoc._id }
-        ),
-        client.fetch(
-          `*[_type=="autoBlockedDays" && chapel._ref == $chapelId]{
-            _id,
-            daysOfWeek,
-            timeExceptions[]{ date, startHour, endHour }
-          }`,
-          { chapelId: chapelDoc._id }
+      // If unlocked => fetch the rest of the data
+      if (unlocked) {
+        const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
+          client.fetch(
+            `*[_type=="reservation" && chapel._ref == $chapelId]{_id, name, phone, start, end}`,
+            { chapelId: chapelDoc._id }
+          ),
+          client.fetch(
+            `*[_type=="blocked" && chapel._ref == $chapelId]{_id, start, end}`,
+            { chapelId: chapelDoc._id }
+          ),
+          client.fetch(
+            `*[_type=="autoBlockedHours" && chapel._ref == $chapelId]{
+              _id,
+              startHour,
+              endHour,
+              timeExceptions[]{ date, startHour, endHour }
+            }`,
+            { chapelId: chapelDoc._id }
+          ),
+          client.fetch(
+            `*[_type=="autoBlockedDays" && chapel._ref == $chapelId]{
+              _id,
+              daysOfWeek,
+              timeExceptions[]{ date, startHour, endHour }
+            }`,
+            { chapelId: chapelDoc._id }
+          )
+        ])
+
+        setEvents(
+          resData.map((r) => ({
+            id: r._id,
+            title: r.name,
+            start: r.start,
+            end: r.end
+          }))
         )
-      ])
-
-      setEvents(
-        resData.map((r) => ({
-          id: r._id,
-          title: r.name,
-          start: r.start,
-          end: r.end
-        }))
-      )
-      setBlockedTimes(
-        blocksData.map((b) => ({ _id: b._id, start: b.start, end: b.end }))
-      )
-      setAutoBlockHours(hourRules)
-      if (daysDocs.length) {
-        setAutoBlockDays(daysDocs[0])
+        setBlockedTimes(
+          blocksData.map((b) => ({ _id: b._id, start: b.start, end: b.end }))
+        )
+        setAutoBlockHours(hourRules)
+        if (daysDocs.length) {
+          setAutoBlockDays(daysDocs[0])
+        }
       }
     } catch (err) {
       console.error('Error fetching chapel-based data:', err)
+    } finally {
+      setLoading(false)
     }
   }, [chapelSlug])
 
@@ -287,6 +300,7 @@ export default function Calendar() {
 
   // 3) Past-block overlay: block everything up to "now"
   useEffect(() => {
+    if (!isUnlocked) return // Only run if user is unlocked
     function updatePastBlockEvent() {
       const now = moment.tz(activeTZ)
       const startOfRange = now.clone().subtract(7, 'days').startOf('day')
@@ -301,7 +315,7 @@ export default function Calendar() {
     updatePastBlockEvent()
     const interval = setInterval(updatePastBlockEvent, 60 * 1000)
     return () => clearInterval(interval)
-  }, [activeTZ])
+  }, [activeTZ, isUnlocked])
 
   // 4) isTimeBlockedByManual / isTimeBlockedByAuto / isSlotReserved
   function isTimeBlockedByManual(start, end) {
@@ -315,7 +329,6 @@ export default function Calendar() {
   }
 
   function isTimeBlockedByAuto(start, end) {
-    // Day-based
     if (autoBlockDays?.daysOfWeek?.length) {
       const dayName = moment.tz(start, activeTZ).format('dddd')
       if (autoBlockDays.daysOfWeek.includes(dayName)) {
@@ -324,7 +337,6 @@ export default function Calendar() {
         }
       }
     }
-    // Hour-based
     return autoBlockHours.some((rule) =>
       doesHourRuleCover(rule, start, end, activeTZ)
     )
@@ -355,14 +367,11 @@ export default function Calendar() {
     const now = moment.tz(activeTZ)
     const slotStart = moment.tz(startStr, activeTZ)
 
-    // If in the past => disallow
     if (slotStart.isBefore(now)) return
-    // If blocked or reserved => disallow
     if (isTimeBlockedByManual(startStr, endStr)) return
     if (isTimeBlockedByAuto(startStr, endStr)) return
     if (isSlotReserved(startStr, endStr)) return
 
-    // Otherwise open the form
     setSelectedInfo({ start: startStr, end: endStr })
     setModalIsOpen(true)
   }
@@ -439,6 +448,7 @@ export default function Calendar() {
       successCallback([])
       return
     }
+
     const { start, end } = fetchInfo
     const loaded = []
 
@@ -465,7 +475,13 @@ export default function Calendar() {
     })
 
     // C) day/hour expansions
-    const autoEvts = buildAutoBlockAllEvents(autoBlockHours, autoBlockDays, start, end, activeTZ)
+    const autoEvts = buildAutoBlockAllEvents(
+      autoBlockHours,
+      autoBlockDays,
+      start,
+      end,
+      activeTZ
+    )
     loaded.push(...autoEvts)
 
     // D) Past-block overlay
@@ -480,7 +496,7 @@ export default function Calendar() {
   function selectAllow(selectInfo) {
     const now = moment.tz(activeTZ)
     const start = moment.tz(selectInfo.startStr, activeTZ)
-    const end = moment.tz(selectInfo.endStr, activeTZ)
+    const end   = moment.tz(selectInfo.endStr, activeTZ)
 
     if (start.isBefore(now)) return false
     if (isTimeBlockedByManual(start, end)) return false
@@ -493,8 +509,18 @@ export default function Calendar() {
   // 10) validRange
   const now = moment.tz(activeTZ)
   const validRangeStart = now.clone().subtract(7, 'days').startOf('day')
-  const validRangeEnd = now.clone().add(30, 'days').endOf('day')
+  const validRangeEnd   = now.clone().add(30, 'days').endOf('day')
 
+  // -- If we're still loading => show a quick "Loading..." (or empty) so no flash.
+  if (loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <p style={{ color: '#999' }}>Loading...</p>
+      </div>
+    )
+  }
+
+  // If done loading
   return (
     <>
       {!isUnlocked ? (
