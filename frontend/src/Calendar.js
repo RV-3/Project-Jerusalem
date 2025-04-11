@@ -162,7 +162,6 @@ export default function Calendar() {
 
   // Chapel, password
   const [chapel, setChapel] = useState(null)
-  const [calendarPasswordDocId, setCalendarPasswordDocId] = useState(null)
   const [calendarPassword, setCalendarPassword] = useState('')
   const [enteredPw, setEnteredPw] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
@@ -209,7 +208,6 @@ export default function Calendar() {
       )
       const pw = pwDoc?.password || ''
       setCalendarPassword(pw)
-      setCalendarPasswordDocId(pwDoc?._id || null)
 
       // If no password, or localStorage has the correct one => unlocked
       if (!pw) {
@@ -290,7 +288,6 @@ export default function Calendar() {
   // 3) Past-block overlay: block everything up to "now"
   useEffect(() => {
     function updatePastBlockEvent() {
-      // Example: block from 7 days ago to "now"
       const now = moment.tz(activeTZ)
       const startOfRange = now.clone().subtract(7, 'days').startOf('day')
       setPastBlockEvent({
@@ -337,7 +334,6 @@ export default function Calendar() {
     const s = moment.tz(slotStart, activeTZ)
     const e = moment.tz(slotEnd,   activeTZ)
     return events.some((evt) => {
-      // Skip background or special "past-block"
       if (evt.id.startsWith('auto-') || evt.id.startsWith('blocked-') || evt.id === 'past-block') {
         return false
       }
@@ -373,7 +369,6 @@ export default function Calendar() {
     const calendarApi = calendarRef.current?.getApi()
     if (!calendarApi) return ''
 
-    // Using FullCalendar's formatDate with the real activeTZ
     const startTxt = calendarApi.formatDate(selectedInfo.start, {
       timeZone: activeTZ,
       hour: 'numeric',
@@ -498,7 +493,6 @@ export default function Calendar() {
 
   return (
     <>
-      {/* If not unlocked => show password screen */}
       {!isUnlocked ? (
         <div style={{ padding: '2rem', textAlign: 'center' }}>
           <h2>
@@ -603,7 +597,6 @@ export default function Calendar() {
               return []
             }}
             eventContent={(arg) => {
-              // Hide label for background or past-block
               if (
                 arg.event.id.startsWith('blocked-') ||
                 arg.event.id.startsWith('auto-') ||
