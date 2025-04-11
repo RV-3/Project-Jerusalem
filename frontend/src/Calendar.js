@@ -20,38 +20,31 @@ import { useLanguage } from './LanguageContext'
 
 Modal.setAppElement('#root')
 
-/** [A] Check if a 1-hour slot is in timeExceptions */
 function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
   const start = moment.tz(hStart, tz)
   const end   = moment.tz(hEnd, tz)
   const dateStr = start.format('YYYY-MM-DD')
-
   return exceptions.some((ex) => {
     if (!ex.date) return false
     if (ex.date.slice(0, 10) !== dateStr) return false
-
-    const exDay = start.clone().startOf('day')
+    const exDay   = start.clone().startOf('day')
     const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-    const exEnd   = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
+    const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
     return start.isBefore(exEnd) && end.isAfter(exStart)
   })
 }
 
-/** [B] Does an hour-based rule cover the given 1-hour slot? */
 function doesHourRuleCover(rule, hStart, hEnd, tz) {
   const s = moment.tz(hStart, tz)
   const e = moment.tz(hEnd, tz)
   const dayAnchor = s.clone().startOf('day')
   const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
   const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
-
   if (s.isBefore(rStart) || e.isAfter(rEnd)) return false
   if (isHourExcepted(rule.timeExceptions, hStart, hEnd, tz)) return false
-
   return true
 }
 
-/** [C] Build expansions from hour-based rule => background slices */
 function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   const slices = []
   let dayCursor = moment.tz(viewStart, tz).startOf('day')
@@ -61,7 +54,6 @@ function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
     for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
       const sliceStart = dayCursor.clone().hour(h)
       const sliceEnd   = sliceStart.clone().add(1, 'hour')
-
       if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
         continue
       }
@@ -75,7 +67,6 @@ function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   return mergeSlices(slices)
 }
 
-/** [D] Build expansions from day-based doc => background slices */
 function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
   if (!dayDoc?.daysOfWeek?.length) return []
   const slices = []
@@ -102,7 +93,6 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
   return mergeSlices(slices)
 }
 
-/** [E] Merge 1-hour slices */
 function mergeSlices(slices) {
   if (!slices.length) return []
   slices.sort((a, b) => a[0] - b[0])
@@ -110,7 +100,6 @@ function mergeSlices(slices) {
   for (let i = 1; i < slices.length; i++) {
     const prev = merged[merged.length - 1]
     const curr = slices[i]
-    // If contiguous, merge them:
     if (prev[1].getTime() === curr[0].getTime()) {
       prev[1] = curr[1]
     } else {
@@ -120,11 +109,9 @@ function mergeSlices(slices) {
   return merged
 }
 
-/** [F] Build background events from day/hour auto-block expansions */
 function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, viewEnd, tz) {
   const events = []
 
-  // Day-based expansions
   if (autoBlockDaysDoc) {
     const daySlices = getDayBlockSlices(autoBlockDaysDoc, viewStart, viewEnd, tz)
     daySlices.forEach(([s, e]) => {
@@ -138,7 +125,6 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
     })
   }
 
-  // Hour-based expansions
   autoBlockHours.forEach((rule) => {
     const hourSlices = getHourRuleSlices(rule, viewStart, viewEnd, tz)
     hourSlices.forEach(([s, e]) => {
@@ -165,7 +151,7 @@ export default function Calendar() {
   const [enteredPw, setEnteredPw] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
 
-  // Track a "loading" state to avoid flashing the password input
+  // "loading" to prevent password screen flash
   const [loading, setLoading] = useState(true)
 
   // Data
@@ -183,16 +169,13 @@ export default function Calendar() {
   const [formData, setFormData] = useState({ name: '', phone: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Use the chapel timezone if available, else fallback
   const activeTZ = chapel?.timezone || TIMEZONE
 
   // 1) Fetch data
   const fetchData = useCallback(async () => {
     try {
-      // Start loading
       setLoading(true)
 
-      // 1) Chapel doc
       const chapelDoc = await client.fetch(
         `*[_type == "chapel" && slug.current == $slug][0]`,
         { slug: chapelSlug }
@@ -204,7 +187,6 @@ export default function Calendar() {
       }
       setChapel(chapelDoc)
 
-      // 2) password doc
       const pwDoc = await client.fetch(
         `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{
           _id,
@@ -217,18 +199,17 @@ export default function Calendar() {
 
       let unlocked = false
       if (!pw) {
-        // no password => automatically unlocked
+        // no password => unlocked
         unlocked = true
       } else {
         const cachedPw = localStorage.getItem(`calendarUserPw-${chapelDoc._id}`)
         if (cachedPw && cachedPw === pw) {
-          // user had correct pw in local storage
           unlocked = true
         }
       }
       setIsUnlocked(unlocked)
 
-      // If unlocked => fetch the rest of the data
+      // If unlocked => fetch reservations, blocks, autoBlock
       if (unlocked) {
         const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
           client.fetch(
@@ -285,7 +266,6 @@ export default function Calendar() {
     fetchData()
   }, [fetchData])
 
-  // 2) Check password
   function handleCheckPassword() {
     if (enteredPw === calendarPassword) {
       setIsUnlocked(true)
@@ -298,9 +278,9 @@ export default function Calendar() {
     }
   }
 
-  // 3) Past-block overlay: block everything up to "now"
+  // 3) Past-block overlay
   useEffect(() => {
-    if (!isUnlocked) return // Only run if user is unlocked
+    if (!isUnlocked) return
     function updatePastBlockEvent() {
       const now = moment.tz(activeTZ)
       const startOfRange = now.clone().subtract(7, 'days').startOf('day')
@@ -317,13 +297,12 @@ export default function Calendar() {
     return () => clearInterval(interval)
   }, [activeTZ, isUnlocked])
 
-  // 4) isTimeBlockedByManual / isTimeBlockedByAuto / isSlotReserved
   function isTimeBlockedByManual(start, end) {
     const s = moment.tz(start, activeTZ)
     const e = moment.tz(end, activeTZ)
     return blockedTimes.some((b) => {
       const bStart = moment.tz(b.start, activeTZ)
-      const bEnd = moment.tz(b.end, activeTZ)
+      const bEnd   = moment.tz(b.end, activeTZ)
       return s.isBefore(bEnd) && e.isAfter(bStart)
     })
   }
@@ -346,23 +325,17 @@ export default function Calendar() {
     const s = moment.tz(slotStart, activeTZ)
     const e = moment.tz(slotEnd, activeTZ)
     return events.some((evt) => {
-      if (
-        evt.id.startsWith('auto-') ||
-        evt.id.startsWith('blocked-') ||
-        evt.id === 'past-block'
-      ) {
+      if (evt.id.startsWith('auto-') || evt.id.startsWith('blocked-') || evt.id === 'past-block') {
         return false
       }
       const evtStart = moment.tz(evt.start, activeTZ)
-      const evtEnd = moment.tz(evt.end, activeTZ)
+      const evtEnd   = moment.tz(evt.end, activeTZ)
       return s.isBefore(evtEnd) && e.isAfter(evtStart)
     })
   }
 
-  // 5) On user select => open reservation form if not blocked/past/reserved
   function handleSelect(info) {
     if (!isUnlocked) return
-
     const { startStr, endStr } = info
     const now = moment.tz(activeTZ)
     const slotStart = moment.tz(startStr, activeTZ)
@@ -376,12 +349,10 @@ export default function Calendar() {
     setModalIsOpen(true)
   }
 
-  // 6) Format the selected time for the modal
   function formatSelectedTime() {
     if (!selectedInfo) return ''
     const calendarApi = calendarRef.current?.getApi()
     if (!calendarApi) return ''
-
     const startTxt = calendarApi.formatDate(selectedInfo.start, {
       timeZone: activeTZ,
       hour: 'numeric',
@@ -397,7 +368,6 @@ export default function Calendar() {
     return `${startTxt} - ${endTxt}`
   }
 
-  // 7) Create reservation doc
   async function handleSubmit(e) {
     e.preventDefault()
     if (!formData.name || !formData.phone || !selectedInfo) return
@@ -442,17 +412,14 @@ export default function Calendar() {
     }
   }
 
-  // 8) "loadEvents" merges reservations, blocks, auto-block expansions, past-block
   function loadEvents(fetchInfo, successCallback) {
     if (!isUnlocked) {
       successCallback([])
       return
     }
-
     const { start, end } = fetchInfo
     const loaded = []
 
-    // A) Reservations
     events.forEach((evt) => {
       loaded.push({
         id: evt.id,
@@ -463,7 +430,6 @@ export default function Calendar() {
       })
     })
 
-    // B) Manual blocks => background
     blockedTimes.forEach((b, i) => {
       loaded.push({
         id: `blocked-${b._id || i}`,
@@ -474,7 +440,6 @@ export default function Calendar() {
       })
     })
 
-    // C) day/hour expansions
     const autoEvts = buildAutoBlockAllEvents(
       autoBlockHours,
       autoBlockDays,
@@ -484,43 +449,58 @@ export default function Calendar() {
     )
     loaded.push(...autoEvts)
 
-    // D) Past-block overlay
     if (pastBlockEvent) {
       loaded.push(pastBlockEvent)
     }
-
     successCallback(loaded)
   }
 
-  // 9) We also disallow selecting any blocked or past times in selectAllow
   function selectAllow(selectInfo) {
     const now = moment.tz(activeTZ)
     const start = moment.tz(selectInfo.startStr, activeTZ)
     const end   = moment.tz(selectInfo.endStr, activeTZ)
-
     if (start.isBefore(now)) return false
     if (isTimeBlockedByManual(start, end)) return false
     if (isTimeBlockedByAuto(start, end)) return false
     if (isSlotReserved(start, end)) return false
-
     return true
   }
 
-  // 10) validRange
   const now = moment.tz(activeTZ)
   const validRangeStart = now.clone().subtract(7, 'days').startOf('day')
   const validRangeEnd   = now.clone().add(30, 'days').endOf('day')
 
-  // -- If we're still loading => show a quick "Loading..." (or empty) so no flash.
+  // If still loading => show spinning circle + "Loading..."
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '2rem' }}>
-        <p style={{ color: '#999' }}>Loading...</p>
-      </div>
+      <>
+        {/* Inlined @keyframes for the spinner */}
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+
+        <div style={{ textAlign: 'center', marginTop: '3rem' }}>
+          <div
+            style={{
+              margin: '0 auto',
+              width: '48px',
+              height: '48px',
+              border: '6px solid #e5e7eb',
+              borderTop: '6px solid #6b21a8',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}
+          />
+          <p style={{ marginTop: '1rem', color: '#999' }}>Loading...</p>
+        </div>
+      </>
     )
   }
 
-  // If done loading
+  // Past loading => show password or calendar
   return (
     <>
       {!isUnlocked ? (
@@ -547,11 +527,7 @@ export default function Calendar() {
           />
           <br />
           <button onClick={handleCheckPassword}>
-            {t({
-              en: 'Submit',
-              de: 'Abschicken',
-              es: 'Enviar'
-            })}
+            {t({ en: 'Submit', de: 'Abschicken', es: 'Enviar' })}
           </button>
         </div>
       ) : (
@@ -663,7 +639,6 @@ export default function Calendar() {
               right: ''
             }}
             eventClassNames={(arg) => {
-              // If it's a background event => "cursor-not-allowed"
               if (arg.event.display === 'background') {
                 return ['cursor-not-allowed']
               }
@@ -749,18 +724,13 @@ export default function Calendar() {
                   style={{ marginRight: '10px' }}
                 >
                   {isSubmitting
-                    ? t({
-                        en: 'Reserving...',
-                        de: 'Reservieren...',
-                        es: 'Reservando...'
-                      })
-                    : t({
-                        en: 'Reserve',
-                        de: 'Reservieren',
-                        es: 'Reservar'
-                      })}
+                    ? t({ en: 'Reserving...', de: 'Reservieren...', es: 'Reservando...' })
+                    : t({ en: 'Reserve', de: 'Reservieren', es: 'Reservar' })}
                 </button>
-                <button type="button" onClick={() => setModalIsOpen(false)}>
+                <button
+                  type="button"
+                  onClick={() => setModalIsOpen(false)}
+                >
                   {t({ en: 'Cancel', de: 'Abbrechen', es: 'Cancelar' })}
                 </button>
               </div>
