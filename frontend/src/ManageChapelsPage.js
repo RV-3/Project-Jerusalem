@@ -1,4 +1,3 @@
-// ManageChapelsPage.js
 import React, { useEffect, useState, useCallback } from 'react'
 import client from './utils/sanityClient.js' // Adjust if needed
 import { useNavigate } from 'react-router-dom'
@@ -11,8 +10,7 @@ const TIMEZONE_OPTIONS = [
   'America/Los_Angeles',
   'Australia/Sydney',
   'Pacific/Honolulu',
-  'UTC',
-  // ... add more as you wish ...
+  'UTC'
 ]
 
 export default function ManageChapelsPage() {
@@ -80,13 +78,42 @@ export default function ManageChapelsPage() {
     }
   }
 
-  // 3) Handle deletion
-  const handleDeleteChapel = async (id) => {
-    if (!window.confirm('Delete this chapel? This cannot be undone.')) return
+  /**
+   * 3) Cascade-Delete the chapel by:
+   *   1) Finding all docs referencing it
+   *   2) Deleting those docs
+   *   3) Deleting the chapel
+   * This prevents 409 Conflict errors.
+   */
+  const handleDeleteChapel = async (chapelId) => {
+    if (
+      !window.confirm(
+        'Delete this chapel AND any documents referencing it? This cannot be undone.'
+      )
+    ) {
+      return
+    }
+
     try {
       setLoading(true)
-      await client.delete(id)
-      alert('Chapel deleted.')
+
+      // 1) Find all docs referencing this chapel
+      const referencingDocs = await client.fetch(
+        `*[references($chapelId)]{ _id }`,
+        { chapelId }
+      )
+
+      // 2) Create a transaction: delete referencing docs, then delete the chapel
+      let tx = client.transaction()
+      referencingDocs.forEach((doc) => {
+        tx = tx.delete(doc._id)
+      })
+      tx = tx.delete(chapelId)
+
+      // 3) Commit
+      await tx.commit()
+
+      alert('Chapel and all referencing documents deleted.')
       fetchChapels()
     } catch (err) {
       console.error('Error deleting chapel:', err)
@@ -98,9 +125,7 @@ export default function ManageChapelsPage() {
 
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '1rem' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        Manage Chapels
-      </h2>
+      <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Manage Chapels</h2>
 
       {/* Chapel creation form */}
       <form onSubmit={handleCreateChapel} style={{ marginBottom: '2rem' }}>
@@ -128,9 +153,7 @@ export default function ManageChapelsPage() {
             onChange={(e) => setTimezone(e.target.value)}
             style={{ width: '100%', padding: '8px', marginBottom: '6px' }}
           >
-            <option value="">
-              -- Select a common timezone --
-            </option>
+            <option value="">-- Select a common timezone --</option>
             {TIMEZONE_OPTIONS.map((tz) => (
               <option key={tz} value={tz}>
                 {tz}
@@ -155,11 +178,7 @@ export default function ManageChapelsPage() {
           </small>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          style={{ padding: '8px 16px' }}
-        >
+        <button type="submit" disabled={loading} style={{ padding: '8px 16px' }}>
           {loading ? 'Creating...' : 'Create Chapel'}
         </button>
       </form>
