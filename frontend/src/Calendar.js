@@ -23,17 +23,17 @@ Modal.setAppElement('#root')
 /** [A] Check if a 1-hour slot is in timeExceptions */
 function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
   const start = moment.tz(hStart, tz)
-  const end   = moment.tz(hEnd, tz)
-  const dateStr  = start.format('YYYY-MM-DD')
+  const end = moment.tz(hEnd, tz)
+  const dateStr = start.format('YYYY-MM-DD')
 
   return exceptions.some((ex) => {
     if (!ex.date) return false
     // compare by date portion:
     if (ex.date.slice(0, 10) !== dateStr) return false
 
-    const exDay   = start.clone().startOf('day')
+    const exDay = start.clone().startOf('day')
     const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-    const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+    const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
     return start.isBefore(exEnd) && end.isAfter(exStart)
   })
 }
@@ -44,7 +44,7 @@ function doesHourRuleCover(rule, hStart, hEnd, tz) {
   const e = moment.tz(hEnd, tz)
   const dayAnchor = s.clone().startOf('day')
   const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-  const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
+  const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
 
   if (s.isBefore(rStart) || e.isAfter(rEnd)) return false
   if (isHourExcepted(rule.timeExceptions, hStart, hEnd, tz)) return false
@@ -56,12 +56,12 @@ function doesHourRuleCover(rule, hStart, hEnd, tz) {
 function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   const slices = []
   let dayCursor = moment.tz(viewStart, tz).startOf('day')
-  const dayEnd  = moment.tz(viewEnd,   tz).endOf('day')
+  const dayEnd = moment.tz(viewEnd, tz).endOf('day')
 
   while (dayCursor.isSameOrBefore(dayEnd, 'day')) {
     for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
       const sliceStart = dayCursor.clone().hour(h)
-      const sliceEnd   = sliceStart.clone().add(1, 'hour')
+      const sliceEnd = sliceStart.clone().add(1, 'hour')
 
       if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
         continue
@@ -81,14 +81,14 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
   if (!dayDoc?.daysOfWeek?.length) return []
   const slices = []
   let current = moment.tz(viewStart, tz).startOf('day')
-  const limit = moment.tz(viewEnd,   tz).endOf('day')
+  const limit = moment.tz(viewEnd, tz).endOf('day')
 
   while (current.isBefore(limit)) {
     const dayName = current.format('dddd')
     if (dayDoc.daysOfWeek.includes(dayName)) {
       for (let h = 0; h < 24; h++) {
         const sliceStart = current.clone().hour(h)
-        const sliceEnd   = sliceStart.clone().add(1, 'hour')
+        const sliceEnd = sliceStart.clone().add(1, 'hour')
         if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
           continue
         }
@@ -309,7 +309,7 @@ export default function Calendar() {
     const e = moment.tz(end, activeTZ)
     return blockedTimes.some((b) => {
       const bStart = moment.tz(b.start, activeTZ)
-      const bEnd   = moment.tz(b.end, activeTZ)
+      const bEnd = moment.tz(b.end, activeTZ)
       return s.isBefore(bEnd) && e.isAfter(bStart)
     })
   }
@@ -332,13 +332,17 @@ export default function Calendar() {
 
   function isSlotReserved(slotStart, slotEnd) {
     const s = moment.tz(slotStart, activeTZ)
-    const e = moment.tz(slotEnd,   activeTZ)
+    const e = moment.tz(slotEnd, activeTZ)
     return events.some((evt) => {
-      if (evt.id.startsWith('auto-') || evt.id.startsWith('blocked-') || evt.id === 'past-block') {
+      if (
+        evt.id.startsWith('auto-') ||
+        evt.id.startsWith('blocked-') ||
+        evt.id === 'past-block'
+      ) {
         return false
       }
       const evtStart = moment.tz(evt.start, activeTZ)
-      const evtEnd   = moment.tz(evt.end,   activeTZ)
+      const evtEnd = moment.tz(evt.end, activeTZ)
       return s.isBefore(evtEnd) && e.isAfter(evtStart)
     })
   }
@@ -476,7 +480,7 @@ export default function Calendar() {
   function selectAllow(selectInfo) {
     const now = moment.tz(activeTZ)
     const start = moment.tz(selectInfo.startStr, activeTZ)
-    const end   = moment.tz(selectInfo.endStr,   activeTZ)
+    const end = moment.tz(selectInfo.endStr, activeTZ)
 
     if (start.isBefore(now)) return false
     if (isTimeBlockedByManual(start, end)) return false
@@ -489,7 +493,7 @@ export default function Calendar() {
   // 10) validRange
   const now = moment.tz(activeTZ)
   const validRangeStart = now.clone().subtract(7, 'days').startOf('day')
-  const validRangeEnd   = now.clone().add(30, 'days').endOf('day')
+  const validRangeEnd = now.clone().add(30, 'days').endOf('day')
 
   return (
     <>
@@ -526,17 +530,60 @@ export default function Calendar() {
         </div>
       ) : (
         <>
-          {chapel && (
-            <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.8rem' }}>
-                {t({
-                  en: `Public Calendar for ${chapel.name}`,
-                  de: `Öffentlicher Kalender für ${chapel.name}`,
-                  es: `Calendario público para ${chapel.name}`
-                })}
-              </h2>
+          {/* 1) Static image */}
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <img
+              src="/assets/ladyofgrace.png"
+              alt="Legio Fidelis"
+              style={{
+                maxWidth: '80px',
+                marginBottom: '0.4rem',
+                display: 'block',
+                marginLeft: 'auto',
+                marginRight: 'auto'
+              }}
+            />
+          </div>
+
+          {/* 2) Sticky Connect text */}
+          <div className="sticky-connect">
+            <div
+              style={{
+                fontSize: '1.15rem',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}
+            >
+              <span>Connect</span>
+              <a
+                href="https://instagram.com/legio.fidelis"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  fontWeight: 'bold',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+              >
+                <img
+                  src="/assets/instagram.png"
+                  alt="Instagram"
+                  style={{
+                    width: '30px',
+                    height: '30px',
+                    objectFit: 'contain',
+                    verticalAlign: 'middle'
+                  }}
+                />
+                <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
+              </a>
             </div>
-          )}
+          </div>
 
           <FullCalendar
             ref={calendarRef}
