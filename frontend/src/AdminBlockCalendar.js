@@ -29,9 +29,11 @@ import {
   handleUnblock as rawHandleUnblock
 } from './admin/ManualBlockLogic.js'
 
-// Helper: "x days ago at midnight in Jerusalem"
-function getJerusalemMidnightXDaysAgo(daysAgo) {
-  return moment.tz(TIMEZONE).startOf('day').subtract(daysAgo, 'days').toDate()
+/**
+ * Helper: "x days ago at local midnight" in the chapel’s time zone
+ */
+function getLocalMidnightXDaysAgo(daysAgo, tz) {
+  return moment.tz(tz).startOf('day').subtract(daysAgo, 'days').toDate()
 }
 
 export default function AdminBlockCalendar() {
@@ -81,7 +83,6 @@ export default function AdminBlockCalendar() {
     }
   }, [])
 
-  // Save or remove password doc
   const handleSavePassword = useCallback(
     async (newPw, chapelId, existingDocId) => {
       if (!chapelId) {
@@ -166,7 +167,7 @@ export default function AdminBlockCalendar() {
       }
       setChapel(chapelDoc)
 
-      // 2) Load that chapel's password doc
+      // 2) password doc
       await fetchCalendarPassword(chapelDoc._id)
 
       // 3) Manual blocks
@@ -212,7 +213,7 @@ export default function AdminBlockCalendar() {
       )
       setAutoBlockDays(daysDocArr.length ? daysDocArr[0] : null)
 
-      // 7) Move FullCalendar to the existing date
+      // 7) Return FullCalendar to the existing date
       if (calendarApi && currentViewDate) {
         calendarApi.gotoDate(currentViewDate)
       }
@@ -228,12 +229,14 @@ export default function AdminBlockCalendar() {
   }, [authenticated, fetchData])
 
   // ---------------------------------------------
-  // 7) Past-block overlay
+  // 7) Past-block overlay, pinned to chapel's time zone
   // ---------------------------------------------
   useEffect(() => {
     function updatePastBlockEvent() {
-      const earliest = getJerusalemMidnightXDaysAgo(7)
-      const now = new Date()
+      if (!chapel?.timezone) return // if we haven't got the chapel yet
+      const adminTZ = chapel.timezone || TIMEZONE
+      const earliest = getLocalMidnightXDaysAgo(7, adminTZ)
+      const now = moment.tz(adminTZ).toDate()
       setPastBlockEvent({
         id: 'past-block',
         start: earliest,
@@ -245,7 +248,7 @@ export default function AdminBlockCalendar() {
     updatePastBlockEvent()
     const interval = setInterval(updatePastBlockEvent, 60 * 1000)
     return () => clearInterval(interval)
-  }, [])
+  }, [chapel])
 
   // If not auth => show password screen
   if (!authenticated) {
@@ -253,44 +256,46 @@ export default function AdminBlockCalendar() {
   }
 
   // ---------------------------------------------
-  // 8) Auto-Block Helpers
+  // 8) Instead of TIMEZONE, use adminTZ from chapel?.timezone
   // ---------------------------------------------
+  const adminTZ = chapel?.timezone || TIMEZONE
+
   function isDayLevelExcepted(hStart, hEnd) {
     if (!autoBlockDays?.timeExceptions?.length) return false
-    const sJer = moment.tz(hStart, TIMEZONE)
-    const eJer = moment.tz(hEnd, TIMEZONE)
-    const dateStr = sJer.format('YYYY-MM-DD')
+    const sLocal = moment.tz(hStart, adminTZ)
+    const eLocal = moment.tz(hEnd,   adminTZ)
+    const dateStr = sLocal.format('YYYY-MM-DD')
     return autoBlockDays.timeExceptions.some((ex) => {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
-      const exDay = sJer.clone().startOf('day')
+      const exDay   = sLocal.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
-      return sJer.isBefore(exEnd) && eJer.isAfter(exStart)
+      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
     })
   }
 
   function isHourRuleExcepted(rule, hStart, hEnd) {
-    const sJer = moment.tz(hStart, TIMEZONE)
-    const eJer = moment.tz(hEnd, TIMEZONE)
+    const sLocal = moment.tz(hStart, adminTZ)
+    const eLocal = moment.tz(hEnd,   adminTZ)
     const exceptions = rule.timeExceptions || []
     return exceptions.some((ex) => {
       if (!ex.date) return false
-      if (ex.date.slice(0, 10) !== sJer.format('YYYY-MM-DD')) return false
-      const exDay = sJer.clone().startOf('day')
+      if (ex.date.slice(0, 10) !== sLocal.format('YYYY-MM-DD')) return false
+      const exDay   = sLocal.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
-      return sJer.isBefore(exEnd) && eJer.isAfter(exStart)
+      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
     })
   }
 
   function doesRuleCoverHourRule(rule, hStart, hEnd) {
-    const sJer = moment.tz(hStart, TIMEZONE)
-    const eJer = moment.tz(hEnd, TIMEZONE)
-    const dayAnchor = sJer.clone().startOf('day')
-    const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-    const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
-    if (sJer.isBefore(rStart) || eJer.isAfter(rEnd)) return false
+    const sLocal    = moment.tz(hStart, adminTZ)
+    const eLocal    = moment.tz(hEnd,   adminTZ)
+    const dayAnchor = sLocal.clone().startOf('day')
+    const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
+    const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
+    if (sLocal.isBefore(rStart) || eLocal.isAfter(rEnd)) return false
     if (isHourRuleExcepted(rule, hStart, hEnd)) return false
     return true
   }
@@ -298,7 +303,7 @@ export default function AdminBlockCalendar() {
   function isAutoBlocked(hStart, hEnd) {
     if (!chapel) return false
     if (autoBlockDays?.daysOfWeek?.length) {
-      const dayName = moment.tz(hStart, TIMEZONE).format('dddd')
+      const dayName = moment.tz(hStart, adminTZ).format('dddd')
       if (autoBlockDays.daysOfWeek.includes(dayName)) {
         if (!isDayLevelExcepted(hStart, hEnd)) {
           return true
@@ -310,7 +315,7 @@ export default function AdminBlockCalendar() {
 
   function isRangeCompletelyBlocked(info) {
     const slotStart = new Date(info.start)
-    const slotEnd = new Date(info.end)
+    const slotEnd   = new Date(info.end)
     let cursor = slotStart
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
@@ -326,21 +331,21 @@ export default function AdminBlockCalendar() {
   }
 
   // ---------------------------------------------
-  // 9) FullCalendar expansions
+  // 9) Adjust expansions to use adminTZ
   // ---------------------------------------------
   function getAutoBlockSlices(rule, dayStart, dayEnd) {
     const slices = []
-    let cursorDay = moment.tz(dayStart, TIMEZONE).startOf('day')
-    const endOfDay = moment.tz(dayEnd, TIMEZONE).endOf('day')
-    while (cursorDay.isSameOrBefore(endOfDay, 'day')) {
+    const startLocal = moment.tz(dayStart, adminTZ).startOf('day')
+    const endLocal   = moment.tz(dayEnd,   adminTZ).endOf('day')
+    while (startLocal.isSameOrBefore(endLocal, 'day')) {
       for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
-        const sliceStart = cursorDay.clone().hour(h)
-        const sliceEnd = sliceStart.clone().add(1, 'hour')
+        const sliceStart = startLocal.clone().hour(h)
+        const sliceEnd   = sliceStart.clone().add(1, 'hour')
         if (sliceEnd <= dayStart || sliceStart >= dayEnd) continue
         if (isHourRuleExcepted(rule, sliceStart.toDate(), sliceEnd.toDate())) continue
         slices.push([sliceStart.toDate(), sliceEnd.toDate()])
       }
-      cursorDay.add(1, 'day').startOf('day')
+      startLocal.add(1, 'day').startOf('day')
     }
     return mergeSlices(slices)
   }
@@ -348,20 +353,22 @@ export default function AdminBlockCalendar() {
   function getDayBlockSlices(dayDoc, rangeStart, rangeEnd) {
     const slices = []
     if (!dayDoc.daysOfWeek?.length) return slices
-    let current = new Date(rangeStart)
-    current.setHours(0, 0, 0, 0)
-    while (current < rangeEnd) {
-      const dayName = moment.tz(current, TIMEZONE).format('dddd')
+
+    const currentLocal = moment.tz(rangeStart, adminTZ).startOf('day')
+    const limitLocal   = moment.tz(rangeEnd,   adminTZ).endOf('day')
+
+    while (currentLocal.isBefore(limitLocal)) {
+      const dayName = currentLocal.format('dddd')
       if (dayDoc.daysOfWeek.includes(dayName)) {
         for (let h = 0; h < 24; h++) {
-          const sliceStart = moment.tz(current, TIMEZONE).hour(h).toDate()
-          const sliceEnd = new Date(sliceStart.getTime() + 3600000)
+          const sliceStart = currentLocal.clone().hour(h)
+          const sliceEnd   = sliceStart.clone().add(1, 'hour')
           if (sliceEnd <= rangeStart || sliceStart >= rangeEnd) continue
-          if (isDayLevelExcepted(sliceStart, sliceEnd)) continue
-          slices.push([sliceStart, sliceEnd])
+          if (isDayLevelExcepted(sliceStart.toDate(), sliceEnd.toDate())) continue
+          slices.push([sliceStart.toDate(), sliceEnd.toDate()])
         }
       }
-      current.setDate(current.getDate() + 1)
+      currentLocal.add(1, 'day').startOf('day')
     }
     return mergeSlices(slices)
   }
@@ -409,7 +416,7 @@ export default function AdminBlockCalendar() {
       })
     })
 
-    // 2) Manual blocks
+    // 2) Manual blocks => background
     blocks.forEach((b) => {
       evts.push({
         id: b._id,
@@ -499,18 +506,19 @@ export default function AdminBlockCalendar() {
   }
 
   // ---------------------------------------------
-  // 11) Wrap handleBlock & handleUnblock to ensure chapel reference
+  // 11) Pass chapel.timezone so ManualBlockLogic interprets the selected range in local time
   // ---------------------------------------------
   function handleBlock(info, blocks, t, reloadFn) {
     if (!chapel) {
       alert('No chapel found. Cannot block.')
       return
     }
-    return rawHandleBlock(info, blocks, t, reloadFn, chapel._id, chapel.timezone)
+    return rawHandleBlock(info, blocks, t, reloadFn, chapel._id, adminTZ)
   }
 
   function handleUnblock(info, blocks, autoBlockRules, autoBlockDays, t, reloadFn) {
-    return rawHandleUnblock(info, blocks, autoBlockRules, autoBlockDays, t, reloadFn)
+    // If you want unblocking also to interpret local times in adminTZ, pass it:
+    return rawHandleUnblock(info, blocks, autoBlockRules, autoBlockDays, t, reloadFn, adminTZ)
   }
 
   // ---------------------------------------------
@@ -554,7 +562,7 @@ export default function AdminBlockCalendar() {
         onRemovePassword={handleRemovePassword}
       />
 
-      {/* Pass chapelId to AutoBlockControls for new or updated docs */}
+      {/* Auto-block config */}
       <AutoBlockControls
         chapelId={chapel?._id || null}
         autoBlockRules={autoBlockRules}
@@ -575,8 +583,8 @@ export default function AdminBlockCalendar() {
           momentPlugin,
           momentTimezonePlugin
         ]}
-        // Optional: pass chapel?.timezone if each chapel has its own time zone
-        timeZone={TIMEZONE}
+        // Use the chapel's actual time zone for the Admin UI
+        timeZone={adminTZ}
         initialView="timeGrid30Day"
         views={{
           timeGrid30Day: {
