@@ -1,9 +1,9 @@
-// Calendar.js
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
+import { useParams } from 'react-router-dom'
 import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
 import allLocales from '@fullcalendar/core/locales-all'
-import { TIMEZONE } from './config'
+import { TIMEZONE } from './config' // Fallback if chapel.timezone is missing
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -20,51 +20,43 @@ import { useLanguage } from './LanguageContext'
 
 Modal.setAppElement('#root')
 
-function getJerusalemNextHourMoment() {
-  const nowJer = moment.tz(TIMEZONE)
-  if (nowJer.minute() !== 0 || nowJer.second() !== 0) {
-    nowJer.add(1, 'hour').startOf('hour')
-  }
-  return nowJer
-}
-
-// --------------------
-// HELPER: exceptions
-// --------------------
-function isHourExcepted(exceptions = [], hStart, hEnd) {
-  const startJer = moment.tz(hStart, TIMEZONE)
-  const endJer   = moment.tz(hEnd, TIMEZONE)
-  const dateStr  = startJer.format('YYYY-MM-DD')
+/** [A] Check if a 1-hour slot is in timeExceptions */
+function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
+  const start = moment.tz(hStart, tz)
+  const end   = moment.tz(hEnd, tz)
+  const dateStr  = start.format('YYYY-MM-DD')
 
   return exceptions.some((ex) => {
     if (!ex.date) return false
+    // compare by date portion:
     if (ex.date.slice(0, 10) !== dateStr) return false
 
-    const exDay   = startJer.clone().startOf('day')
+    const exDay   = start.clone().startOf('day')
     const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
     const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
-
-    return startJer.isBefore(exEnd) && endJer.isAfter(exStart)
+    return start.isBefore(exEnd) && end.isAfter(exStart)
   })
 }
 
-function doesHourRuleCover(rule, hStart, hEnd) {
-  const startJer = moment.tz(hStart, TIMEZONE)
-  const endJer   = moment.tz(hEnd, TIMEZONE)
+/** [B] Does an hour-based rule cover the given 1-hour slot? */
+function doesHourRuleCover(rule, hStart, hEnd, tz) {
+  const s = moment.tz(hStart, tz)
+  const e = moment.tz(hEnd, tz)
+  const dayAnchor = s.clone().startOf('day')
+  const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
+  const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
 
-  const dayAnchor = startJer.clone().startOf('day')
-  const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-  const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
+  if (s.isBefore(rStart) || e.isAfter(rEnd)) return false
+  if (isHourExcepted(rule.timeExceptions, hStart, hEnd, tz)) return false
 
-  if (startJer.isBefore(rStart) || endJer.isAfter(rEnd)) return false
-  if (isHourExcepted(rule.timeExceptions, hStart, hEnd)) return false
   return true
 }
 
-function getHourRuleSlices(rule, viewStart, viewEnd) {
+/** [C] Build expansions from hour-based rule => background slices */
+function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   const slices = []
-  let dayCursor = moment.tz(viewStart, TIMEZONE).startOf('day')
-  const dayEnd  = moment.tz(viewEnd, TIMEZONE).endOf('day')
+  let dayCursor = moment.tz(viewStart, tz).startOf('day')
+  const dayEnd  = moment.tz(viewEnd,   tz).endOf('day')
 
   while (dayCursor.isSameOrBefore(dayEnd, 'day')) {
     for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
@@ -74,7 +66,7 @@ function getHourRuleSlices(rule, viewStart, viewEnd) {
       if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
         continue
       }
-      if (isHourExcepted(rule.timeExceptions, sliceStart.toDate(), sliceEnd.toDate())) {
+      if (isHourExcepted(rule.timeExceptions, sliceStart.toDate(), sliceEnd.toDate(), tz)) {
         continue
       }
       slices.push([sliceStart.toDate(), sliceEnd.toDate()])
@@ -84,12 +76,12 @@ function getHourRuleSlices(rule, viewStart, viewEnd) {
   return mergeSlices(slices)
 }
 
-// Day-based rules
-function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
+/** [D] Build expansions from day-based doc => background slices */
+function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
   if (!dayDoc?.daysOfWeek?.length) return []
   const slices = []
-  let current = moment.tz(viewStart, TIMEZONE).startOf('day')
-  const limit = moment.tz(viewEnd, TIMEZONE).endOf('day')
+  let current = moment.tz(viewStart, tz).startOf('day')
+  const limit = moment.tz(viewEnd,   tz).endOf('day')
 
   while (current.isBefore(limit)) {
     const dayName = current.format('dddd')
@@ -97,11 +89,10 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
       for (let h = 0; h < 24; h++) {
         const sliceStart = current.clone().hour(h)
         const sliceEnd   = sliceStart.clone().add(1, 'hour')
-
         if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
           continue
         }
-        if (isHourExcepted(dayDoc.timeExceptions, sliceStart.toDate(), sliceEnd.toDate())) {
+        if (isHourExcepted(dayDoc.timeExceptions, sliceStart.toDate(), sliceEnd.toDate(), tz)) {
           continue
         }
         slices.push([sliceStart.toDate(), sliceEnd.toDate()])
@@ -112,6 +103,7 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd) {
   return mergeSlices(slices)
 }
 
+/** [E] Merge 1-hour slices */
 function mergeSlices(slices) {
   if (!slices.length) return []
   slices.sort((a, b) => a[0] - b[0])
@@ -119,6 +111,7 @@ function mergeSlices(slices) {
   for (let i = 1; i < slices.length; i++) {
     const prev = merged[merged.length - 1]
     const curr = slices[i]
+    // If contiguous, merge them:
     if (prev[1].getTime() === curr[0].getTime()) {
       prev[1] = curr[1]
     } else {
@@ -128,13 +121,13 @@ function mergeSlices(slices) {
   return merged
 }
 
-// Build background events for day-based & hour-based
-function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, viewEnd) {
+/** [F] Build background events from day/hour auto-block expansions */
+function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, viewEnd, tz) {
   const events = []
 
-  // day-based expansions
+  // Day-based expansions
   if (autoBlockDaysDoc) {
-    const daySlices = getDayBlockSlices(autoBlockDaysDoc, viewStart, viewEnd)
+    const daySlices = getDayBlockSlices(autoBlockDaysDoc, viewStart, viewEnd, tz)
     daySlices.forEach(([s, e]) => {
       events.push({
         id: `auto-day-${autoBlockDaysDoc._id}-${s.toISOString()}`,
@@ -146,9 +139,9 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
     })
   }
 
-  // hour-based expansions
+  // Hour-based expansions
   autoBlockHours.forEach((rule) => {
-    const hourSlices = getHourRuleSlices(rule, viewStart, viewEnd)
+    const hourSlices = getHourRuleSlices(rule, viewStart, viewEnd, tz)
     hourSlices.forEach(([s, e]) => {
       events.push({
         id: `auto-hour-${rule._id}-${s.toISOString()}`,
@@ -159,220 +152,248 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
       })
     })
   })
-
   return events
 }
 
 export default function Calendar() {
+  const { chapelSlug } = useParams()
   const { language } = useLanguage()
   const t = useTranslate()
 
-  // ---------------------------------------------------------------------
-  // [1] Password gate hooks
-  // ---------------------------------------------------------------------
+  // Chapel, password
+  const [chapel, setChapel] = useState(null)
+  const [calendarPasswordDocId, setCalendarPasswordDocId] = useState(null)
   const [calendarPassword, setCalendarPassword] = useState('')
   const [enteredPw, setEnteredPw] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
 
-  useEffect(() => {
-    const fetchPassword = async () => {
-      try {
-        const result = await client.fetch(`*[_type == "calendarPassword"][0]{password}`)
-        const pw = result?.password || ''
+  // Data
+  const [events, setEvents] = useState([])
+  const [blockedTimes, setBlockedTimes] = useState([])
+  const [autoBlockHours, setAutoBlockHours] = useState([])
+  const [autoBlockDays, setAutoBlockDays] = useState(null)
+  const [pastBlockEvent, setPastBlockEvent] = useState(null)
 
-        setCalendarPassword(pw)
+  // UI
+  const calendarRef = useRef(null)
+  const platformDelay = isIOS ? 85 : 47
+  const [modalIsOpen, setModalIsOpen] = useState(false)
+  const [selectedInfo, setSelectedInfo] = useState(null)
+  const [formData, setFormData] = useState({ name: '', phone: '' })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-        // If there's no password in Sanity, just unlock
-        if (!pw) {
-          setIsUnlocked(true)
-          return
-        }
+  // ---- Use the chapel timezone if available, else fallback
+  const activeTZ = chapel?.timezone || TIMEZONE
 
-        // Otherwise check localStorage
-        const cachedPw = localStorage.getItem('calendarUserPw')
+  // 1) Fetch data
+  const fetchData = useCallback(async () => {
+    try {
+      // 1) Chapel doc
+      const chapelDoc = await client.fetch(
+        `*[_type == "chapel" && slug.current == $slug][0]`,
+        { slug: chapelSlug }
+      )
+      if (!chapelDoc) {
+        console.warn('No chapel found for slug:', chapelSlug)
+        return
+      }
+      setChapel(chapelDoc)
+
+      // 2) password doc
+      const pwDoc = await client.fetch(
+        `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{
+          _id,
+          password
+        }`,
+        { chapelId: chapelDoc._id }
+      )
+      const pw = pwDoc?.password || ''
+      setCalendarPassword(pw)
+      setCalendarPasswordDocId(pwDoc?._id || null)
+
+      // If no password, or localStorage has the correct one => unlocked
+      if (!pw) {
+        setIsUnlocked(true)
+      } else {
+        const cachedPw = localStorage.getItem(`calendarUserPw-${chapelDoc._id}`)
         if (cachedPw && cachedPw === pw) {
           setIsUnlocked(true)
         }
-      } catch (err) {
-        console.error('Failed to fetch password:', err)
-        // fallback: unlock if fetch fails
-        setIsUnlocked(true)
       }
-    }
-    fetchPassword()
-  }, [])
 
-  const handleCheckPassword = () => {
+      // 3) reservations, blocks, autoBlocks
+      const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
+        client.fetch(
+          `*[_type=="reservation" && chapel._ref == $chapelId]{_id, name, phone, start, end}`,
+          { chapelId: chapelDoc._id }
+        ),
+        client.fetch(
+          `*[_type=="blocked" && chapel._ref == $chapelId]{_id, start, end}`,
+          { chapelId: chapelDoc._id }
+        ),
+        client.fetch(
+          `*[_type=="autoBlockedHours" && chapel._ref == $chapelId]{
+            _id,
+            startHour,
+            endHour,
+            timeExceptions[]{ date, startHour, endHour }
+          }`,
+          { chapelId: chapelDoc._id }
+        ),
+        client.fetch(
+          `*[_type=="autoBlockedDays" && chapel._ref == $chapelId]{
+            _id,
+            daysOfWeek,
+            timeExceptions[]{ date, startHour, endHour }
+          }`,
+          { chapelId: chapelDoc._id }
+        )
+      ])
+
+      setEvents(
+        resData.map((r) => ({
+          id: r._id,
+          title: r.name,
+          start: r.start,
+          end: r.end
+        }))
+      )
+      setBlockedTimes(
+        blocksData.map((b) => ({ _id: b._id, start: b.start, end: b.end }))
+      )
+      setAutoBlockHours(hourRules)
+      if (daysDocs.length) {
+        setAutoBlockDays(daysDocs[0])
+      }
+    } catch (err) {
+      console.error('Error fetching chapel-based data:', err)
+    }
+  }, [chapelSlug])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  // 2) Check password
+  function handleCheckPassword() {
     if (enteredPw === calendarPassword) {
       setIsUnlocked(true)
-      // Store the correct password in localStorage
-      localStorage.setItem('calendarUserPw', enteredPw)
+      if (chapel?._id) {
+        localStorage.setItem(`calendarUserPw-${chapel._id}`, enteredPw)
+      }
     } else {
       alert('Incorrect password')
       setEnteredPw('')
     }
   }
 
-  // ---------------------------------------------------------------------
-  // [2] Calendar logic & data Hooks
-  // ---------------------------------------------------------------------
-  const [events, setEvents] = useState([])
-  const [blockedTimes, setBlockedTimes] = useState([])
-  const [autoBlockHours, setAutoBlockHours] = useState([])
-  const [autoBlockDays, setAutoBlockDays] = useState(null)
-  const [pastBlockEvent, setPastBlockEvent] = useState(null)
-  const [modalIsOpen, setModalIsOpen] = useState(false)
-  const [selectedInfo, setSelectedInfo] = useState(null)
-  const [formData, setFormData] = useState({ name: '', phone: '' })
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const calendarRef = useRef(null)
-  const platformDelay = isIOS ? 85 : 47
-
-  // Fetch data only if unlocked
+  // 3) Past-block overlay: block everything up to "now"
   useEffect(() => {
-    if (!isUnlocked) return
-
-    // a) Reservations
-    client
-      .fetch(`*[_type == "reservation"]{_id, name, phone, start, end}`)
-      .then((data) => {
-        const parsed = data.map((res) => ({
-          id: res._id,
-          title: res.name,
-          start: res.start,
-          end: res.end
-        }))
-        setEvents(parsed)
-      })
-      .catch((err) => console.error('Error fetching reservations:', err))
-
-    // b) Manual blocks
-    client
-      .fetch(`*[_type == "blocked"]{_id, start, end}`)
-      .then((data) => {
-        const blocks = data.map((item) => ({
-          _id: item._id,
-          start: item.start,
-          end: item.end
-        }))
-        setBlockedTimes(blocks)
-      })
-      .catch((err) => console.error('Error fetching blocked times:', err))
-
-    // c) Hour-based autoBlock
-    client
-      .fetch(`*[_type == "autoBlockedHours"]{
-        _id,
-        startHour,
-        endHour,
-        timeExceptions[]{ date, startHour, endHour }
-      }`)
-      .then((rules) => setAutoBlockHours(rules))
-      .catch((err) => console.error('Error fetching auto-block hours:', err))
-
-    // d) Day-based autoBlock
-    client
-      .fetch(`*[_type == "autoBlockedDays"]{
-        _id,
-        daysOfWeek,
-        timeExceptions[]{ date, startHour, endHour }
-      }`)
-      .then((daysDocs) => {
-        if (daysDocs.length) {
-          setAutoBlockDays(daysDocs[0])
-        }
-      })
-      .catch((err) => console.error('Error fetching autoBlockedDays:', err))
-  }, [isUnlocked])
-
-  // Past-block overlay
-  useEffect(() => {
-    if (!isUnlocked) return
-
     function updatePastBlockEvent() {
-      const nowJer = moment.tz(TIMEZONE)
-      const startOfTodayJer = nowJer.clone().startOf('day')
+      // Example: block from 7 days ago to "now"
+      const now = moment.tz(activeTZ)
+      const startOfRange = now.clone().subtract(7, 'days').startOf('day')
       setPastBlockEvent({
         id: 'past-block',
-        start: startOfTodayJer.toISOString(),
-        end: nowJer.toISOString(),
+        start: startOfRange.toISOString(),
+        end: now.toISOString(),
         display: 'background',
         color: '#ffcccc'
       })
     }
-
     updatePastBlockEvent()
     const interval = setInterval(updatePastBlockEvent, 60 * 1000)
     return () => clearInterval(interval)
-  }, [isUnlocked])
+  }, [activeTZ])
 
-  // ---------------------------------------------------------------------
-  // Utility checks
-  // ---------------------------------------------------------------------
+  // 4) isTimeBlockedByManual / isTimeBlockedByAuto / isSlotReserved
   function isTimeBlockedByManual(start, end) {
-    const sJer = moment.tz(start, TIMEZONE)
-    const eJer = moment.tz(end, TIMEZONE)
+    const s = moment.tz(start, activeTZ)
+    const e = moment.tz(end, activeTZ)
     return blockedTimes.some((b) => {
-      const bStart = moment.tz(b.start, TIMEZONE)
-      const bEnd   = moment.tz(b.end, TIMEZONE)
-      return sJer.isBefore(bEnd) && eJer.isAfter(bStart)
+      const bStart = moment.tz(b.start, activeTZ)
+      const bEnd   = moment.tz(b.end, activeTZ)
+      return s.isBefore(bEnd) && e.isAfter(bStart)
     })
   }
 
   function isTimeBlockedByAuto(start, end) {
-    // day-based
-    if (autoBlockDays && autoBlockDays.daysOfWeek?.length) {
-      if (isDayCovered(autoBlockDays, start, end)) {
-        return true
+    // Day-based
+    if (autoBlockDays?.daysOfWeek?.length) {
+      const dayName = moment.tz(start, activeTZ).format('dddd')
+      if (autoBlockDays.daysOfWeek.includes(dayName)) {
+        if (!isHourExcepted(autoBlockDays.timeExceptions, start, end, activeTZ)) {
+          return true
+        }
       }
     }
-    // hour-based
-    return autoBlockHours.some((rule) => doesHourRuleCover(rule, start, end))
-  }
-
-  function isDayCovered(dayDoc, hStart, hEnd) {
-    const dayName = moment.tz(hStart, TIMEZONE).format('dddd')
-    if (!dayDoc.daysOfWeek?.includes(dayName)) return false
-    if (isHourExcepted(dayDoc.timeExceptions || [], hStart, hEnd)) {
-      return false
-    }
-    return true
+    // Hour-based
+    return autoBlockHours.some((rule) =>
+      doesHourRuleCover(rule, start, end, activeTZ)
+    )
   }
 
   function isSlotReserved(slotStart, slotEnd) {
-    const sJer = moment.tz(slotStart, TIMEZONE)
-    const eJer = moment.tz(slotEnd, TIMEZONE)
+    const s = moment.tz(slotStart, activeTZ)
+    const e = moment.tz(slotEnd,   activeTZ)
     return events.some((evt) => {
-      if (
-        evt.id.startsWith('auto-') ||
-        evt.id.startsWith('blocked-') ||
-        evt.id === 'past-block'
-      ) {
+      // Skip background or special "past-block"
+      if (evt.id.startsWith('auto-') || evt.id.startsWith('blocked-') || evt.id === 'past-block') {
         return false
       }
-      const evtStart = moment.tz(evt.start, TIMEZONE)
-      const evtEnd   = moment.tz(evt.end, TIMEZONE)
-      return sJer.isBefore(evtEnd) && eJer.isAfter(evtStart)
+      const evtStart = moment.tz(evt.start, activeTZ)
+      const evtEnd   = moment.tz(evt.end,   activeTZ)
+      return s.isBefore(evtEnd) && e.isAfter(evtStart)
     })
   }
 
-  // ---------------------------------------------------------------------
-  // Calendar interactions
-  // ---------------------------------------------------------------------
-  const handleSelect = (info) => {
+  // 5) On user select => open reservation form if not blocked/past/reserved
+  function handleSelect(info) {
     if (!isUnlocked) return
+
     const { startStr, endStr } = info
+    const now = moment.tz(activeTZ)
+    const slotStart = moment.tz(startStr, activeTZ)
+
+    // If in the past => disallow
+    if (slotStart.isBefore(now)) return
+    // If blocked or reserved => disallow
     if (isTimeBlockedByManual(startStr, endStr)) return
     if (isTimeBlockedByAuto(startStr, endStr)) return
     if (isSlotReserved(startStr, endStr)) return
 
+    // Otherwise open the form
     setSelectedInfo({ start: startStr, end: endStr })
     setModalIsOpen(true)
   }
 
-  const handleSubmit = async (e) => {
+  // 6) Format the selected time for the modal
+  function formatSelectedTime() {
+    if (!selectedInfo) return ''
+    const calendarApi = calendarRef.current?.getApi()
+    if (!calendarApi) return ''
+
+    // Using FullCalendar's formatDate with the real activeTZ
+    const startTxt = calendarApi.formatDate(selectedInfo.start, {
+      timeZone: activeTZ,
+      hour: 'numeric',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      weekday: 'long'
+    })
+    const endTxt = calendarApi.formatDate(selectedInfo.end, {
+      timeZone: activeTZ,
+      hour: 'numeric'
+    })
+    return `${startTxt} - ${endTxt}`
+  }
+
+  // 7) Create reservation doc
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!formData.name || !formData.phone || !selectedInfo) return
+
     try {
       setIsSubmitting(true)
       const reservationDoc = {
@@ -382,6 +403,10 @@ export default function Calendar() {
         start: selectedInfo.start,
         end: selectedInfo.end
       }
+      if (chapel?._id) {
+        reservationDoc.chapel = { _ref: chapel._id, _type: 'reference' }
+      }
+
       const created = await client.create(reservationDoc)
       setEvents((prev) => [
         ...prev,
@@ -409,36 +434,16 @@ export default function Calendar() {
     }
   }
 
-  const formatSelectedTime = () => {
-    if (!selectedInfo) return ''
-    const calendarApi = calendarRef.current?.getApi()
-    if (!calendarApi) return ''
-    const startTxt = calendarApi.formatDate(selectedInfo.start, {
-      timeZone: TIMEZONE,
-      hour: 'numeric',
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      weekday: 'long'
-    })
-    const endTxt = calendarApi.formatDate(selectedInfo.end, {
-      timeZone: TIMEZONE,
-      hour: 'numeric'
-    })
-    return `${startTxt} - ${endTxt}`
-  }
-
+  // 8) "loadEvents" merges reservations, blocks, auto-block expansions, past-block
   function loadEvents(fetchInfo, successCallback) {
     if (!isUnlocked) {
-      // Return no events if locked
       successCallback([])
       return
     }
-
     const { start, end } = fetchInfo
     const loaded = []
 
-    // A) Normal reservations
+    // A) Reservations
     events.forEach((evt) => {
       loaded.push({
         id: evt.id,
@@ -452,7 +457,7 @@ export default function Calendar() {
     // B) Manual blocks => background
     blockedTimes.forEach((b, i) => {
       loaded.push({
-        id: `blocked-${i}`,
+        id: `blocked-${b._id || i}`,
         start: b.start,
         end: b.end,
         display: 'background',
@@ -460,9 +465,9 @@ export default function Calendar() {
       })
     })
 
-    // C) Build day+hour auto-block expansions => background
-    const autoEvents = buildAutoBlockAllEvents(autoBlockHours, autoBlockDays, start, end)
-    loaded.push(...autoEvents)
+    // C) day/hour expansions
+    const autoEvts = buildAutoBlockAllEvents(autoBlockHours, autoBlockDays, start, end, activeTZ)
+    loaded.push(...autoEvts)
 
     // D) Past-block overlay
     if (pastBlockEvent) {
@@ -472,15 +477,43 @@ export default function Calendar() {
     successCallback(loaded)
   }
 
-  // ---------------------------------------------------------------------
-  // Render: Password locked vs. Calendar
-  // ---------------------------------------------------------------------
+  // 9) We also disallow selecting any blocked or past times in selectAllow
+  function selectAllow(selectInfo) {
+    const now = moment.tz(activeTZ)
+    const start = moment.tz(selectInfo.startStr, activeTZ)
+    const end   = moment.tz(selectInfo.endStr,   activeTZ)
+
+    if (start.isBefore(now)) return false
+    if (isTimeBlockedByManual(start, end)) return false
+    if (isTimeBlockedByAuto(start, end)) return false
+    if (isSlotReserved(start, end)) return false
+
+    return true
+  }
+
+  // 10) validRange
+  const now = moment.tz(activeTZ)
+  const validRangeStart = now.clone().subtract(7, 'days').startOf('day')
+  const validRangeEnd   = now.clone().add(30, 'days').endOf('day')
+
   return (
     <>
-      {/* If locked, show password UI */}
+      {/* If not unlocked => show password screen */}
       {!isUnlocked ? (
         <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <h2>Enter Calendar Password</h2>
+          <h2>
+            {chapel
+              ? t({
+                  en: `Enter password for chapel: ${chapel.name}`,
+                  de: `Passwort für Kapelle ${chapel.name} eingeben`,
+                  es: `Ingrese la contraseña para la capilla: ${chapel.name}`
+                })
+              : t({
+                  en: 'Enter Calendar Password',
+                  de: 'Kalender-Passwort eingeben',
+                  es: 'Ingrese la contraseña del calendario'
+                })}
+          </h2>
           <input
             type="password"
             value={enteredPw}
@@ -489,173 +522,100 @@ export default function Calendar() {
             style={{ padding: '8px', marginBottom: '1rem', width: '200px' }}
           />
           <br />
-          <button onClick={handleCheckPassword}>Submit</button>
+          <button onClick={handleCheckPassword}>
+            {t({
+              en: 'Submit',
+              de: 'Abschicken',
+              es: 'Enviar'
+            })}
+          </button>
         </div>
       ) : (
-        // If unlocked, show full Calendar
         <>
-          {/* 1) Static image */}
-          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-            <img
-              src="/assets/ladyofgrace.png"
-              alt="Legio Fidelis"
-              style={{
-                maxWidth: '80px',
-                marginBottom: '0.4rem',
-                display: 'block',
-                marginLeft: 'auto',
-                marginRight: 'auto'
-              }}
-            />
-          </div>
-
-          {/* 2) Sticky Connect text */}
-          <div className="sticky-connect">
-            <div
-              style={{
-                fontSize: '1.15rem',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: '0.4rem'
-              }}
-            >
-              <span>Connect</span>
-              <a
-                href="https://instagram.com/legio.fidelis"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  textDecoration: 'none',
-                  color: 'inherit',
-                  fontWeight: 'bold',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem'
-                }}
-              >
-                <img
-                  src="/assets/instagram.png"
-                  alt="Instagram"
-                  style={{
-                    width: '30px',
-                    height: '30px',
-                    objectFit: 'contain',
-                    verticalAlign: 'middle'
-                  }}
-                />
-                <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
-              </a>
+          {chapel && (
+            <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.8rem' }}>
+                {t({
+                  en: `Public Calendar for ${chapel.name}`,
+                  de: `Öffentlicher Kalender für ${chapel.name}`,
+                  es: `Calendario público para ${chapel.name}`
+                })}
+              </h2>
             </div>
-          </div>
+          )}
 
-          {/* 3) The FullCalendar */}
-          <div>
-            <FullCalendar
-              ref={calendarRef}
-              locales={allLocales}
-              locale={
-                language === 'de'
-                  ? 'de'
-                  : language === 'es'
-                  ? 'es'
-                  : 'en'
+          <FullCalendar
+            ref={calendarRef}
+            locales={allLocales}
+            slotLabelFormat={(dateInfo) => moment(dateInfo.date).format('h A')}
+            plugins={[
+              timeGridPlugin,
+              scrollGridPlugin,
+              interactionPlugin,
+              momentPlugin,
+              momentTimezonePlugin
+            ]}
+            locale={language === 'de' ? 'de' : language === 'es' ? 'es' : 'en'}
+            timeZone={activeTZ}
+            initialView="timeGrid30Day"
+            views={{
+              timeGrid30Day: {
+                type: 'timeGrid',
+                duration: { days: 30 },
+                dayCount: 30,
+                buttonText: '30 days'
               }
-              slotLabelFormat={(dateInfo) => moment(dateInfo.date).format('h A')}
-              plugins={[
-                timeGridPlugin,
-                scrollGridPlugin,
-                interactionPlugin,
-                momentPlugin,
-                momentTimezonePlugin
-              ]}
-              timeZone={TIMEZONE}
-              initialView="timeGrid30Day"
-              views={{
-                timeGrid30Day: {
-                  type: 'timeGrid',
-                  duration: { days: 30 },
-                  dayCount: 30,
-                  buttonText: '30 days'
-                }
-              }}
-              dayMinWidth={200}
-              dayHeaderFormat={{
-                weekday: 'short',
-                month: 'numeric',
-                day: 'numeric',
-                omitCommas: true
-              }}
-              stickyHeaderDates
-              stickyFooterScrollbar={false}
-              longPressDelay={platformDelay}
-              selectLongPressDelay={platformDelay}
-              eventLongPressDelay={platformDelay}
-              selectable
-              themeSystem="standard"
-              validRange={{
-                start: moment().tz(TIMEZONE).subtract(7, 'days').format(),
-                end: moment().tz(TIMEZONE).add(30, 'days').format()
-              }}
-              events={loadEvents}
-              select={handleSelect}
-              selectAllow={(selectInfo) => {
-                const selStart = moment.tz(selectInfo.startStr, TIMEZONE)
-                const selEnd   = moment.tz(selectInfo.endStr, TIMEZONE)
+            }}
+            dayMinWidth={200}
+            dayHeaderFormat={{
+              weekday: 'short',
+              month: 'numeric',
+              day: 'numeric',
+              omitCommas: true
+            }}
+            stickyHeaderDates
+            stickyFooterScrollbar={false}
+            longPressDelay={platformDelay}
+            selectLongPressDelay={platformDelay}
+            eventLongPressDelay={platformDelay}
+            selectable
+            selectAllow={selectAllow}
+            select={handleSelect}
+            validRange={{
+              start: validRangeStart.format(),
+              end: validRangeEnd.format()
+            }}
+            events={loadEvents}
+            allDaySlot={false}
+            slotDuration="01:00:00"
+            slotMinTime="00:00:00"
+            slotMaxTime="24:00:00"
+            headerToolbar={{
+              left: 'prev,next',
+              center: 'title',
+              right: ''
+            }}
+            eventClassNames={(arg) => {
+              // If it's a background event => "cursor-not-allowed"
+              if (arg.event.display === 'background') {
+                return ['cursor-not-allowed']
+              }
+              return []
+            }}
+            eventContent={(arg) => {
+              // Hide label for background or past-block
+              if (
+                arg.event.id.startsWith('blocked-') ||
+                arg.event.id.startsWith('auto-') ||
+                arg.event.id === 'past-block'
+              ) {
+                return null
+              }
+              return <div>{arg.event.title}</div>
+            }}
+            height="auto"
+          />
 
-                const nextHour = getJerusalemNextHourMoment()
-                if (selStart.isBefore(nextHour)) return false
-
-                if (isTimeBlockedByManual(selStart, selEnd)) return false
-                if (isTimeBlockedByAuto(selStart, selEnd)) return false
-                if (isSlotReserved(selStart, selEnd)) return false
-
-                const duration = selEnd.diff(selStart, 'hours', true)
-                const isExactlyOneHour = duration === 1
-
-                let sameDay = selStart.isSame(selEnd, 'day')
-                if (!sameDay && isExactlyOneHour) {
-                  // crossing midnight edge-case
-                  if (
-                    selEnd.hour() === 0 &&
-                    selEnd.minute() === 0 &&
-                    selEnd.second() === 0
-                  ) {
-                    sameDay = true
-                  }
-                }
-                return sameDay && isExactlyOneHour
-              }}
-              allDaySlot={false}
-              slotDuration="01:00:00"
-              slotMinTime="00:00:00"
-              slotMaxTime="24:00:00"
-              headerToolbar={{
-                left: 'prev,next',
-                center: 'title',
-                right: ''
-              }}
-              slotLaneClassNames={(arg) => {
-                if (arg.date.getDay() === 0) {
-                  return ['fc-sunday-col']
-                }
-                return []
-              }}
-              eventContent={(arg) => {
-                if (
-                  arg.event.id.startsWith('blocked-') ||
-                  arg.event.id === 'past-block' ||
-                  arg.event.id.startsWith('auto-')
-                ) {
-                  return null
-                }
-                return <div>{arg.event.title}</div>
-              }}
-              height="auto"
-            />
-          </div>
-
-          {/* Reservation modal */}
           <Modal
             isOpen={modalIsOpen}
             onRequestClose={() => {
@@ -691,41 +651,31 @@ export default function Calendar() {
               })}
             </h2>
             <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>
-              {formatSelectedTime()}
+              {selectedInfo ? formatSelectedTime() : ''}
             </p>
             <form onSubmit={handleSubmit}>
               <label>
-                {t({
-                  en: 'Name:',
-                  de: 'Name:',
-                  es: 'Nombre:'
-                })}
+                {t({ en: 'Name:', de: 'Name:', es: 'Nombre:' })}
               </label>
               <input
                 type="text"
                 value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
                 style={{ width: '100%', marginBottom: '10px', padding: '6px' }}
               />
+
               <label>
-                {t({
-                  en: 'Phone:',
-                  de: 'Telefon:',
-                  es: 'Teléfono:'
-                })}
+                {t({ en: 'Phone:', de: 'Telefon:', es: 'Teléfono:' })}
               </label>
               <input
                 type="tel"
                 value={formData.phone}
-                onChange={(e) =>
-                  setFormData({ ...formData, phone: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 required
                 style={{ width: '100%', marginBottom: '20px', padding: '6px' }}
               />
+
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <button
                   type="submit"
@@ -744,15 +694,8 @@ export default function Calendar() {
                         es: 'Reservar'
                       })}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setModalIsOpen(false)}
-                >
-                  {t({
-                    en: 'Cancel',
-                    de: 'Abbrechen',
-                    es: 'Cancelar'
-                  })}
+                <button type="button" onClick={() => setModalIsOpen(false)}>
+                  {t({ en: 'Cancel', de: 'Abbrechen', es: 'Cancelar' })}
                 </button>
               </div>
             </form>

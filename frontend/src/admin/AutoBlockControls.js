@@ -3,8 +3,6 @@ import React, { useEffect, useState } from 'react'
 import Modal from 'react-modal'
 import moment from 'moment-timezone'
 import client from '../utils/sanityClient.js'
-
-// Import your language/translation hooks
 import { useLanguage } from '../LanguageContext'
 import useTranslate from '../useTranslate'
 
@@ -48,8 +46,7 @@ function format24HourTo12(hourStr) {
 }
 
 // ---------------------------------------------------------------------
-// We keep doc keys in English (Sunday, Monday, etc.)
-// but now show Spanish as well if language === "es".
+// Day toggles in multiple languages
 // ---------------------------------------------------------------------
 const DAY_TOGGLES = [
   {
@@ -118,9 +115,10 @@ const DAY_TOGGLES = [
 ]
 
 // ---------------------------------------------------------------------
-// AUTO-BLOCK CONTROLS COMPONENT
+// AUTO-BLOCK CONTROLS
 // ---------------------------------------------------------------------
 export function AutoBlockControls({
+  chapelId,          // <--- NEW: pass from AdminBlockCalendar
   autoBlockRules,
   setAutoBlockRules,
   autoBlockDays,
@@ -170,10 +168,11 @@ export function AutoBlockControls({
   const isAddDisabled = !startHour || !endHour
 
   async function handleAddRule() {
-    if (isAddDisabled) return
+    if (isAddDisabled || !chapelId) return
     try {
       const doc = {
         _type: 'autoBlockedHours',
+        chapel: { _ref: chapelId, _type: 'reference' }, // <--- attach the chapel reference
         startHour,
         endHour,
         timeExceptions: []
@@ -251,11 +250,18 @@ export function AutoBlockControls({
 
   // Save doc to Sanity
   async function saveDaysToSanity(daysArr, newlyAddedDays = []) {
+    if (!chapelId) {
+      alert('No chapelId found—cannot save day-block settings.')
+      return
+    }
+
     try {
-      const docId = autoBlockDays?._id || 'autoBlockedDaysSingleton'
+      // If no doc exists yet, we can create one with a custom ID or let Sanity generate
+      const docId = autoBlockDays?._id || `autoBlockedDays-${chapelId}`
       const docToSave = {
         _id: docId,
         _type: 'autoBlockedDays',
+        chapel: { _ref: chapelId, _type: 'reference' }, // attach chapel
         daysOfWeek: daysArr,
         timeExceptions: autoBlockDays?.timeExceptions || []
       }
@@ -264,6 +270,7 @@ export function AutoBlockControls({
       if (newlyAddedDays.length && docToSave.timeExceptions?.length) {
         const filteredEx = docToSave.timeExceptions.filter((ex) => {
           if (!ex.date) return true
+          // e.g. we assume your TIMEZONE or "Asia/Jerusalem"
           const exDayName = moment.tz(ex.date, 'Asia/Jerusalem').format('dddd')
           // if it's a newly added day, remove that exception
           if (newlyAddedDays.includes(exDayName)) {
@@ -274,7 +281,8 @@ export function AutoBlockControls({
         docToSave.timeExceptions = filteredEx
       }
 
-      await client.createOrReplace(docToSave)
+      const result = await client.createOrReplace(docToSave)
+      setAutoBlockDays(result)
       reloadData()
     } catch (err) {
       console.error('Error saving day-block doc:', err)
@@ -539,7 +547,6 @@ export function AutoBlockControls({
 
       {showDays && (
         <div>
-          {/* Show existing days as chips */}
           <div style={{ margin: '0.5rem 0' }}>
             {!autoBlockDays?.daysOfWeek || autoBlockDays.daysOfWeek.length === 0 ? (
               <em>
@@ -551,9 +558,7 @@ export function AutoBlockControls({
               </em>
             ) : (
               autoBlockDays.daysOfWeek.map((day) => {
-                // find matching day object
                 const toggleObj = DAY_TOGGLES.find((x) => x.docKey === day)
-                // label for the chip
                 let shortLabel = day
                 if (toggleObj) {
                   if (language === 'de') shortLabel = toggleObj.shortDe
@@ -582,7 +587,6 @@ export function AutoBlockControls({
             )}
           </div>
 
-          {/* Button => opens modal with toggles */}
           <button
             onClick={() => setDaysModalOpen(true)}
             style={{

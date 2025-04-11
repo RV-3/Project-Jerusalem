@@ -1,8 +1,9 @@
-// CalendarPasswordPanel.js
 import React, { useState } from 'react'
-import useTranslate from '../useTranslate' // adjust this import if needed
+import useTranslate from '../useTranslate' // adjust path if needed
 
 export default function CalendarPasswordPanel({
+  chapelId,
+  existingPasswordDocId,
   currentCalendarPassword,
   onSavePassword,
   onRemovePassword
@@ -23,7 +24,8 @@ export default function CalendarPasswordPanel({
       )
       return
     }
-    onSavePassword(newPassword)
+    // Pass chapelId and docId so parent can do createOrReplace:
+    onSavePassword(newPassword, chapelId, existingPasswordDocId)
     setNewPassword('')
   }
 
@@ -127,7 +129,7 @@ export default function CalendarPasswordPanel({
             {currentCalendarPassword && (
               <button
                 className="modern-button modern-button--danger"
-                onClick={onRemovePassword}
+                onClick={() => onRemovePassword(chapelId, existingPasswordDocId)}
               >
                 {t({ en: 'Remove', de: 'Entfernen', es: 'Eliminar' })}
               </button>
