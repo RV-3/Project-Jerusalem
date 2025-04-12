@@ -1,5 +1,4 @@
 // WelcomePage.js
-
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Modal from 'react-modal'
@@ -22,9 +21,7 @@ function useIsMobile(breakpoint = 768) {
       setIsMobile(window.innerWidth <= breakpoint)
     }
     window.addEventListener('resize', handleResize)
-    return () => {
-      window.removeEventListener('resize', handleResize)
-    }
+    return () => window.removeEventListener('resize', handleResize)
   }, [breakpoint])
 
   return isMobile
@@ -129,10 +126,11 @@ export default function WelcomePage() {
               fontSize: '1rem',
               outline: 'none',
 
-              // Horizontal expand/collapse based on screen + menuOpen
+              // Collapsed ~20% bigger than before,
+              // Expanded back to original
               width: menuOpen
-                ? isMobile ? '160px' : '120px'
-                : isMobile ? '60px' : '48px',
+                ? (isMobile ? '160px' : '120px') // original expanded
+                : (isMobile ? '72px' : '58px'),  // 20% bigger collapsed
               transition: 'width 0.3s ease'
             }}
           >
