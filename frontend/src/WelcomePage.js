@@ -14,7 +14,7 @@ import {
 Modal.setAppElement('#root')
 
 /**
- * (Optional) Hook if you want bigger icons on small screens.
+ * (Optional) Hook if you want bigger icons on small screens
  */
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(
@@ -35,12 +35,12 @@ function useIsMobile(breakpoint = 768) {
 export default function WelcomePage() {
   const [chapels, setChapels] = useState([])
   const [selectedChapel, setSelectedChapel] = useState(null)
-  const [sidebarOpen, setSidebarOpen] = useState(false) // slide‐out state
+  const [sidebarOpen, setSidebarOpen] = useState(false) // Slide‐out state
 
   const isMobile = useIsMobile(768)
 
   useEffect(() => {
-    // Fetch chapel data from Sanity
+    // Fetch chapel data
     client
       .fetch(`*[_type == "chapel"]{
         name,
@@ -58,7 +58,6 @@ export default function WelcomePage() {
       .catch((err) => console.error('Error fetching chapels:', err))
   }, [])
 
-  // Helper to parse block-based description arrays
   function parseDescription(blocks) {
     if (!blocks || !Array.isArray(blocks)) return ''
     return blocks
@@ -69,7 +68,6 @@ export default function WelcomePage() {
       .join('\n\n')
   }
 
-  // Build WhatsApp link
   function getWhatsappLink(num) {
     if (!num || !num.trim()) {
       return 'https://wa.me/0000000000'
@@ -78,7 +76,6 @@ export default function WelcomePage() {
     return `https://wa.me/${cleaned}`
   }
 
-  // Chapel info for modal
   let displayedDesc = ''
   let whatsappLink = ''
   let chapelImageUrl = ''
@@ -88,12 +85,13 @@ export default function WelcomePage() {
     chapelImageUrl = selectedChapel.chapelImage?.asset?.url || ''
   }
 
-  // The sidebar slides out from the right
+  // Slide-out from the right
   const SIDEBAR_WIDTH = 240
 
   return (
     <div
       style={{
+        // main layout
         display: 'flex',
         flexDirection: 'row',
         width: '100%',
@@ -108,8 +106,10 @@ export default function WelcomePage() {
       {/* Main content area */}
       <div
         style={{
-          flex: '1 1 auto',
-          // if open => push left by 240
+          // Force the main content to be at least as wide as the viewport,
+          // so marginRight actually pushes the entire screen on mobile
+          width: '100vw',
+          flexShrink: 0,
           marginRight: sidebarOpen ? SIDEBAR_WIDTH : 0,
           transition: 'margin-right 0.3s ease',
           display: 'flex',
@@ -118,10 +118,7 @@ export default function WelcomePage() {
           textAlign: 'center'
         }}
       >
-        {/*
-          Collapsed button => visible only if !sidebarOpen
-          (Menu icon + down arrow in the top-right corner)
-        */}
+        {/* Collapsed top-right button => Only visible if sidebar closed */}
         {!sidebarOpen && (
           <header
             style={{
@@ -195,7 +192,7 @@ export default function WelcomePage() {
             Choose an adoration chapel to experience perpetual prayer
           </p>
 
-          {/* Chapel Buttons */}
+          {/* Chapel buttons */}
           <div
             style={{
               display: 'grid',
@@ -230,8 +227,8 @@ export default function WelcomePage() {
                   (e.currentTarget.style.transform = 'scale(1.05)')
                 }
                 onMouseOut={(e) =>
-                  (e.currentTarget.style.transform = 'scale(1.0)')
-                }
+                  (e.currentTarget.style.transform = 'scale(1)'
+                )}
                 onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
                 onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
               >
@@ -242,7 +239,7 @@ export default function WelcomePage() {
         </main>
       </div>
 
-      {/* Sidebar => width=0 when collapsed, 240px if open */}
+      {/* Slide-out Sidebar from the right => width=0 or 240 */}
       <aside
         style={{
           position: 'absolute',
@@ -260,7 +257,7 @@ export default function WelcomePage() {
           zIndex: 1001
         }}
       >
-        {/* Expanded: top row => (Menu icon + "Menu" + up arrow) => only if open */}
+        {/* Expanded top row => (Menu icon + "Menu" text + up arrow) => only if open */}
         {sidebarOpen && (
           <div
             style={{
@@ -292,7 +289,7 @@ export default function WelcomePage() {
           </div>
         )}
 
-        {/* Sidebar Links */}
+        {/* Nav links */}
         <nav
           style={{
             flex: 1,
@@ -348,8 +345,7 @@ export default function WelcomePage() {
           >
             Manager
           </Link>
-
-          {/* more links if needed */}
+          {/* etc. */}
         </nav>
       </aside>
 
@@ -446,7 +442,7 @@ export default function WelcomePage() {
                 marginBottom: '1rem'
               }}
             >
-              {/* Calendar hover effect */}
+              {/* Calendar link, same hover effect */}
               <Link
                 to={`/${selectedChapel.slug}`}
                 style={{
@@ -474,7 +470,7 @@ export default function WelcomePage() {
                 </span>
               </Link>
 
-              {/* WhatsApp hover effect */}
+              {/* WhatsApp link */}
               <a
                 href={whatsappLink}
                 target="_blank"
