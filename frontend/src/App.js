@@ -5,7 +5,6 @@ import {
   Routes,
   Route,
   Link,
-  useLocation,
   useMatch
 } from 'react-router-dom'
 
@@ -23,7 +22,6 @@ import LeaderboardPage from './LeaderboardPage'
 // 🧠 Only chapel-based routes render this wrapper
 function ChapelLayout() {
   const t = useTranslate()
-  const location = useLocation()
   const matchChapel = useMatch('/:chapelSlug/*')
   const chapelSlug = matchChapel?.params?.chapelSlug || null
 
