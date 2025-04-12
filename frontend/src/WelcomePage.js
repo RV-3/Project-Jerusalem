@@ -2,54 +2,61 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
+import { Calendar, MessageCircle } from 'lucide-react'
 
-// If you're using React 18+, you may need Modal.setAppElement('#root') or similar
 Modal.setAppElement('#root')
 
 export default function WelcomePage() {
   const [chapels, setChapels] = useState([])
-  const [expandedChapel, setExpandedChapel] = useState(null) // track which chapel is expanded
-  const [selectedChapelForInfo, setSelectedChapelForInfo] = useState(null) // for the info modal
+  const [selectedChapel, setSelectedChapel] = useState(null)
 
   useEffect(() => {
-    // Fetch all chapel docs from Sanity
+    // Fetch data including chapelImage
     client
-      .fetch(
-        `*[_type == "chapel"]{
-          name,
-          "slug": slug.current,
-          // Optional fields if you want to store them in Sanity:
-          // description,
-          // imageUrl
-        }`
-      )
-      .then((data) => {
-        setChapels(data)
-      })
-      .catch((err) => {
-        console.error('Error fetching chapels:', err)
-      })
+      .fetch(`*[_type == "chapel"]{
+        name,
+        "slug": slug.current,
+        description,
+        whatsappNumber,
+        chapelImage{
+          asset-> {
+            _id,
+            url
+          }
+        }
+      }`)
+      .then((data) => setChapels(data))
+      .catch((err) => console.error('Error fetching chapels:', err))
   }, [])
 
-  // Toggle expand or collapse for a given chapel
-  function handleChapelClick(slug) {
-    if (expandedChapel === slug) {
-      // If already expanded, collapse it
-      setExpandedChapel(null)
-    } else {
-      // Expand this chapel
-      setExpandedChapel(slug)
+  // Helper to parse the `description` (array of blocks) into plain text
+  function parseDescription(blocks) {
+    if (!blocks || !Array.isArray(blocks)) return ''
+    return blocks
+      .map((block) => {
+        if (!block.children) return ''
+        return block.children.map((span) => span.text).join('')
+      })
+      .join('\n\n')
+  }
+
+  // Build the WhatsApp link from the chapel's number
+  function getWhatsappLink(num) {
+    if (!num || !num.trim()) {
+      return 'https://wa.me/0000000000' // fallback
     }
+    const cleaned = num.replace(/\D+/g, '')
+    return `https://wa.me/${cleaned}`
   }
 
-  // Show the info modal for a given chapel
-  function handleInfo(chapelItem) {
-    setSelectedChapelForInfo(chapelItem)
-  }
-
-  // Hide the modal
-  function closeModal() {
-    setSelectedChapelForInfo(null)
+  // If a chapel is selected => parse description, build WA link
+  let displayedDesc = ''
+  let whatsappLink = ''
+  let chapelImageUrl = ''
+  if (selectedChapel) {
+    displayedDesc = parseDescription(selectedChapel.description)
+    whatsappLink = getWhatsappLink(selectedChapel.whatsappNumber)
+    chapelImageUrl = selectedChapel.chapelImage?.asset?.url || ''
   }
 
   return (
@@ -65,8 +72,7 @@ export default function WelcomePage() {
         color: '#f4f4f5',
         fontFamily: "'Inter', sans-serif",
         textAlign: 'center',
-        padding: '2rem',
-        zIndex: 0
+        padding: '2rem'
       }}
     >
       <h1
@@ -102,6 +108,7 @@ export default function WelcomePage() {
         Choose an adoration chapel to experience perpetual prayer
       </p>
 
+      {/* Chapel Buttons */}
       <div
         style={{
           display: 'grid',
@@ -112,104 +119,38 @@ export default function WelcomePage() {
           justifyContent: 'center'
         }}
       >
-        {chapels.map((chapelItem) => {
-          const isExpanded = expandedChapel === chapelItem.slug
-
-          return (
-            <div key={chapelItem.slug} style={{ position: 'relative' }}>
-              {/* The main "button" for the chapel */}
-              <button
-                onClick={() => handleChapelClick(chapelItem.slug)}
-                style={{
-                  width: '100%',
-                  height: '48px',
-                  background: 'linear-gradient(90deg, #6b21a8 0%, #8b5cf6 100%)',
-                  color: '#fff',
-                  fontWeight: '600',
-                  fontSize: '1rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '8px',
-                  textDecoration: 'none',
-                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.6)',
-                  transition: 'transform 0.2s ease',
-                  border: 'none',
-                  cursor: 'pointer'
-                }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
-                onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
-              >
-                {chapelItem.name}
-              </button>
-
-              {/* The dropdown area if expanded */}
-              {isExpanded && (
-                <div
-                  style={{
-                    marginTop: '0.5rem',
-                    display: 'flex',
-                    flexDirection: 'row',
-                    justifyContent: 'space-evenly',
-                    alignItems: 'center',
-                    background: '#1f1f3c',
-                    borderRadius: '8px',
-                    padding: '0.5rem'
-                  }}
-                >
-                  {/* 1) Calendar icon/link */}
-                  <Link
-                    to={`/${chapelItem.slug}`}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      color: '#fff',
-                      textDecoration: 'none',
-                      width: '60px'
-                    }}
-                  >
-                    {/* Example icon could be a calendar image or FontAwesome icon */}
-                    <img
-                      src="/assets/calendar-favicon.png"
-                      alt="Calendar"
-                      style={{ width: '32px', marginBottom: '4px' }}
-                    />
-                    <span style={{ fontSize: '0.9rem' }}>Calendar</span>
-                  </Link>
-
-                  {/* 2) Info icon => opens modal */}
-                  <button
-                    onClick={() => handleInfo(chapelItem)}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#fff',
-                      cursor: 'pointer',
-                      width: '60px'
-                    }}
-                  >
-                    <img
-                      src="/assets/info.png"
-                      alt="Info"
-                      style={{ width: '32px', marginBottom: '4px' }}
-                    />
-                    <span style={{ fontSize: '0.9rem' }}>Info</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        })}
+        {chapels.map((chapelItem) => (
+          <button
+            key={chapelItem.slug}
+            onClick={() => setSelectedChapel(chapelItem)}
+            style={{
+              width: '100%',
+              height: '48px',
+              background: 'linear-gradient(90deg, #6b21a8 0%, #8b5cf6 100%)',
+              color: '#fff',
+              fontWeight: '600',
+              fontSize: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '8px',
+              boxShadow: '0 0 10px rgba(139, 92, 246, 0.6)',
+              transition: 'transform 0.2s ease',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+            onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+            onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
+          >
+            {chapelItem.name}
+          </button>
+        ))}
       </div>
 
       {/* Info Modal */}
       <Modal
-        isOpen={!!selectedChapelForInfo}
-        onRequestClose={closeModal}
+        isOpen={!!selectedChapel}
+        onRequestClose={() => setSelectedChapel(null)}
         contentLabel="Chapel Info"
         style={{
           overlay: {
@@ -219,39 +160,130 @@ export default function WelcomePage() {
           content: {
             maxWidth: '400px',
             margin: 'auto',
-            borderRadius: '10px',
-            padding: '20px',
-            background: '#fff'
+            borderRadius: '12px',
+            padding: '24px',
+            background: '#1f1f3c',
+            color: '#f4f4f5',
+            textAlign: 'center',
+            border: '1px solid #6b21a8'
           }
         }}
       >
-        {selectedChapelForInfo && (
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ marginBottom: '1rem' }}>
-              {selectedChapelForInfo.name} Info
+        {selectedChapel && (
+          <div>
+            <h2
+              style={{
+                fontSize: '1.6rem',
+                marginBottom: '1rem',
+                fontFamily: "'Cinzel', serif",
+                color: '#fff'
+              }}
+            >
+              {selectedChapel.name}
             </h2>
 
-            {/* If you have an image stored in the doc, use selectedChapelForInfo.imageUrl */}
-            <img
-              src="/assets/sample-chapel.jpg"
-              alt={selectedChapelForInfo.name}
-              style={{
-                width: '100%',
-                height: 'auto',
-                borderRadius: '8px',
-                marginBottom: '1rem'
-              }}
-            />
+            {/* Uniform Chapel Image */}
+            {chapelImageUrl ? (
+              <div
+                style={{
+                  width: '100%',
+                  height: '200px', // uniform height
+                  overflow: 'hidden',
+                  borderRadius: '8px',
+                  marginBottom: '1rem'
+                }}
+              >
+                <img
+                  src={chapelImageUrl}
+                  alt={selectedChapel.name}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                />
+              </div>
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '200px',
+                  background: '#3a3a5d',
+                  borderRadius: '8px',
+                  marginBottom: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <span style={{ color: '#aaa' }}>No Image Available</span>
+              </div>
+            )}
 
-            {/* If you have a doc field like selectedChapelForInfo.description, use it */}
-            <p style={{ color: '#333', fontSize: '1rem' }}>
-              {/* {selectedChapelForInfo.description || 'No description available.'} */}
-              This is a short description about {selectedChapelForInfo.name}.
-              More details can go here.
+            <p
+              style={{
+                fontSize: '1rem',
+                marginBottom: '1.5rem',
+                color: '#cbd5e1',
+                whiteSpace: 'pre-wrap'
+              }}
+            >
+              {displayedDesc.trim()
+                ? displayedDesc
+                : `No description available for ${selectedChapel.name} yet.`}
             </p>
 
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: '2rem',
+                marginBottom: '1rem'
+              }}
+            >
+              {/* Calendar */}
+              <Link
+                to={`/${selectedChapel.slug}`}
+                style={{ color: '#fff', textDecoration: 'none' }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                  }}
+                >
+                  <Calendar size={30} strokeWidth={1.8} />
+                  <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+                    Calendar
+                  </span>
+                </div>
+              </Link>
+
+              {/* WhatsApp */}
+              <a
+                href={whatsappLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#fff', textDecoration: 'none' }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                  }}
+                >
+                  <MessageCircle size={30} strokeWidth={1.8} />
+                  <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+                    WhatsApp
+                  </span>
+                </div>
+              </a>
+            </div>
+
             <button
-              onClick={closeModal}
+              onClick={() => setSelectedChapel(null)}
               style={{
                 marginTop: '1rem',
                 padding: '8px 16px',
@@ -259,7 +291,8 @@ export default function WelcomePage() {
                 color: '#fff',
                 borderRadius: '6px',
                 border: 'none',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                fontWeight: '500'
               }}
             >
               Close
