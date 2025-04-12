@@ -329,7 +329,7 @@ export default function WelcomePage() {
           </Link>
 
           <Link
-            to="/manager"
+            to="/leaderboard"
             style={{
               color: '#fff',
               textDecoration: 'none',
@@ -350,6 +350,32 @@ export default function WelcomePage() {
             onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
           >
             Manager
+
+          </Link>
+
+          <Link
+            to="/leaderboard"
+            style={{
+              color: '#fff',
+              textDecoration: 'none',
+              marginBottom: '1rem',
+              fontSize: '1.1rem',
+              transition: 'color 0.2s ease, transform 0.2s ease'
+            }}
+            onClick={() => setSidebarOpen(false)}
+            onMouseOver={(e) => {
+              e.currentTarget.style.color = '#ddd'
+              e.currentTarget.style.transform = 'scale(1.01)'
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.color = '#fff'
+              e.currentTarget.style.transform = 'scale(1)'
+            }}
+            onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            Map
+            
           </Link>
           {/* More links, etc. */}
         </nav>
