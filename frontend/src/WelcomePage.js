@@ -260,7 +260,7 @@ export default function WelcomePage() {
                 </div>
               </Link>
 
-              {/* WhatsApp */}
+              {/* Contact */}
               <a
                 href={whatsappLink}
                 target="_blank"
@@ -276,7 +276,7 @@ export default function WelcomePage() {
                 >
                   <MessageCircle size={30} strokeWidth={1.8} />
                   <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
-                    WhatsApp
+                    Contact
                   </span>
                 </div>
               </a>
