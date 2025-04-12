@@ -3,13 +3,18 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Modal from 'react-modal'
 import client from './utils/sanityClient.js'
-import { Calendar, MessageCircle, Menu as MenuIcon, ChevronDown } from 'lucide-react'
+import {
+  Menu as MenuIcon,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  MessageCircle
+} from 'lucide-react'
 
 Modal.setAppElement('#root')
 
 /**
- * Inline hook: Returns true if window.innerWidth <= breakpoint (default 768).
- * Automatically updates on resize.
+ * (Optional) Hook if you want bigger icons on small screens.
  */
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(
@@ -30,13 +35,12 @@ function useIsMobile(breakpoint = 768) {
 export default function WelcomePage() {
   const [chapels, setChapels] = useState([])
   const [selectedChapel, setSelectedChapel] = useState(null)
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false) // slide‐out state
 
-  // Detect mobile
   const isMobile = useIsMobile(768)
 
   useEffect(() => {
-    // Fetch chapel data including images
+    // Fetch chapel data from Sanity
     client
       .fetch(`*[_type == "chapel"]{
         name,
@@ -54,7 +58,7 @@ export default function WelcomePage() {
       .catch((err) => console.error('Error fetching chapels:', err))
   }, [])
 
-  // Helper to parse a block-based description array into plain text
+  // Helper to parse block-based description arrays
   function parseDescription(blocks) {
     if (!blocks || !Array.isArray(blocks)) return ''
     return blocks
@@ -65,257 +69,291 @@ export default function WelcomePage() {
       .join('\n\n')
   }
 
-  // Build WhatsApp link from phone number
+  // Build WhatsApp link
   function getWhatsappLink(num) {
     if (!num || !num.trim()) {
-      return 'https://wa.me/0000000000' // fallback
+      return 'https://wa.me/0000000000'
     }
     const cleaned = num.replace(/\D+/g, '')
     return `https://wa.me/${cleaned}`
   }
 
+  // Chapel info for modal
   let displayedDesc = ''
   let whatsappLink = ''
   let chapelImageUrl = ''
-
   if (selectedChapel) {
     displayedDesc = parseDescription(selectedChapel.description)
     whatsappLink = getWhatsappLink(selectedChapel.whatsappNumber)
     chapelImageUrl = selectedChapel.chapelImage?.asset?.url || ''
   }
 
+  // The sidebar slides out from the right
+  const SIDEBAR_WIDTH = 240
+
   return (
     <div
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'linear-gradient(135deg, #0f0f23 0%, #1b1b2f 100%)',
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
+        flexDirection: 'row',
+        width: '100%',
+        height: '100vh',
+        overflow: 'hidden',
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1b1b2f 100%)',
         color: '#f4f4f5',
         fontFamily: "'Inter', sans-serif",
-        textAlign: 'center'
+        position: 'relative'
       }}
     >
-      {/* -- Header / Menu -- */}
-      <header
+      {/* Main content area */}
+      <div
         style={{
-          width: '100%',
-          padding: '1rem',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          position: 'relative',
-          background: 'transparent'
-        }}
-      >
-        <div style={{ position: 'relative', display: 'inline-flex' }}>
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              cursor: 'pointer',
-              fontSize: '1rem',
-              outline: 'none',
-
-              // Collapsed ~20% bigger than before,
-              // Expanded back to original
-              width: menuOpen
-                ? (isMobile ? '160px' : '120px') // original expanded
-                : (isMobile ? '72px' : '58px'),  // 20% bigger collapsed
-              transition: 'width 0.3s ease'
-            }}
-          >
-            {/* Larger icon on mobile */}
-            <MenuIcon size={isMobile ? 32 : 24} strokeWidth={1.8} />
-
-            {/* Show "Menu" label only if expanded */}
-            {menuOpen && (
-              <span style={{ margin: '0 0.4rem', fontWeight: 500 }}>
-                Menu
-              </span>
-            )}
-
-            {/* Chevron arrow rotates on expand */}
-            <ChevronDown
-              size={isMobile ? 24 : 18}
-              style={{
-                marginLeft: !menuOpen ? '0.25rem' : '',
-                transition: 'transform 0.3s ease',
-                transform: menuOpen ? 'rotate(180deg)' : 'rotate(0deg)'
-              }}
-            />
-          </button>
-
-          {/* Dropdown content: slides down/fades in */}
-          <div
-            style={{
-              position: 'absolute',
-              top: isMobile ? '3.5rem' : '2.5rem',
-              right: 0,
-              background: '#1f1f3c',
-              border: '1px solid #6b21a8',
-              borderRadius: '8px',
-              padding: '0.5rem 0',
-              minWidth: '150px',
-
-              transform: menuOpen ? 'translateY(0)' : 'translateY(-10px)',
-              opacity: menuOpen ? 1 : 0,
-              pointerEvents: menuOpen ? 'auto' : 'none',
-              transition: 'transform 0.3s ease, opacity 0.3s ease'
-            }}
-          >
-            {/* Example Menu Items */}
-            <Link
-              to="/leaderboard"
-              style={{
-                display: 'block',
-                textDecoration: 'none',
-                color: '#fff',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                transition: 'color 0.2s ease, transform 0.2s ease'
-              }}
-              onClick={() => setMenuOpen(false)}
-              onMouseOver={(e) => {
-                e.currentTarget.style.color = '#ddd'
-                e.currentTarget.style.transform = 'scale(1.01)'
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.color = '#fff'
-                e.currentTarget.style.transform = 'scale(1)'
-              }}
-              onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
-              onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
-            >
-              Leaderboard
-            </Link>
-
-            <Link
-              to="/manager"
-              style={{
-                display: 'block',
-                textDecoration: 'none',
-                color: '#fff',
-                padding: '0.5rem 1rem',
-                borderRadius: '4px',
-                transition: 'color 0.2s ease, transform 0.2s ease'
-              }}
-              onClick={() => setMenuOpen(false)}
-              onMouseOver={(e) => {
-                e.currentTarget.style.color = '#ddd'
-                e.currentTarget.style.transform = 'scale(1.01)'
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.color = '#fff'
-                e.currentTarget.style.transform = 'scale(1)'
-              }}
-              onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
-              onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
-            >
-              Manager
-            </Link>
-
-            {/* Add any additional links here */}
-          </div>
-        </div>
-      </header>
-
-      {/* -- Main Content -- */}
-      <main
-        style={{
-          flex: 1,
+          flex: '1 1 auto',
+          // if open => push left by 240
+          marginRight: sidebarOpen ? SIDEBAR_WIDTH : 0,
+          transition: 'margin-right 0.3s ease',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
-          padding: '2rem'
+          textAlign: 'center'
         }}
       >
-        <h1
-          style={{
-            fontFamily: "'Cinzel', serif",
-            fontSize: '2.8rem',
-            fontWeight: '700',
-            marginBottom: '0.3rem',
-            color: '#ffffff'
-          }}
-        >
-          Legio Fidelis
-        </h1>
-
-        <p
-          style={{
-            fontSize: '1.1rem',
-            color: '#9ca3af',
-            marginBottom: '2rem'
-          }}
-        >
-          A Global Mission for 24/7 Eucharistic Adoration
-        </p>
-
-        <p
-          style={{
-            fontSize: '1.2rem',
-            maxWidth: '600px',
-            color: '#cbd5e1',
-            marginBottom: '2.5rem'
-          }}
-        >
-          Choose an adoration chapel to experience perpetual prayer
-        </p>
-
-        {/* Chapel Buttons */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, 160px)',
-            gap: '1rem',
-            width: '100%',
-            maxWidth: '500px',
-            justifyContent: 'center'
-          }}
-        >
-          {chapels.map((chapelItem) => (
+        {/*
+          Collapsed button => visible only if !sidebarOpen
+          (Menu icon + down arrow in the top-right corner)
+        */}
+        {!sidebarOpen && (
+          <header
+            style={{
+              width: '100%',
+              padding: '1rem',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              background: 'transparent'
+            }}
+          >
             <button
-              key={chapelItem.slug}
-              onClick={() => setSelectedChapel(chapelItem)}
+              onClick={() => setSidebarOpen(true)}
               style={{
-                width: '100%',
-                height: '48px',
-                background: 'linear-gradient(90deg, #6b21a8 0%, #8b5cf6 100%)',
+                background: 'none',
+                border: 'none',
                 color: '#fff',
-                fontWeight: '600',
-                fontSize: '1rem',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '8px',
-                boxShadow: '0 0 10px rgba(139, 92, 246, 0.6)',
-                transition: 'transform 0.2s ease, opacity 0.2s ease',
-                border: 'none',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                fontSize: '1rem',
+                gap: '0.3rem'
               }}
-              onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
-              onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
-              onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
-              onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
             >
-              {chapelItem.name}
+              <MenuIcon size={isMobile ? 32 : 24} strokeWidth={1.8} />
+              <ChevronDown size={isMobile ? 32 : 24} strokeWidth={1.8} />
             </button>
-          ))}
-        </div>
-      </main>
+          </header>
+        )}
 
-      {/* -- Chapel Info Modal -- */}
+        <main
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '2rem'
+          }}
+        >
+          <h1
+            style={{
+              fontFamily: "'Cinzel', serif",
+              fontSize: '2.8rem',
+              fontWeight: '700',
+              marginBottom: '0.3rem',
+              color: '#ffffff'
+            }}
+          >
+            Legio Fidelis
+          </h1>
+
+          <p
+            style={{
+              fontSize: '1.1rem',
+              color: '#9ca3af',
+              marginBottom: '2rem'
+            }}
+          >
+            A Global Mission for 24/7 Eucharistic Adoration
+          </p>
+
+          <p
+            style={{
+              fontSize: '1.2rem',
+              maxWidth: '600px',
+              color: '#cbd5e1',
+              marginBottom: '2.5rem'
+            }}
+          >
+            Choose an adoration chapel to experience perpetual prayer
+          </p>
+
+          {/* Chapel Buttons */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, 160px)',
+              gap: '1rem',
+              width: '100%',
+              maxWidth: '500px',
+              justifyContent: 'center'
+            }}
+          >
+            {chapels.map((chapelItem) => (
+              <button
+                key={chapelItem.slug}
+                onClick={() => setSelectedChapel(chapelItem)}
+                style={{
+                  width: '100%',
+                  height: '48px',
+                  background: 'linear-gradient(90deg, #6b21a8 0%, #8b5cf6 100%)',
+                  color: '#fff',
+                  fontWeight: '600',
+                  fontSize: '1rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '8px',
+                  boxShadow: '0 0 10px rgba(139, 92, 246, 0.6)',
+                  transition: 'transform 0.2s ease, opacity 0.2s ease',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.transform = 'scale(1.05)')
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.transform = 'scale(1.0)')
+                }
+                onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+                onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+              >
+                {chapelItem.name}
+              </button>
+            ))}
+          </div>
+        </main>
+      </div>
+
+      {/* Sidebar => width=0 when collapsed, 240px if open */}
+      <aside
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: sidebarOpen ? SIDEBAR_WIDTH : 0,
+          height: '100%',
+          background: '#1f1f3c',
+          borderLeft: '1px solid #6b21a8',
+          overflow: 'hidden',
+          transition: 'width 0.3s ease',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box',
+          zIndex: 1001
+        }}
+      >
+        {/* Expanded: top row => (Menu icon + "Menu" + up arrow) => only if open */}
+        {sidebarOpen && (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-start',
+              alignItems: 'center',
+              padding: '1rem',
+              borderBottom: '1px solid #6b21a8',
+              gap: '0.3rem'
+            }}
+          >
+            <button
+              onClick={() => setSidebarOpen(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                gap: '0.3rem'
+              }}
+            >
+              <MenuIcon size={isMobile ? 32 : 24} strokeWidth={1.8} />
+              <span style={{ fontWeight: 500 }}>Menu</span>
+              <ChevronUp size={isMobile ? 32 : 24} strokeWidth={1.8} />
+            </button>
+          </div>
+        )}
+
+        {/* Sidebar Links */}
+        <nav
+          style={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '1rem'
+          }}
+        >
+          <Link
+            to="/leaderboard"
+            style={{
+              color: '#fff',
+              textDecoration: 'none',
+              marginBottom: '1rem',
+              fontSize: '1.1rem',
+              transition: 'color 0.2s ease, transform 0.2s ease'
+            }}
+            onClick={() => setSidebarOpen(false)}
+            onMouseOver={(e) => {
+              e.currentTarget.style.color = '#ddd'
+              e.currentTarget.style.transform = 'scale(1.01)'
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.color = '#fff'
+              e.currentTarget.style.transform = 'scale(1)'
+            }}
+            onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            Leaderboard
+          </Link>
+
+          <Link
+            to="/manager"
+            style={{
+              color: '#fff',
+              textDecoration: 'none',
+              marginBottom: '1rem',
+              fontSize: '1.1rem',
+              transition: 'color 0.2s ease, transform 0.2s ease'
+            }}
+            onClick={() => setSidebarOpen(false)}
+            onMouseOver={(e) => {
+              e.currentTarget.style.color = '#ddd'
+              e.currentTarget.style.transform = 'scale(1.01)'
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.color = '#fff'
+              e.currentTarget.style.transform = 'scale(1)'
+            }}
+            onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+            onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            Manager
+          </Link>
+
+          {/* more links if needed */}
+        </nav>
+      </aside>
+
+      {/* Chapel Info Modal */}
       <Modal
         isOpen={!!selectedChapel}
         onRequestClose={() => setSelectedChapel(null)}
@@ -323,7 +361,7 @@ export default function WelcomePage() {
         style={{
           overlay: {
             backgroundColor: 'rgba(0,0,0,0.5)',
-            zIndex: 1000
+            zIndex: 2000
           },
           content: {
             maxWidth: '400px',
@@ -350,7 +388,6 @@ export default function WelcomePage() {
               {selectedChapel.name}
             </h2>
 
-            {/* Chapel Image */}
             {chapelImageUrl ? (
               <div
                 style={{
@@ -409,44 +446,62 @@ export default function WelcomePage() {
                 marginBottom: '1rem'
               }}
             >
-              {/* Calendar Link */}
+              {/* Calendar hover effect */}
               <Link
                 to={`/${selectedChapel.slug}`}
-                style={{ color: '#fff', textDecoration: 'none' }}
+                style={{
+                  color: '#fff',
+                  textDecoration: 'none',
+                  transition: 'color 0.2s ease, transform 0.2s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.color = '#ddd'
+                  e.currentTarget.style.transform = 'scale(1.01)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.color = '#fff'
+                  e.currentTarget.style.transform = 'scale(1)'
+                }}
+                onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+                onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center'
-                  }}
-                >
-                  <Calendar size={30} strokeWidth={1.8} />
-                  <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
-                    Calendar
-                  </span>
-                </div>
+                <Calendar size={30} strokeWidth={1.8} />
+                <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+                  Calendar
+                </span>
               </Link>
 
-              {/* WhatsApp Contact */}
+              {/* WhatsApp hover effect */}
               <a
                 href={whatsappLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: '#fff', textDecoration: 'none' }}
+                style={{
+                  color: '#fff',
+                  textDecoration: 'none',
+                  transition: 'color 0.2s ease, transform 0.2s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.color = '#ddd'
+                  e.currentTarget.style.transform = 'scale(1.01)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.color = '#fff'
+                  e.currentTarget.style.transform = 'scale(1)'
+                }}
+                onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+                onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center'
-                  }}
-                >
-                  <MessageCircle size={30} strokeWidth={1.8} />
-                  <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
-                    Contact
-                  </span>
-                </div>
+                <MessageCircle size={30} strokeWidth={1.8} />
+                <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+                  Contact
+                </span>
               </a>
             </div>
 
