@@ -1,21 +1,45 @@
 // WelcomePage.js
+
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
-
-// Lucide icons
+import client from './utils/sanityClient.js'
 import { Calendar, MessageCircle, Menu as MenuIcon, ChevronDown } from 'lucide-react'
 
 Modal.setAppElement('#root')
 
+/**
+ * Inline hook: Returns true if window.innerWidth <= breakpoint (default 768).
+ * Automatically updates on resize.
+ */
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false
+  )
+
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth <= breakpoint)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => {
+      window.removeEventListener('resize', handleResize)
+    }
+  }, [breakpoint])
+
+  return isMobile
+}
+
 export default function WelcomePage() {
   const [chapels, setChapels] = useState([])
   const [selectedChapel, setSelectedChapel] = useState(null)
-  const [menuOpen, setMenuOpen] = useState(false) // For dropdown
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  // Detect mobile
+  const isMobile = useIsMobile(768)
 
   useEffect(() => {
-    // Fetch data including chapelImage
+    // Fetch chapel data including images
     client
       .fetch(`*[_type == "chapel"]{
         name,
@@ -33,7 +57,7 @@ export default function WelcomePage() {
       .catch((err) => console.error('Error fetching chapels:', err))
   }, [])
 
-  // Helper to parse the `description` (array of blocks) into plain text
+  // Helper to parse a block-based description array into plain text
   function parseDescription(blocks) {
     if (!blocks || !Array.isArray(blocks)) return ''
     return blocks
@@ -44,7 +68,7 @@ export default function WelcomePage() {
       .join('\n\n')
   }
 
-  // Build the WhatsApp link from the chapel's number
+  // Build WhatsApp link from phone number
   function getWhatsappLink(num) {
     if (!num || !num.trim()) {
       return 'https://wa.me/0000000000' // fallback
@@ -53,10 +77,10 @@ export default function WelcomePage() {
     return `https://wa.me/${cleaned}`
   }
 
-  // If a chapel is selected => parse description, build WA link
   let displayedDesc = ''
   let whatsappLink = ''
   let chapelImageUrl = ''
+
   if (selectedChapel) {
     displayedDesc = parseDescription(selectedChapel.description)
     whatsappLink = getWhatsappLink(selectedChapel.whatsappNumber)
@@ -67,7 +91,10 @@ export default function WelcomePage() {
     <div
       style={{
         position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         background: 'linear-gradient(135deg, #0f0f23 0%, #1b1b2f 100%)',
         display: 'flex',
         flexDirection: 'column',
@@ -77,19 +104,18 @@ export default function WelcomePage() {
         textAlign: 'center'
       }}
     >
-      {/* Top Navbar/Menu */}
+      {/* -- Header / Menu -- */}
       <header
         style={{
           width: '100%',
           padding: '1rem',
-          background: 'transparent',
           display: 'flex',
-          justifyContent: 'flex-end', // menu on right side
+          justifyContent: 'flex-end',
           alignItems: 'center',
-          position: 'relative'
+          position: 'relative',
+          background: 'transparent'
         }}
       >
-        {/* Menu Button (dropdown toggle) */}
         <div style={{ position: 'relative', display: 'inline-flex' }}>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
@@ -101,32 +127,28 @@ export default function WelcomePage() {
               alignItems: 'center',
               cursor: 'pointer',
               fontSize: '1rem',
+              outline: 'none',
 
-              // Horizontal expand/collapse
-              width: menuOpen ? '120px' : '48px',
-              transition: 'width 0.3s ease, background 0.3s ease, color 0.3s ease',
-              // Additional styling (optional hover highlight)
-              outline: 'none'
+              // Horizontal expand/collapse based on screen + menuOpen
+              width: menuOpen
+                ? isMobile ? '160px' : '120px'
+                : isMobile ? '60px' : '48px',
+              transition: 'width 0.3s ease'
             }}
           >
-            {/* Hamburger Icon */}
-            <MenuIcon size={24} strokeWidth={1.8} />
+            {/* Larger icon on mobile */}
+            <MenuIcon size={isMobile ? 32 : 24} strokeWidth={1.8} />
 
-            {/* "Menu" text only if expanded */}
+            {/* Show "Menu" label only if expanded */}
             {menuOpen && (
-              <span
-                style={{
-                  margin: '0 0.4rem',
-                  fontWeight: 500
-                }}
-              >
+              <span style={{ margin: '0 0.4rem', fontWeight: 500 }}>
                 Menu
               </span>
             )}
 
-            {/* Arrow rotates 180deg if expanded */}
+            {/* Chevron arrow rotates on expand */}
             <ChevronDown
-              size={18}
+              size={isMobile ? 24 : 18}
               style={{
                 marginLeft: !menuOpen ? '0.25rem' : '',
                 transition: 'transform 0.3s ease',
@@ -135,26 +157,25 @@ export default function WelcomePage() {
             />
           </button>
 
-          {/* Dropdown Menu (vertical slide/fade) */}
+          {/* Dropdown content: slides down/fades in */}
           <div
             style={{
               position: 'absolute',
-              top: '2.5rem',
-              right: 0, // Align to the right
+              top: isMobile ? '3.5rem' : '2.5rem',
+              right: 0,
               background: '#1f1f3c',
               border: '1px solid #6b21a8',
               borderRadius: '8px',
               padding: '0.5rem 0',
               minWidth: '150px',
 
-              // Slide-down & fade:
-              transform: menuOpen ? 'translateY(0px)' : 'translateY(-10px)',
+              transform: menuOpen ? 'translateY(0)' : 'translateY(-10px)',
               opacity: menuOpen ? 1 : 0,
               pointerEvents: menuOpen ? 'auto' : 'none',
               transition: 'transform 0.3s ease, opacity 0.3s ease'
             }}
           >
-            {/* Leaderboard Item */}
+            {/* Example Menu Items */}
             <Link
               to="/leaderboard"
               style={{
@@ -180,9 +201,8 @@ export default function WelcomePage() {
               Leaderboard
             </Link>
 
-            {/* Manager Item */}
             <Link
-              to="/leaderboard"
+              to="/manager"
               style={{
                 display: 'block',
                 textDecoration: 'none',
@@ -206,11 +226,12 @@ export default function WelcomePage() {
               Manager
             </Link>
 
-            {/* Additional Menu Items as needed */}
+            {/* Add any additional links here */}
           </div>
         </div>
       </header>
 
+      {/* -- Main Content -- */}
       <main
         style={{
           flex: 1,
@@ -296,7 +317,7 @@ export default function WelcomePage() {
         </div>
       </main>
 
-      {/* Info Modal */}
+      {/* -- Chapel Info Modal -- */}
       <Modal
         isOpen={!!selectedChapel}
         onRequestClose={() => setSelectedChapel(null)}
@@ -331,12 +352,12 @@ export default function WelcomePage() {
               {selectedChapel.name}
             </h2>
 
-            {/* Uniform Chapel Image */}
+            {/* Chapel Image */}
             {chapelImageUrl ? (
               <div
                 style={{
                   width: '100%',
-                  height: '200px', // uniform height
+                  height: '200px',
                   overflow: 'hidden',
                   borderRadius: '8px',
                   marginBottom: '1rem'
@@ -390,7 +411,7 @@ export default function WelcomePage() {
                 marginBottom: '1rem'
               }}
             >
-              {/* Calendar */}
+              {/* Calendar Link */}
               <Link
                 to={`/${selectedChapel.slug}`}
                 style={{ color: '#fff', textDecoration: 'none' }}
@@ -409,7 +430,7 @@ export default function WelcomePage() {
                 </div>
               </Link>
 
-              {/* Contact */}
+              {/* WhatsApp Contact */}
               <a
                 href={whatsappLink}
                 target="_blank"
