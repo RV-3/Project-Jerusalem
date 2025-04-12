@@ -1,14 +1,18 @@
+// WelcomePage.js
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
-import { Calendar, MessageCircle } from 'lucide-react'
+
+// Lucide icons
+import { Calendar, MessageCircle, Menu as MenuIcon, ChevronDown } from 'lucide-react'
 
 Modal.setAppElement('#root')
 
 export default function WelcomePage() {
   const [chapels, setChapels] = useState([])
   const [selectedChapel, setSelectedChapel] = useState(null)
+  const [menuOpen, setMenuOpen] = useState(false) // For dropdown
 
   useEffect(() => {
     // Fetch data including chapelImage
@@ -68,84 +72,229 @@ export default function WelcomePage() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
         color: '#f4f4f5',
         fontFamily: "'Inter', sans-serif",
-        textAlign: 'center',
-        padding: '2rem'
+        textAlign: 'center'
       }}
     >
-      <h1
+      {/* Top Navbar/Menu */}
+      <header
         style={{
-          fontFamily: "'Cinzel', serif",
-          fontSize: '2.8rem',
-          fontWeight: '700',
-          marginBottom: '0.3rem',
-          color: '#ffffff'
-        }}
-      >
-        Legio Fidelis
-      </h1>
-
-      <p
-        style={{
-          fontSize: '1.1rem',
-          color: '#9ca3af',
-          marginBottom: '2rem'
-        }}
-      >
-        A Global Mission for 24/7 Eucharistic Adoration
-      </p>
-
-      <p
-        style={{
-          fontSize: '1.2rem',
-          maxWidth: '600px',
-          color: '#cbd5e1',
-          marginBottom: '2.5rem'
-        }}
-      >
-        Choose an adoration chapel to experience perpetual prayer
-      </p>
-
-      {/* Chapel Buttons */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, 160px)',
-          gap: '1rem',
           width: '100%',
-          maxWidth: '500px',
-          justifyContent: 'center'
+          padding: '1rem',
+          background: 'transparent',
+          display: 'flex',
+          justifyContent: 'flex-end', // menu on right side
+          alignItems: 'center',
+          position: 'relative'
         }}
       >
-        {chapels.map((chapelItem) => (
+        {/* Menu Button (dropdown toggle) */}
+        <div style={{ position: 'relative', display: 'inline-flex' }}>
           <button
-            key={chapelItem.slug}
-            onClick={() => setSelectedChapel(chapelItem)}
+            onClick={() => setMenuOpen(!menuOpen)}
             style={{
-              width: '100%',
-              height: '48px',
-              background: 'linear-gradient(90deg, #6b21a8 0%, #8b5cf6 100%)',
+              background: 'none',
+              border: 'none',
               color: '#fff',
-              fontWeight: '600',
-              fontSize: '1rem',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '8px',
-              boxShadow: '0 0 10px rgba(139, 92, 246, 0.6)',
-              transition: 'transform 0.2s ease',
-              border: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              fontSize: '1rem',
+
+              // Horizontal expand/collapse
+              width: menuOpen ? '120px' : '48px',
+              transition: 'width 0.3s ease, background 0.3s ease, color 0.3s ease',
+              // Additional styling (optional hover highlight)
+              outline: 'none'
             }}
-            onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
-            onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
           >
-            {chapelItem.name}
+            {/* Hamburger Icon */}
+            <MenuIcon size={24} strokeWidth={1.8} />
+
+            {/* "Menu" text only if expanded */}
+            {menuOpen && (
+              <span
+                style={{
+                  margin: '0 0.4rem',
+                  fontWeight: 500
+                }}
+              >
+                Menu
+              </span>
+            )}
+
+            {/* Arrow rotates 180deg if expanded */}
+            <ChevronDown
+              size={18}
+              style={{
+                marginLeft: !menuOpen ? '0.25rem' : '',
+                transition: 'transform 0.3s ease',
+                transform: menuOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+              }}
+            />
           </button>
-        ))}
-      </div>
+
+          {/* Dropdown Menu (vertical slide/fade) */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '2.5rem',
+              right: 0, // Align to the right
+              background: '#1f1f3c',
+              border: '1px solid #6b21a8',
+              borderRadius: '8px',
+              padding: '0.5rem 0',
+              minWidth: '150px',
+
+              // Slide-down & fade:
+              transform: menuOpen ? 'translateY(0px)' : 'translateY(-10px)',
+              opacity: menuOpen ? 1 : 0,
+              pointerEvents: menuOpen ? 'auto' : 'none',
+              transition: 'transform 0.3s ease, opacity 0.3s ease'
+            }}
+          >
+            {/* Leaderboard Item */}
+            <Link
+              to="/leaderboard"
+              style={{
+                display: 'block',
+                textDecoration: 'none',
+                color: '#fff',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                transition: 'color 0.2s ease, transform 0.2s ease'
+              }}
+              onClick={() => setMenuOpen(false)}
+              onMouseOver={(e) => {
+                e.currentTarget.style.color = '#ddd'
+                e.currentTarget.style.transform = 'scale(1.01)'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.color = '#fff'
+                e.currentTarget.style.transform = 'scale(1)'
+              }}
+              onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+              onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+            >
+              Leaderboard
+            </Link>
+
+            {/* Manager Item */}
+            <Link
+              to="/leaderboard"
+              style={{
+                display: 'block',
+                textDecoration: 'none',
+                color: '#fff',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                transition: 'color 0.2s ease, transform 0.2s ease'
+              }}
+              onClick={() => setMenuOpen(false)}
+              onMouseOver={(e) => {
+                e.currentTarget.style.color = '#ddd'
+                e.currentTarget.style.transform = 'scale(1.01)'
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.color = '#fff'
+                e.currentTarget.style.transform = 'scale(1)'
+              }}
+              onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+              onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+            >
+              Manager
+            </Link>
+
+            {/* Additional Menu Items as needed */}
+          </div>
+        </div>
+      </header>
+
+      <main
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem'
+        }}
+      >
+        <h1
+          style={{
+            fontFamily: "'Cinzel', serif",
+            fontSize: '2.8rem',
+            fontWeight: '700',
+            marginBottom: '0.3rem',
+            color: '#ffffff'
+          }}
+        >
+          Legio Fidelis
+        </h1>
+
+        <p
+          style={{
+            fontSize: '1.1rem',
+            color: '#9ca3af',
+            marginBottom: '2rem'
+          }}
+        >
+          A Global Mission for 24/7 Eucharistic Adoration
+        </p>
+
+        <p
+          style={{
+            fontSize: '1.2rem',
+            maxWidth: '600px',
+            color: '#cbd5e1',
+            marginBottom: '2.5rem'
+          }}
+        >
+          Choose an adoration chapel to experience perpetual prayer
+        </p>
+
+        {/* Chapel Buttons */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, 160px)',
+            gap: '1rem',
+            width: '100%',
+            maxWidth: '500px',
+            justifyContent: 'center'
+          }}
+        >
+          {chapels.map((chapelItem) => (
+            <button
+              key={chapelItem.slug}
+              onClick={() => setSelectedChapel(chapelItem)}
+              style={{
+                width: '100%',
+                height: '48px',
+                background: 'linear-gradient(90deg, #6b21a8 0%, #8b5cf6 100%)',
+                color: '#fff',
+                fontWeight: '600',
+                fontSize: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '8px',
+                boxShadow: '0 0 10px rgba(139, 92, 246, 0.6)',
+                transition: 'transform 0.2s ease, opacity 0.2s ease',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+              onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
+              onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
+              onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+            >
+              {chapelItem.name}
+            </button>
+          ))}
+        </div>
+      </main>
 
       {/* Info Modal */}
       <Modal
