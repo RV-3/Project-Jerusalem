@@ -1,6 +1,6 @@
 // AdminBlockCalendar.js
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+// Remove: import { useParams } from 'react-router-dom'
 import FullCalendar from '@fullcalendar/react'
 import { TIMEZONE } from './config'
 import allLocales from '@fullcalendar/core/locales-all'
@@ -36,29 +36,40 @@ function getLocalMidnightXDaysAgo(daysAgo, tz) {
   return moment.tz(tz).startOf('day').subtract(daysAgo, 'days').toDate()
 }
 
-export default function AdminBlockCalendar() {
-  // ---------------------------------------------
-  // 1) Chapel Slug from the URL (/:chapelSlug/admin)
-  // ---------------------------------------------
-  const { chapelSlug } = useParams()
-  const [chapel, setChapel] = useState(null)
+/**
+ * Updated AdminBlockCalendar now receives a prop { chapelSlug }
+ */
+export default function AdminBlockCalendar({ chapelSlug }) {
+  // 1) Remove useParams, we rely on the prop
+  // const { chapelSlug } = useParams()
 
-  // ---------------------------------------------
   // 2) Language + Auth
-  // ---------------------------------------------
   const { language } = useLanguage()
   const t = useTranslate()
   const [authenticated, setAuthenticated] = useState(
     localStorage.getItem('isAdmin') === 'true'
   )
 
-  // ---------------------------------------------
-  // 3) Calendar Password State (per-chapel)
-  // ---------------------------------------------
+  // 3) Chapel + password data
+  const [chapel, setChapel] = useState(null)
   const [calendarPasswordDocId, setCalendarPasswordDocId] = useState(null)
   const [currentCalendarPassword, setCurrentCalendarPassword] = useState('')
 
-  // Fetch chapel-specific password doc
+  // 4) Data: blocks, reservations, autoBlock
+  const [blocks, setBlocks] = useState([])
+  const [reservations, setReservations] = useState([])
+  const [autoBlockRules, setAutoBlockRules] = useState([])
+  const [autoBlockDays, setAutoBlockDays] = useState(null)
+  const [pastBlockEvent, setPastBlockEvent] = useState(null)
+
+  // 5) UI state
+  const calendarRef = useRef(null)
+  const platformDelay = isIOS ? 100 : 47
+  const [modalIsOpen, setModalIsOpen] = useState(false)
+  const [selectedReservation, setSelectedReservation] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // 6) Admin password doc fetch
   const fetchCalendarPassword = useCallback(async (chapelId) => {
     try {
       const pwDoc = await client.fetch(
@@ -68,7 +79,6 @@ export default function AdminBlockCalendar() {
         }`,
         { chapelId }
       )
-
       if (pwDoc) {
         setCalendarPasswordDocId(pwDoc._id)
         setCurrentCalendarPassword(pwDoc.password || '')
@@ -131,27 +141,10 @@ export default function AdminBlockCalendar() {
     }
   }, [])
 
-  // ---------------------------------------------
-  // 4) Data: Blocks, Reservations, AutoBlock
-  // ---------------------------------------------
-  const [blocks, setBlocks] = useState([])
-  const [reservations, setReservations] = useState([])
-  const [autoBlockRules, setAutoBlockRules] = useState([])
-  const [autoBlockDays, setAutoBlockDays] = useState(null)
-  const [pastBlockEvent, setPastBlockEvent] = useState(null)
-
-  // ---------------------------------------------
-  // 5) UI State
-  // ---------------------------------------------
-  const calendarRef = useRef()
-  const platformDelay = isIOS ? 100 : 47
-  const [modalIsOpen, setModalIsOpen] = useState(false)
-  const [selectedReservation, setSelectedReservation] = useState(null)
-
-  // ---------------------------------------------
-  // 6) Fetch Data
-  // ---------------------------------------------
+  // 7) Data fetch
   const fetchData = useCallback(async () => {
+    if (!chapelSlug) return // no slug => skip
+
     const calendarApi = calendarRef.current?.getApi()
     const currentViewDate = calendarApi?.getDate()
 
@@ -213,7 +206,7 @@ export default function AdminBlockCalendar() {
       )
       setAutoBlockDays(daysDocArr.length ? daysDocArr[0] : null)
 
-      // 7) Return FullCalendar to the existing date
+      // 7) Keep FullCalendar on existing date
       if (calendarApi && currentViewDate) {
         calendarApi.gotoDate(currentViewDate)
       }
@@ -228,12 +221,10 @@ export default function AdminBlockCalendar() {
     }
   }, [authenticated, fetchData])
 
-  // ---------------------------------------------
-  // 7) Past-block overlay, pinned to chapel's time zone
-  // ---------------------------------------------
+  // 8) Past-block overlay
   useEffect(() => {
+    if (!chapel?.timezone) return
     function updatePastBlockEvent() {
-      if (!chapel?.timezone) return // if we haven't got the chapel yet
       const adminTZ = chapel.timezone || TIMEZONE
       const earliest = getLocalMidnightXDaysAgo(7, adminTZ)
       const now = moment.tz(adminTZ).toDate()
@@ -250,68 +241,13 @@ export default function AdminBlockCalendar() {
     return () => clearInterval(interval)
   }, [chapel])
 
-  // If not auth => show password screen
+  // If not admin => show auth
   if (!authenticated) {
     return <AdminAuthScreen onSuccess={setAuthenticated} />
   }
 
-  // ---------------------------------------------
-  // 8) Instead of TIMEZONE, use adminTZ from chapel?.timezone
-  // ---------------------------------------------
+  // 9) Use chapel's timezone for everything
   const adminTZ = chapel?.timezone || TIMEZONE
-
-  function isDayLevelExcepted(hStart, hEnd) {
-    if (!autoBlockDays?.timeExceptions?.length) return false
-    const sLocal = moment.tz(hStart, adminTZ)
-    const eLocal = moment.tz(hEnd,   adminTZ)
-    const dateStr = sLocal.format('YYYY-MM-DD')
-    return autoBlockDays.timeExceptions.some((ex) => {
-      if (!ex.date) return false
-      if (ex.date.slice(0, 10) !== dateStr) return false
-      const exDay   = sLocal.clone().startOf('day')
-      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
-      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
-    })
-  }
-
-  function isHourRuleExcepted(rule, hStart, hEnd) {
-    const sLocal = moment.tz(hStart, adminTZ)
-    const eLocal = moment.tz(hEnd,   adminTZ)
-    const exceptions = rule.timeExceptions || []
-    return exceptions.some((ex) => {
-      if (!ex.date) return false
-      if (ex.date.slice(0, 10) !== sLocal.format('YYYY-MM-DD')) return false
-      const exDay   = sLocal.clone().startOf('day')
-      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
-      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
-    })
-  }
-
-  function doesRuleCoverHourRule(rule, hStart, hEnd) {
-    const sLocal    = moment.tz(hStart, adminTZ)
-    const eLocal    = moment.tz(hEnd,   adminTZ)
-    const dayAnchor = sLocal.clone().startOf('day')
-    const rStart    = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-    const rEnd      = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
-    if (sLocal.isBefore(rStart) || eLocal.isAfter(rEnd)) return false
-    if (isHourRuleExcepted(rule, hStart, hEnd)) return false
-    return true
-  }
-
-  function isAutoBlocked(hStart, hEnd) {
-    if (!chapel) return false
-    if (autoBlockDays?.daysOfWeek?.length) {
-      const dayName = moment.tz(hStart, adminTZ).format('dddd')
-      if (autoBlockDays.daysOfWeek.includes(dayName)) {
-        if (!isDayLevelExcepted(hStart, hEnd)) {
-          return true
-        }
-      }
-    }
-    return autoBlockRules.some((rule) => doesRuleCoverHourRule(rule, hStart, hEnd))
-  }
 
   function isRangeCompletelyBlocked(info) {
     const slotStart = new Date(info.start)
@@ -330,73 +266,57 @@ export default function AdminBlockCalendar() {
     return true
   }
 
-  // ---------------------------------------------
-  // 9) Adjust expansions to use adminTZ
-  // ---------------------------------------------
-  function getAutoBlockSlices(rule, dayStart, dayEnd) {
-    const slices = []
-    const startLocal = moment.tz(dayStart, adminTZ).startOf('day')
-    const endLocal   = moment.tz(dayEnd,   adminTZ).endOf('day')
-    while (startLocal.isSameOrBefore(endLocal, 'day')) {
-      for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
-        const sliceStart = startLocal.clone().hour(h)
-        const sliceEnd   = sliceStart.clone().add(1, 'hour')
-        if (sliceEnd <= dayStart || sliceStart >= dayEnd) continue
-        if (isHourRuleExcepted(rule, sliceStart.toDate(), sliceEnd.toDate())) continue
-        slices.push([sliceStart.toDate(), sliceEnd.toDate()])
-      }
-      startLocal.add(1, 'day').startOf('day')
-    }
-    return mergeSlices(slices)
-  }
-
-  function getDayBlockSlices(dayDoc, rangeStart, rangeEnd) {
-    const slices = []
-    if (!dayDoc.daysOfWeek?.length) return slices
-
-    const currentLocal = moment.tz(rangeStart, adminTZ).startOf('day')
-    const limitLocal   = moment.tz(rangeEnd,   adminTZ).endOf('day')
-
-    while (currentLocal.isBefore(limitLocal)) {
-      const dayName = currentLocal.format('dddd')
-      if (dayDoc.daysOfWeek.includes(dayName)) {
-        for (let h = 0; h < 24; h++) {
-          const sliceStart = currentLocal.clone().hour(h)
-          const sliceEnd   = sliceStart.clone().add(1, 'hour')
-          if (sliceEnd <= rangeStart || sliceStart >= rangeEnd) continue
-          if (isDayLevelExcepted(sliceStart.toDate(), sliceEnd.toDate())) continue
-          slices.push([sliceStart.toDate(), sliceEnd.toDate()])
+  function isAutoBlocked(hStart, hEnd) {
+    if (!chapel) return false
+    // Similar logic to Calendar for autoBlock checks
+    // Checking day-based + hour-based rules
+    if (autoBlockDays?.daysOfWeek?.length) {
+      const dayName = moment.tz(hStart, adminTZ).format('dddd')
+      if (autoBlockDays.daysOfWeek.includes(dayName)) {
+        if (!dayExceptionCheck(hStart, hEnd)) {
+          return true
         }
       }
-      currentLocal.add(1, 'day').startOf('day')
     }
-    return mergeSlices(slices)
+    return autoBlockRules.some((rule) =>
+      hourRuleCheck(rule, hStart, hEnd)
+    )
   }
 
-  function mergeSlices(slices) {
-    if (!slices.length) return []
-    slices.sort((a, b) => a[0] - b[0])
-    const merged = [slices[0]]
-    for (let i = 1; i < slices.length; i++) {
-      const prev = merged[merged.length - 1]
-      const curr = slices[i]
-      if (prev[1].getTime() === curr[0].getTime()) {
-        prev[1] = curr[1]
-      } else {
-        merged.push(curr)
-      }
-    }
-    return merged
+  function dayExceptionCheck(hStart, hEnd) {
+    if (!autoBlockDays?.timeExceptions?.length) return false
+    const sLocal = moment.tz(hStart, adminTZ)
+    const eLocal = moment.tz(hEnd,   adminTZ)
+    const dateStr = sLocal.format('YYYY-MM-DD')
+    return autoBlockDays.timeExceptions.some((ex) => {
+      if (!ex.date) return false
+      if (ex.date.slice(0, 10) !== dateStr) return false
+      const exDay   = sLocal.clone().startOf('day')
+      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
+      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
+    })
   }
 
-  function fullyCoveredByManual(start, end) {
-    let cursorCheck = new Date(start)
-    while (cursorCheck < end) {
-      const nxt = new Date(cursorCheck.getTime() + 3600000)
-      if (!isManuallyBlocked(cursorCheck, nxt, blocks)) {
-        return false
-      }
-      cursorCheck = nxt
+  function hourRuleCheck(rule, hStart, hEnd) {
+    const sLocal = moment.tz(hStart, adminTZ)
+    const eLocal = moment.tz(hEnd,   adminTZ)
+    const dayAnchor = sLocal.clone().startOf('day')
+    const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
+    const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
+
+    if (sLocal.isBefore(rStart) || eLocal.isAfter(rEnd)) return false
+
+    // Check if there's an exception for this hour
+    if ((rule.timeExceptions || []).some((ex) => {
+      if (!ex.date) return false
+      if (ex.date.slice(0, 10) !== sLocal.format('YYYY-MM-DD')) return false
+      const exDay   = sLocal.clone().startOf('day')
+      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
+      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
+    })) {
+      return false
     }
     return true
   }
@@ -430,7 +350,7 @@ export default function AdminBlockCalendar() {
 
     // 3) Day-based expansions
     if (autoBlockDays) {
-      const daySlices = getDayBlockSlices(autoBlockDays, start, end)
+      const daySlices = getDaySlices(autoBlockDays, start, end)
       daySlices.forEach(([s, e]) => {
         if (!fullyCoveredByManual(s, e)) {
           evts.push({
@@ -447,8 +367,8 @@ export default function AdminBlockCalendar() {
 
     // 4) Hour-based expansions
     autoBlockRules.forEach((rule) => {
-      const slices = getAutoBlockSlices(rule, start, end)
-      slices.forEach(([s, e]) => {
+      const hourSlices = getHourSlices(rule, start, end)
+      hourSlices.forEach(([s, e]) => {
         if (!fullyCoveredByManual(s, e)) {
           evts.push({
             id: `auto-hour-${rule._id}-${s.toISOString()}`,
@@ -470,6 +390,102 @@ export default function AdminBlockCalendar() {
     successCallback(evts)
   }
 
+  function getHourSlices(rule, dayStart, dayEnd) {
+    const slices = []
+    const startLocal = moment.tz(dayStart, adminTZ).startOf('day')
+    const endLocal   = moment.tz(dayEnd,   adminTZ).endOf('day')
+
+    while (startLocal.isSameOrBefore(endLocal, 'day')) {
+      for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
+        const sliceStart = startLocal.clone().hour(h)
+        const sliceEnd   = sliceStart.clone().add(1, 'hour')
+        if (sliceEnd <= dayStart || sliceStart >= dayEnd) continue
+        if (hourRuleExcepted(rule, sliceStart, sliceEnd)) continue
+        slices.push([sliceStart.toDate(), sliceEnd.toDate()])
+      }
+      startLocal.add(1, 'day').startOf('day')
+    }
+    return mergeSlices(slices)
+  }
+
+  function hourRuleExcepted(rule, sLocal, eLocal) {
+    // check rule's timeExceptions
+    const exArr = rule.timeExceptions || []
+    const dateStr = sLocal.format('YYYY-MM-DD')
+    return exArr.some((ex) => {
+      if (!ex.date) return false
+      if (ex.date.slice(0, 10) !== dateStr) return false
+      const exDay   = sLocal.clone().startOf('day')
+      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
+      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
+    })
+  }
+
+  function getDaySlices(dayDoc, rangeStart, rangeEnd) {
+    const slices = []
+    if (!dayDoc.daysOfWeek?.length) return slices
+
+    const currentLocal = moment.tz(rangeStart, adminTZ).startOf('day')
+    const limitLocal   = moment.tz(rangeEnd,   adminTZ).endOf('day')
+
+    while (currentLocal.isBefore(limitLocal)) {
+      const dayName = currentLocal.format('dddd')
+      if (dayDoc.daysOfWeek.includes(dayName)) {
+        for (let h = 0; h < 24; h++) {
+          const sliceStart = currentLocal.clone().hour(h)
+          const sliceEnd   = sliceStart.clone().add(1, 'hour')
+          if (sliceEnd <= rangeStart || sliceStart >= rangeEnd) continue
+          if (dayLevelExcepted(dayDoc, sliceStart, sliceEnd)) continue
+          slices.push([sliceStart.toDate(), sliceEnd.toDate()])
+        }
+      }
+      currentLocal.add(1, 'day').startOf('day')
+    }
+    return mergeSlices(slices)
+  }
+
+  function dayLevelExcepted(dayDoc, sLocal, eLocal) {
+    if (!dayDoc.timeExceptions?.length) return false
+    const dateStr = sLocal.format('YYYY-MM-DD')
+    return dayDoc.timeExceptions.some((ex) => {
+      if (!ex.date) return false
+      if (ex.date.slice(0, 10) !== dateStr) return false
+      const exDay   = sLocal.clone().startOf('day')
+      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
+      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
+    })
+  }
+
+  function mergeSlices(slices) {
+    if (!slices.length) return []
+    slices.sort((a, b) => a[0] - b[0])
+    const merged = [slices[0]]
+    for (let i = 1; i < slices.length; i++) {
+      const prev = merged[merged.length - 1]
+      const curr = slices[i]
+      if (prev[1].getTime() === curr[0].getTime()) {
+        prev[1] = curr[1]
+      } else {
+        merged.push(curr)
+      }
+    }
+    return merged
+  }
+
+  function fullyCoveredByManual(start, end) {
+    let cursorCheck = new Date(start)
+    while (cursorCheck < end) {
+      const nxt = new Date(cursorCheck.getTime() + 3600000)
+      if (!isManuallyBlocked(cursorCheck, nxt, blocks)) {
+        return false
+      }
+      cursorCheck = nxt
+    }
+    return true
+  }
+
   function handleEventContent(arg) {
     if (arg.event.display === 'background') return null
     return <div>{arg.event.title}</div>
@@ -483,9 +499,6 @@ export default function AdminBlockCalendar() {
     }
   }
 
-  // ---------------------------------------------
-  // 10) Reservation Deletion
-  // ---------------------------------------------
   async function handleDeleteReservation() {
     if (!selectedReservation) return
     if (
@@ -505,25 +518,18 @@ export default function AdminBlockCalendar() {
     setSelectedReservation(null)
   }
 
-  // ---------------------------------------------
-  // 11) Pass chapel.timezone so ManualBlockLogic interprets the selected range in local time
-  // ---------------------------------------------
-  function handleBlock(info, blocks, t, reloadFn) {
+  function handleBlock(info) {
     if (!chapel) {
       alert('No chapel found. Cannot block.')
       return
     }
-    return rawHandleBlock(info, blocks, t, reloadFn, chapel._id, adminTZ)
+    return rawHandleBlock(info, blocks, t, fetchData, chapel._id, adminTZ)
   }
 
-  function handleUnblock(info, blocks, autoBlockRules, autoBlockDays, t, reloadFn) {
-    // If you want unblocking also to interpret local times in adminTZ, pass it:
-    return rawHandleUnblock(info, blocks, autoBlockRules, autoBlockDays, t, reloadFn, adminTZ)
+  function handleUnblock(info) {
+    return rawHandleUnblock(info, blocks, autoBlockRules, autoBlockDays, t, fetchData, adminTZ)
   }
 
-  // ---------------------------------------------
-  // 12) Render
-  // ---------------------------------------------
   const now = new Date()
   const validRangeStart = new Date(now)
   validRangeStart.setHours(0, 0, 0, 0)
@@ -546,14 +552,12 @@ export default function AdminBlockCalendar() {
         })}
       </h2>
 
-      {/* Show the chapel name if found */}
       {chapel && (
         <p style={{ textAlign: 'center', fontWeight: 'bold' }}>
           Managing Chapel: {chapel.name}
         </p>
       )}
 
-      {/* Per-chapel password panel */}
       <CalendarPasswordPanel
         chapelId={chapel?._id || null}
         existingPasswordDocId={calendarPasswordDocId}
@@ -562,7 +566,6 @@ export default function AdminBlockCalendar() {
         onRemovePassword={handleRemovePassword}
       />
 
-      {/* Auto-block config */}
       <AutoBlockControls
         chapelId={chapel?._id || null}
         autoBlockRules={autoBlockRules}
@@ -583,8 +586,7 @@ export default function AdminBlockCalendar() {
           momentPlugin,
           momentTimezonePlugin
         ]}
-        // Use the chapel's actual time zone for the Admin UI
-        timeZone={adminTZ}
+        timeZone={chapel?.timezone || TIMEZONE}
         initialView="timeGrid30Day"
         views={{
           timeGrid30Day: {
@@ -622,7 +624,7 @@ export default function AdminBlockCalendar() {
                 })
               )
             ) {
-              handleUnblock(info, blocks, autoBlockRules, autoBlockDays, t, fetchData)
+              handleUnblock(info)
             }
           } else {
             if (
@@ -634,7 +636,7 @@ export default function AdminBlockCalendar() {
                 })
               )
             ) {
-              handleBlock(info, blocks, t, fetchData)
+              handleBlock(info)
             }
           }
         }}
