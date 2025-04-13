@@ -67,7 +67,6 @@ export default function AdminBlockCalendar({ chapelSlug }) {
   const platformDelay = isIOS ? 100 : 47
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // 6) Admin password doc fetch
   const fetchCalendarPassword = useCallback(async (chapelId) => {
