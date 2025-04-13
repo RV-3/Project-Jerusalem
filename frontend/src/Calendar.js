@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+// REMOVE: import { useParams } from 'react-router-dom'
 import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
 import allLocales from '@fullcalendar/core/locales-all'
@@ -140,10 +140,17 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
   return events
 }
 
-export default function Calendar() {
-  const { chapelSlug } = useParams()
+/**
+ * We now accept a prop 'chapelSlug' from App.js or ChapelLayout.
+ */
+export default function Calendar({ chapelSlug }) {
   const { language } = useLanguage()
   const t = useTranslate()
+
+  // If we want a fallback for path usage, we could do:
+  // const { chapelSlug: paramSlug } = useParams()
+  // const finalSlug = chapelSlug || paramSlug
+  // But let's assume we always rely on the prop now.
 
   // Chapel, password
   const [chapel, setChapel] = useState(null)
@@ -176,6 +183,14 @@ export default function Calendar() {
     try {
       setLoading(true)
 
+      // If there's no slug at all => stop
+      if (!chapelSlug) {
+        console.warn('No chapelSlug provided to Calendar')
+        setLoading(false)
+        return
+      }
+
+      // fetch the chapel doc
       const chapelDoc = await client.fetch(
         `*[_type == "chapel" && slug.current == $slug][0]`,
         { slug: chapelSlug }
@@ -187,6 +202,7 @@ export default function Calendar() {
       }
       setChapel(chapelDoc)
 
+      // get the chapel's password doc
       const pwDoc = await client.fetch(
         `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{
           _id,
@@ -325,7 +341,11 @@ export default function Calendar() {
     const s = moment.tz(slotStart, activeTZ)
     const e = moment.tz(slotEnd, activeTZ)
     return events.some((evt) => {
-      if (evt.id.startsWith('auto-') || evt.id.startsWith('blocked-') || evt.id === 'past-block') {
+      if (
+        evt.id.startsWith('auto-') ||
+        evt.id.startsWith('blocked-') ||
+        evt.id === 'past-block'
+      ) {
         return false
       }
       const evtStart = moment.tz(evt.start, activeTZ)
@@ -420,6 +440,7 @@ export default function Calendar() {
     const { start, end } = fetchInfo
     const loaded = []
 
+    // 1) Real "reservations"
     events.forEach((evt) => {
       loaded.push({
         id: evt.id,
@@ -430,6 +451,7 @@ export default function Calendar() {
       })
     })
 
+    // 2) Manually blocked times
     blockedTimes.forEach((b, i) => {
       loaded.push({
         id: `blocked-${b._id || i}`,
@@ -440,6 +462,7 @@ export default function Calendar() {
       })
     })
 
+    // 3) Auto-block times
     const autoEvts = buildAutoBlockAllEvents(
       autoBlockHours,
       autoBlockDays,
@@ -449,6 +472,7 @@ export default function Calendar() {
     )
     loaded.push(...autoEvts)
 
+    // 4) Past-block overlay
     if (pastBlockEvent) {
       loaded.push(pastBlockEvent)
     }
@@ -474,7 +498,6 @@ export default function Calendar() {
   if (loading) {
     return (
       <>
-        {/* Inlined @keyframes for the spinner */}
         <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
