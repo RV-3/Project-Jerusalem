@@ -7,7 +7,6 @@ import {
 } from 'react-router-dom'
 
 import LiveClock from './utils/LiveClock'
-import useTranslate from './useTranslate'
 import client from './utils/sanityClient'
 
 // Pages
@@ -31,7 +30,6 @@ function getSubdomainOrNull() {
 
 // The ChapelLayout extracts subdomain or route param => final slug
 function ChapelLayout() {
-  const t = useTranslate()
   const matchChapel = useMatch('/:chapelSlug/*') // path-based fallback
   const routeSlug = matchChapel?.params?.chapelSlug || null
 
