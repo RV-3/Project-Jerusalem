@@ -46,7 +46,7 @@ function format24HourTo12(hourStr) {
 }
 
 // ---------------------------------------------------------------------
-// Day toggles in multiple languages
+// Day toggles in multiple languages, now including Arabic
 // ---------------------------------------------------------------------
 const DAY_TOGGLES = [
   {
@@ -54,63 +54,77 @@ const DAY_TOGGLES = [
     labelEn: 'Sunday',
     labelDe: 'Sonntag',
     labelEs: 'Domingo',
+    labelAr: 'الأحد',
     shortEn: 'Su',
     shortDe: 'So',
-    shortEs: 'Do'
+    shortEs: 'Do',
+    shortAr: 'أح'
   },
   {
     docKey: 'Monday',
     labelEn: 'Monday',
     labelDe: 'Montag',
     labelEs: 'Lunes',
+    labelAr: 'الاثنين',
     shortEn: 'Mo',
     shortDe: 'Mo',
-    shortEs: 'Lu'
+    shortEs: 'Lu',
+    shortAr: 'اث'
   },
   {
     docKey: 'Tuesday',
     labelEn: 'Tuesday',
     labelDe: 'Dienstag',
     labelEs: 'Martes',
+    labelAr: 'الثلاثاء',
     shortEn: 'Tu',
     shortDe: 'Di',
-    shortEs: 'Ma'
+    shortEs: 'Ma',
+    shortAr: 'ث'
   },
   {
     docKey: 'Wednesday',
     labelEn: 'Wednesday',
     labelDe: 'Mittwoch',
     labelEs: 'Miércoles',
+    labelAr: 'الأربعاء',
     shortEn: 'We',
     shortDe: 'Mi',
-    shortEs: 'Mi'
+    shortEs: 'Mi',
+    shortAr: 'أر'
   },
   {
     docKey: 'Thursday',
     labelEn: 'Thursday',
     labelDe: 'Donnerstag',
     labelEs: 'Jueves',
+    labelAr: 'الخميس',
     shortEn: 'Th',
     shortDe: 'Do',
-    shortEs: 'Ju'
+    shortEs: 'Ju',
+    shortAr: 'خ'
   },
   {
     docKey: 'Friday',
     labelEn: 'Friday',
     labelDe: 'Freitag',
     labelEs: 'Viernes',
+    labelAr: 'الجمعة',
     shortEn: 'Fr',
     shortDe: 'Fr',
-    shortEs: 'Vi'
+    shortEs: 'Vi',
+    shortAr: 'ج'
   },
   {
     docKey: 'Saturday',
     labelEn: 'Saturday',
     labelDe: 'Samstag',
     labelEs: 'Sábado',
+    labelAr: 'السبت',
     shortEn: 'Sa',
     shortDe: 'Sa',
-    shortEs: 'Sá'
+    shortEs: 'Sá',
+    shortAr: 'س'
   }
 ]
 
@@ -118,7 +132,7 @@ const DAY_TOGGLES = [
 // AUTO-BLOCK CONTROLS
 // ---------------------------------------------------------------------
 export function AutoBlockControls({
-  chapelId,          // <--- NEW: pass from AdminBlockCalendar
+  chapelId,
   autoBlockRules,
   setAutoBlockRules,
   autoBlockDays,
@@ -172,7 +186,7 @@ export function AutoBlockControls({
     try {
       const doc = {
         _type: 'autoBlockedHours',
-        chapel: { _ref: chapelId, _type: 'reference' }, // <--- attach the chapel reference
+        chapel: { _ref: chapelId, _type: 'reference' },
         startHour,
         endHour,
         timeExceptions: []
@@ -188,7 +202,8 @@ export function AutoBlockControls({
         t({
           en: 'Error adding auto-block rule. Check console.',
           de: 'Fehler beim Hinzufügen einer automatischen Blockierungsregel. Siehe Konsole.',
-          es: 'Error al agregar la regla de bloqueo automático. Revise la consola.'
+          es: 'Error al agregar la regla de bloqueo automático. Revise la consola.',
+          ar: 'حدث خطأ أثناء إضافة قاعدة الحظر التلقائي. يرجى التحقق من وحدة التحكم.'
         })
       )
     }
@@ -205,7 +220,8 @@ export function AutoBlockControls({
         t({
           en: 'Error removing auto-block rule. Check console.',
           de: 'Fehler beim Entfernen einer automatischen Blockierungsregel. Siehe Konsole.',
-          es: 'Error al eliminar la regla de bloqueo automático. Revise la consola.'
+          es: 'Error al eliminar la regla de bloqueo automático. Revise la consola.',
+          ar: 'حدث خطأ أثناء إزالة قاعدة الحظر التلقائي. تحقق من وحدة التحكم.'
         })
       )
     }
@@ -233,7 +249,7 @@ export function AutoBlockControls({
 
   // On "Save" in the modal
   async function handleSaveDaysModal() {
-    // Detect newly added days => remove matching timeExceptions
+    // Compare old vs new for potential timeExceptions cleanup
     const oldDays = autoBlockDays?.daysOfWeek || []
     const newlyAddedDays = selectedDays.filter((d) => !oldDays.includes(d))
 
@@ -242,7 +258,8 @@ export function AutoBlockControls({
       t({
         en: 'Blocked days saved.',
         de: 'Blockierte Tage gespeichert.',
-        es: 'Días bloqueados guardados.'
+        es: 'Días bloqueados guardados.',
+        ar: 'تم حفظ الأيام المحظورة.'
       })
     )
     setDaysModalOpen(false)
@@ -256,12 +273,11 @@ export function AutoBlockControls({
     }
 
     try {
-      // If no doc exists yet, we can create one with a custom ID or let Sanity generate
       const docId = autoBlockDays?._id || `autoBlockedDays-${chapelId}`
       const docToSave = {
         _id: docId,
         _type: 'autoBlockedDays',
-        chapel: { _ref: chapelId, _type: 'reference' }, // attach chapel
+        chapel: { _ref: chapelId, _type: 'reference' },
         daysOfWeek: daysArr,
         timeExceptions: autoBlockDays?.timeExceptions || []
       }
@@ -270,9 +286,9 @@ export function AutoBlockControls({
       if (newlyAddedDays.length && docToSave.timeExceptions?.length) {
         const filteredEx = docToSave.timeExceptions.filter((ex) => {
           if (!ex.date) return true
-          // e.g. we assume your TIMEZONE or "Asia/Jerusalem"
+          // Example: using 'Asia/Jerusalem' or your chapel timezone
           const exDayName = moment.tz(ex.date, 'Asia/Jerusalem').format('dddd')
-          // if it's a newly added day, remove that exception
+          // If it's a newly added day, remove that exception
           if (newlyAddedDays.includes(exDayName)) {
             return false
           }
@@ -290,7 +306,8 @@ export function AutoBlockControls({
         t({
           en: 'Could not save blocked days. See console.',
           de: 'Blockierte Tage konnten nicht gespeichert werden. Siehe Konsole.',
-          es: 'No se pudieron guardar los días bloqueados. Ver consola.'
+          es: 'No se pudieron guardar los días bloqueados. Ver consola.',
+          ar: 'تعذر حفظ الأيام المحظورة. راجع وحدة التحكم.'
         })
       )
     }
@@ -396,13 +413,24 @@ export function AutoBlockControls({
           {t({
             en: 'Auto-Block Hours',
             de: 'Automatische Stundenblockierung',
-            es: 'Bloqueo automático por horas'
+            es: 'Bloqueo automático por horas',
+            ar: 'حظر الساعات تلقائيًا'
           })}
         </span>
         <span style={{ fontSize: '1rem' }}>
           {showHours
-            ? `▲ ${t({ en: 'Hide', de: 'Ausblenden', es: 'Ocultar' })}`
-            : `▼ ${t({ en: 'Show', de: 'Anzeigen', es: 'Mostrar' })}`}
+            ? `▲ ${t({
+                en: 'Hide',
+                de: 'Ausblenden',
+                es: 'Ocultar',
+                ar: 'إخفاء'
+              })}`
+            : `▼ ${t({
+                en: 'Show',
+                de: 'Anzeigen',
+                es: 'Mostrar',
+                ar: 'إظهار'
+              })}`}
         </span>
       </div>
 
@@ -418,7 +446,8 @@ export function AutoBlockControls({
                       {t({
                         en: 'Block:',
                         de: 'Blockieren:',
-                        es: 'Bloquear:'
+                        es: 'Bloquear:',
+                        ar: 'حظر:'
                       })}
                     </strong>{' '}
                     {format24HourTo12(rule.startHour)} – {format24HourTo12(rule.endHour)}
@@ -435,7 +464,8 @@ export function AutoBlockControls({
                     {t({
                       en: 'Remove',
                       de: 'Entfernen',
-                      es: 'Eliminar'
+                      es: 'Eliminar',
+                      ar: 'إزالة'
                     })}
                     <span style={xIconStyle}>×</span>
                   </button>
@@ -459,7 +489,8 @@ export function AutoBlockControls({
                 {t({
                   en: 'Start Hour:',
                   de: 'Startstunde:',
-                  es: 'Hora de inicio:'
+                  es: 'Hora de inicio:',
+                  ar: 'ساعة البدء:'
                 })}
               </label>
               <select
@@ -468,7 +499,12 @@ export function AutoBlockControls({
                 style={selectStyle}
               >
                 <option value="">
-                  {t({ en: '-- Start --', de: '-- Start --', es: '-- Inicio --' })}
+                  {t({
+                    en: '-- Start --',
+                    de: '-- Start --',
+                    es: '-- Inicio --',
+                    ar: '-- بدء --'
+                  })}
                 </option>
                 {HOUR_OPTIONS_12H.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -485,7 +521,8 @@ export function AutoBlockControls({
                 {t({
                   en: 'End Hour:',
                   de: 'Endstunde:',
-                  es: 'Hora de fin:'
+                  es: 'Hora de fin:',
+                  ar: 'ساعة الانتهاء:'
                 })}
               </label>
               <select
@@ -494,7 +531,12 @@ export function AutoBlockControls({
                 style={selectStyle}
               >
                 <option value="">
-                  {t({ en: '-- End --', de: '-- Ende --', es: '-- Fin --' })}
+                  {t({
+                    en: '-- End --',
+                    de: '-- Ende --',
+                    es: '-- Fin --',
+                    ar: '-- انتهاء --'
+                  })}
                 </option>
                 {filteredEndOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -521,7 +563,8 @@ export function AutoBlockControls({
                 {t({
                   en: 'Add Rule',
                   de: 'Regel hinzufügen',
-                  es: 'Agregar regla'
+                  es: 'Agregar regla',
+                  ar: 'إضافة قاعدة'
                 })}
               </button>
             </div>
@@ -535,13 +578,24 @@ export function AutoBlockControls({
           {t({
             en: 'Auto-Block Days',
             de: 'Automatische Tagesblockierung',
-            es: 'Bloqueo automático de días'
+            es: 'Bloqueo automático de días',
+            ar: 'حظر الأيام تلقائيًا'
           })}
         </span>
         <span style={{ fontSize: '1rem' }}>
           {showDays
-            ? `▲ ${t({ en: 'Hide', de: 'Ausblenden', es: 'Ocultar' })}`
-            : `▼ ${t({ en: 'Show', de: 'Anzeigen', es: 'Mostrar' })}`}
+            ? `▲ ${t({
+                en: 'Hide',
+                de: 'Ausblenden',
+                es: 'Ocultar',
+                ar: 'إخفاء'
+              })}`
+            : `▼ ${t({
+                en: 'Show',
+                de: 'Anzeigen',
+                es: 'Mostrar',
+                ar: 'إظهار'
+              })}`}
         </span>
       </div>
 
@@ -553,7 +607,8 @@ export function AutoBlockControls({
                 {t({
                   en: 'No days blocked',
                   de: 'Keine Tage blockiert',
-                  es: 'Ningún día bloqueado'
+                  es: 'Ningún día bloqueado',
+                  ar: 'لا توجد أيام محظورة'
                 })}
               </em>
             ) : (
@@ -561,7 +616,8 @@ export function AutoBlockControls({
                 const toggleObj = DAY_TOGGLES.find((x) => x.docKey === day)
                 let shortLabel = day
                 if (toggleObj) {
-                  if (language === 'de') shortLabel = toggleObj.shortDe
+                  if (language === 'ar') shortLabel = toggleObj.shortAr
+                  else if (language === 'de') shortLabel = toggleObj.shortDe
                   else if (language === 'es') shortLabel = toggleObj.shortEs
                   else shortLabel = toggleObj.shortEn
                 }
@@ -600,7 +656,8 @@ export function AutoBlockControls({
             {t({
               en: 'Block Days',
               de: 'Tage blockieren',
-              es: 'Bloquear días'
+              es: 'Bloquear días',
+              ar: 'حظر الأيام'
             })}
           </button>
 
@@ -610,7 +667,8 @@ export function AutoBlockControls({
             contentLabel={t({
               en: 'Block Days Modal',
               de: 'Tage blockieren Modal',
-              es: 'Modal para bloquear días'
+              es: 'Modal para bloquear días',
+              ar: 'نافذة حظر الأيام'
             })}
             style={{
               overlay: {
@@ -632,7 +690,8 @@ export function AutoBlockControls({
               {t({
                 en: 'Select which days to block',
                 de: 'Wählen Sie, welche Tage blockiert werden sollen',
-                es: 'Seleccione qué días bloquear'
+                es: 'Seleccione qué días bloquear',
+                ar: 'اختر الأيام المراد حظرها'
               })}
             </h3>
             <div
@@ -644,10 +703,11 @@ export function AutoBlockControls({
                 marginBottom: '1.5rem'
               }}
             >
-              {DAY_TOGGLES.map(({ docKey, shortEn, shortDe, shortEs }) => {
+              {DAY_TOGGLES.map(({ docKey, shortEn, shortDe, shortEs, shortAr }) => {
                 const active = selectedDays.includes(docKey)
                 let shortLabel = shortEn
-                if (language === 'de') shortLabel = shortDe
+                if (language === 'ar') shortLabel = shortAr
+                else if (language === 'de') shortLabel = shortDe
                 else if (language === 'es') shortLabel = shortEs
 
                 return (
@@ -684,7 +744,12 @@ export function AutoBlockControls({
                   fontSize: '1rem'
                 }}
               >
-                {t({ en: 'Save', de: 'Speichern', es: 'Guardar' })}
+                {t({
+                  en: 'Save',
+                  de: 'Speichern',
+                  es: 'Guardar',
+                  ar: 'حفظ'
+                })}
               </button>
               <button
                 onClick={() => setDaysModalOpen(false)}
@@ -694,7 +759,12 @@ export function AutoBlockControls({
                   fontSize: '1rem'
                 }}
               >
-                {t({ en: 'Cancel', de: 'Abbrechen', es: 'Cancelar' })}
+                {t({
+                  en: 'Cancel',
+                  de: 'Abbrechen',
+                  es: 'Cancelar',
+                  ar: 'إلغاء'
+                })}
               </button>
             </div>
           </Modal>

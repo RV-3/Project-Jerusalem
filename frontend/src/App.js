@@ -54,7 +54,6 @@ function ChapelLayout() {
           { slug: chapelSlug }
         )
         .then((doc) => {
-          // Log the fetched doc for debugging:
           console.log('Fetched doc in ChapelLayout =>', doc)
           if (doc) setChapelInfo(doc)
         })
@@ -80,10 +79,15 @@ function ChapelLayout() {
         }}
       >
         {
-          // Show nickname if available, otherwise show name, otherwise fallback
+          // Show nickname if available, otherwise name, otherwise a translated fallback
           chapelInfo?.nickname ||
           chapelInfo?.name ||
-          (chapelSlug ? 'Loading Chapel...' : 'No Chapel Selected')
+          t({
+            en: chapelSlug ? 'Loading Chapel...' : 'No Chapel Selected',
+            de: chapelSlug ? 'Kapelle wird geladen...' : 'Keine Kapelle ausgewählt',
+            es: chapelSlug ? 'Cargando capilla...' : 'Ninguna capilla seleccionada',
+            ar: chapelSlug ? 'جاري تحميل المصلى...' : 'لم يتم اختيار المصلى'
+          })
         }
       </h2>
 
@@ -101,14 +105,16 @@ function ChapelLayout() {
             {t({
               en: 'Main Calendar',
               de: 'Hauptkalender',
-              es: 'Calendario Principal'
+              es: 'Calendario Principal',
+              ar: 'التقويم الرئيسي'
             })}
           </Link>
           <Link to={subdomain ? '/admin' : `/${chapelSlug}/admin`}>
             {t({
               en: 'Admin Panel',
               de: 'Admin-Bereich',
-              es: 'Panel de Administración'
+              es: 'Panel de Administración',
+              ar: 'لوحة الإدارة'
             })}
           </Link>
         </nav>

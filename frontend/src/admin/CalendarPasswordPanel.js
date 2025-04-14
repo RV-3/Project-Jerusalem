@@ -19,7 +19,8 @@ export default function CalendarPasswordPanel({
         t({
           en: 'Please enter a new password.',
           de: 'Bitte geben Sie ein neues Passwort ein.',
-          es: 'Por favor ingrese una nueva contraseña.'
+          es: 'Por favor ingrese una nueva contraseña.',
+          ar: 'الرجاء إدخال كلمة مرور جديدة.'
         })
       )
       return
@@ -56,13 +57,24 @@ export default function CalendarPasswordPanel({
           {t({
             en: 'Calendar Password',
             de: 'Kalenderpasswort',
-            es: 'Contraseña del Calendario'
+            es: 'Contraseña del Calendario',
+            ar: 'كلمة مرور التقويم'
           })}
         </strong>
         <span>
           {panelOpen
-            ? t({ en: '▲ Hide', de: '▲ Verbergen', es: '▲ Ocultar' })
-            : t({ en: '▼ Show', de: '▼ Anzeigen', es: '▼ Mostrar' })}
+            ? t({
+                en: '▲ Hide',
+                de: '▲ Verbergen',
+                es: '▲ Ocultar',
+                ar: '▲ إخفاء'
+              })
+            : t({
+                en: '▼ Show',
+                de: '▼ Anzeigen',
+                es: '▼ Mostrar',
+                ar: '▼ إظهار'
+              })}
         </span>
       </div>
 
@@ -74,7 +86,8 @@ export default function CalendarPasswordPanel({
               {t({
                 en: 'Current Password:',
                 de: 'Aktuelles Passwort:',
-                es: 'Contraseña Actual:'
+                es: 'Contraseña Actual:',
+                ar: 'كلمة المرور الحالية:'
               })}
             </strong>{' '}
             {currentCalendarPassword ? (
@@ -84,7 +97,8 @@ export default function CalendarPasswordPanel({
                 {t({
                   en: '(none)',
                   de: '(kein)',
-                  es: '(ninguna)'
+                  es: '(ninguna)',
+                  ar: '(لا يوجد)'
                 })}
               </em>
             )}
@@ -96,7 +110,8 @@ export default function CalendarPasswordPanel({
               {t({
                 en: 'Set New Password:',
                 de: 'Neues Passwort setzen:',
-                es: 'Establecer nueva contraseña:'
+                es: 'Establecer nueva contraseña:',
+                ar: 'تعيين كلمة مرور جديدة:'
               })}
             </label>
             <input
@@ -104,7 +119,8 @@ export default function CalendarPasswordPanel({
               placeholder={t({
                 en: '(enter new password)',
                 de: '(neues Passwort eingeben)',
-                es: '(ingresar nueva contraseña)'
+                es: '(ingresar nueva contraseña)',
+                ar: '(أدخل كلمة مرور جديدة)'
               })}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
@@ -123,7 +139,12 @@ export default function CalendarPasswordPanel({
               onClick={handleClickSave}
               style={{ marginRight: '0.4rem' }}
             >
-              {t({ en: 'Save', de: 'Speichern', es: 'Guardar' })}
+              {t({
+                en: 'Save',
+                de: 'Speichern',
+                es: 'Guardar',
+                ar: 'حفظ'
+              })}
             </button>
 
             {currentCalendarPassword && (
@@ -131,7 +152,12 @@ export default function CalendarPasswordPanel({
                 className="modern-button modern-button--danger"
                 onClick={() => onRemovePassword(chapelId, existingPasswordDocId)}
               >
-                {t({ en: 'Remove', de: 'Entfernen', es: 'Eliminar' })}
+                {t({
+                  en: 'Remove',
+                  de: 'Entfernen',
+                  es: 'Eliminar',
+                  ar: 'إزالة'
+                })}
               </button>
             )}
           </div>
