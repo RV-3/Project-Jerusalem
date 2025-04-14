@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import LanguageDropdown from '../LanguageDropdown'  // adjust path if needed
 import useTranslate from '../useTranslate'          // adjust path if needed
 
 // You can keep this local, or pass it in as a prop:
@@ -45,9 +44,6 @@ export default function AdminAuthScreen({ onSuccess }) {
         })}
       </h2>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <LanguageDropdown />
-      </div>
 
       <input
         type="password"
