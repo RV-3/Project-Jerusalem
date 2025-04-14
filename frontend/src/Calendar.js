@@ -1,5 +1,5 @@
+// Calendar.js
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-// REMOVE: import { useParams } from 'react-router-dom'
 import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
 import allLocales from '@fullcalendar/core/locales-all'
@@ -20,16 +20,19 @@ import { useLanguage } from './LanguageContext'
 
 Modal.setAppElement('#root')
 
+// Increase the delay by ~20% to reduce "touch sensitivity"
+const platformDelay = isIOS ? 100 : 56
+
 function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
   const start = moment.tz(hStart, tz)
-  const end   = moment.tz(hEnd, tz)
+  const end = moment.tz(hEnd, tz)
   const dateStr = start.format('YYYY-MM-DD')
   return exceptions.some((ex) => {
     if (!ex.date) return false
     if (ex.date.slice(0, 10) !== dateStr) return false
-    const exDay   = start.clone().startOf('day')
+    const exDay = start.clone().startOf('day')
     const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-    const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+    const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
     return start.isBefore(exEnd) && end.isAfter(exStart)
   })
 }
@@ -39,7 +42,7 @@ function doesHourRuleCover(rule, hStart, hEnd, tz) {
   const e = moment.tz(hEnd, tz)
   const dayAnchor = s.clone().startOf('day')
   const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-  const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
+  const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
   if (s.isBefore(rStart) || e.isAfter(rEnd)) return false
   if (isHourExcepted(rule.timeExceptions, hStart, hEnd, tz)) return false
   return true
@@ -48,12 +51,12 @@ function doesHourRuleCover(rule, hStart, hEnd, tz) {
 function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   const slices = []
   let dayCursor = moment.tz(viewStart, tz).startOf('day')
-  const dayEnd  = moment.tz(viewEnd, tz).endOf('day')
+  const dayEnd = moment.tz(viewEnd, tz).endOf('day')
 
   while (dayCursor.isSameOrBefore(dayEnd, 'day')) {
     for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
       const sliceStart = dayCursor.clone().hour(h)
-      const sliceEnd   = sliceStart.clone().add(1, 'hour')
+      const sliceEnd = sliceStart.clone().add(1, 'hour')
       if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
         continue
       }
@@ -78,7 +81,7 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
     if (dayDoc.daysOfWeek.includes(dayName)) {
       for (let h = 0; h < 24; h++) {
         const sliceStart = current.clone().hour(h)
-        const sliceEnd   = sliceStart.clone().add(1, 'hour')
+        const sliceEnd = sliceStart.clone().add(1, 'hour')
         if (sliceEnd.isSameOrBefore(viewStart) || sliceStart.isSameOrAfter(viewEnd)) {
           continue
         }
@@ -112,6 +115,7 @@ function mergeSlices(slices) {
 function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, viewEnd, tz) {
   const events = []
 
+  // Day-based auto blocks
   if (autoBlockDaysDoc) {
     const daySlices = getDayBlockSlices(autoBlockDaysDoc, viewStart, viewEnd, tz)
     daySlices.forEach(([s, e]) => {
@@ -125,6 +129,7 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
     })
   }
 
+  // Hour-based auto blocks
   autoBlockHours.forEach((rule) => {
     const hourSlices = getHourRuleSlices(rule, viewStart, viewEnd, tz)
     hourSlices.forEach(([s, e]) => {
@@ -140,37 +145,23 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
   return events
 }
 
-/**
- * We now accept a prop 'chapelSlug' from App.js or ChapelLayout.
- */
 export default function Calendar({ chapelSlug }) {
   const { language } = useLanguage()
   const t = useTranslate()
 
-  // If we want a fallback for path usage, we could do:
-  // const { chapelSlug: paramSlug } = useParams()
-  // const finalSlug = chapelSlug || paramSlug
-  // But let's assume we always rely on the prop now.
-
-  // Chapel, password
   const [chapel, setChapel] = useState(null)
   const [calendarPassword, setCalendarPassword] = useState('')
   const [enteredPw, setEnteredPw] = useState('')
   const [isUnlocked, setIsUnlocked] = useState(false)
-
-  // "loading" to prevent password screen flash
   const [loading, setLoading] = useState(true)
 
-  // Data
   const [events, setEvents] = useState([])
   const [blockedTimes, setBlockedTimes] = useState([])
   const [autoBlockHours, setAutoBlockHours] = useState([])
   const [autoBlockDays, setAutoBlockDays] = useState(null)
   const [pastBlockEvent, setPastBlockEvent] = useState(null)
 
-  // UI
   const calendarRef = useRef(null)
-  const platformDelay = isIOS ? 85 : 47
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
@@ -182,15 +173,13 @@ export default function Calendar({ chapelSlug }) {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true)
-
-      // If there's no slug at all => stop
       if (!chapelSlug) {
         console.warn('No chapelSlug provided to Calendar')
         setLoading(false)
         return
       }
 
-      // fetch the chapel doc
+      // Fetch the chapel doc
       const chapelDoc = await client.fetch(
         `*[_type == "chapel" && slug.current == $slug][0]{
           _id,
@@ -207,7 +196,7 @@ export default function Calendar({ chapelSlug }) {
       }
       setChapel(chapelDoc)
 
-      // get the chapel's password doc
+      // Fetch password doc
       const pwDoc = await client.fetch(
         `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{
           _id,
@@ -218,9 +207,9 @@ export default function Calendar({ chapelSlug }) {
       const pw = pwDoc?.password || ''
       setCalendarPassword(pw)
 
+      // Check if user is unlocked
       let unlocked = false
       if (!pw) {
-        // no password => unlocked
         unlocked = true
       } else {
         const cachedPw = localStorage.getItem(`calendarUserPw-${chapelDoc._id}`)
@@ -299,7 +288,7 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
-  // 3) Past-block overlay
+  // 2) Past-block overlay
   useEffect(() => {
     if (!isUnlocked) return
     function updatePastBlockEvent() {
@@ -323,7 +312,7 @@ export default function Calendar({ chapelSlug }) {
     const e = moment.tz(end, activeTZ)
     return blockedTimes.some((b) => {
       const bStart = moment.tz(b.start, activeTZ)
-      const bEnd   = moment.tz(b.end, activeTZ)
+      const bEnd = moment.tz(b.end, activeTZ)
       return s.isBefore(bEnd) && e.isAfter(bStart)
     })
   }
@@ -332,6 +321,7 @@ export default function Calendar({ chapelSlug }) {
     if (autoBlockDays?.daysOfWeek?.length) {
       const dayName = moment.tz(start, activeTZ).format('dddd')
       if (autoBlockDays.daysOfWeek.includes(dayName)) {
+        // If there's a matching day, check exceptions
         if (!isHourExcepted(autoBlockDays.timeExceptions, start, end, activeTZ)) {
           return true
         }
@@ -354,16 +344,22 @@ export default function Calendar({ chapelSlug }) {
         return false
       }
       const evtStart = moment.tz(evt.start, activeTZ)
-      const evtEnd   = moment.tz(evt.end, activeTZ)
+      const evtEnd = moment.tz(evt.end, activeTZ)
       return s.isBefore(evtEnd) && e.isAfter(evtStart)
     })
   }
 
+  // 3) Disallow multi-hour selection in handleSelect (or via selectAllow)
   function handleSelect(info) {
     if (!isUnlocked) return
     const { startStr, endStr } = info
     const now = moment.tz(activeTZ)
     const slotStart = moment.tz(startStr, activeTZ)
+    const slotEnd = moment.tz(endStr, activeTZ)
+
+    // Must be exactly 1 hour
+    const durationInMinutes = slotEnd.diff(slotStart, 'minutes')
+    if (durationInMinutes !== 60) return
 
     if (slotStart.isBefore(now)) return
     if (isTimeBlockedByManual(startStr, endStr)) return
@@ -437,6 +433,7 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
+  // 4) Provide events to the calendar
   function loadEvents(fetchInfo, successCallback) {
     if (!isUnlocked) {
       successCallback([])
@@ -481,25 +478,34 @@ export default function Calendar({ chapelSlug }) {
     if (pastBlockEvent) {
       loaded.push(pastBlockEvent)
     }
+
     successCallback(loaded)
   }
 
+  // 5) Additional logic to disallow selection if you prefer (though handleSelect also enforces 1 hour)
   function selectAllow(selectInfo) {
     const now = moment.tz(activeTZ)
     const start = moment.tz(selectInfo.startStr, activeTZ)
-    const end   = moment.tz(selectInfo.endStr, activeTZ)
+    const end = moment.tz(selectInfo.endStr, activeTZ)
+
+    // Must be exactly 60 minutes
+    const durationInMinutes = end.diff(start, 'minutes')
+    if (durationInMinutes !== 60) {
+      return false
+    }
+
     if (start.isBefore(now)) return false
     if (isTimeBlockedByManual(start, end)) return false
     if (isTimeBlockedByAuto(start, end)) return false
     if (isSlotReserved(start, end)) return false
+
     return true
   }
 
   const now = moment.tz(activeTZ)
   const validRangeStart = now.clone().subtract(7, 'days').startOf('day')
-  const validRangeEnd   = now.clone().add(30, 'days').endOf('day')
+  const validRangeEnd = now.clone().add(30, 'days').endOf('day')
 
-  // If still loading => show spinning circle + "Loading..."
   if (loading) {
     return (
       <>
@@ -509,7 +515,6 @@ export default function Calendar({ chapelSlug }) {
             100% { transform: rotate(360deg); }
           }
         `}</style>
-
         <div style={{ textAlign: 'center', marginTop: '3rem' }}>
           <div
             style={{
@@ -528,7 +533,6 @@ export default function Calendar({ chapelSlug }) {
     )
   }
 
-  // Past loading => show password or calendar
   return (
     <>
       {!isUnlocked ? (
@@ -560,7 +564,7 @@ export default function Calendar({ chapelSlug }) {
         </div>
       ) : (
         <>
-          {/* 1) Static image */}
+          {/* 1) Static image/logo */}
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <img
               src="/assets/ladyofgrace.png"
@@ -575,7 +579,7 @@ export default function Calendar({ chapelSlug }) {
             />
           </div>
 
-          {/* 2) Sticky Connect text */}
+          {/* 2) Example "Connect" sticky bar */}
           <div className="sticky-connect">
             <div
               style={{
@@ -646,6 +650,7 @@ export default function Calendar({ chapelSlug }) {
             }}
             stickyHeaderDates
             stickyFooterScrollbar={false}
+            // Increased delays to reduce sensitivity
             longPressDelay={platformDelay}
             selectLongPressDelay={platformDelay}
             eventLongPressDelay={platformDelay}
@@ -673,6 +678,7 @@ export default function Calendar({ chapelSlug }) {
               return []
             }}
             eventContent={(arg) => {
+              // Hide text for background or "blocked" events
               if (
                 arg.event.id.startsWith('blocked-') ||
                 arg.event.id.startsWith('auto-') ||
