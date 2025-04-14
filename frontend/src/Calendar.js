@@ -21,7 +21,7 @@ import { useLanguage } from './LanguageContext'
 Modal.setAppElement('#root')
 
 // Increase the delay by ~20% to reduce "touch sensitivity"
-const platformDelay = isIOS ? 100 : 56
+const platformDelay = isIOS ? 100 : 49
 
 function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
   const start = moment.tz(hStart, tz)
