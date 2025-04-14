@@ -33,7 +33,6 @@ function getSubdomainOrNull() {
 }
 
 function ChapelLayout() {
-  // We can still use the translator if you want text in multiple languages.
   const t = useTranslate()
 
   // Path-based fallback: /:chapelSlug/*
@@ -51,10 +50,12 @@ function ChapelLayout() {
     if (chapelSlug) {
       client
         .fetch(
-          `*[_type == "chapel" && slug.current == $slug][0]{name, timezone}`,
+          `*[_type == "chapel" && slug.current == $slug][0]{name, nickname, timezone}`,
           { slug: chapelSlug }
         )
         .then((doc) => {
+          // Log the fetched doc for debugging:
+          console.log('Fetched doc in ChapelLayout =>', doc)
           if (doc) setChapelInfo(doc)
         })
         .catch((err) => {
@@ -78,8 +79,12 @@ function ChapelLayout() {
           marginBottom: '1.5rem'
         }}
       >
-        {chapelInfo?.name ||
-          (chapelSlug ? 'Loading Chapel...' : 'No Chapel Selected')}
+        {
+          // Show nickname if available, otherwise show name, otherwise fallback
+          chapelInfo?.nickname ||
+          chapelInfo?.name ||
+          (chapelSlug ? 'Loading Chapel...' : 'No Chapel Selected')
+        }
       </h2>
 
       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
@@ -88,10 +93,7 @@ function ChapelLayout() {
 
       {chapelSlug && (
         <nav style={{ textAlign: 'center', marginBottom: '1rem' }}>
-          {/*
-            If subdomain => link to "/" and "/admin"
-            Else => link to "/[chapelSlug]" and "/[chapelSlug]/admin"
-          */}
+          {/* If subdomain => link to "/" and "/admin", otherwise link to "/[chapelSlug]" and "/[chapelSlug]/admin" */}
           <Link
             to={subdomain ? '/' : `/${chapelSlug}`}
             style={{ marginRight: '1rem' }}
@@ -113,27 +115,22 @@ function ChapelLayout() {
       )}
 
       <Routes>
-        {/*
-          Subdomain style => index => <Calendar chapelSlug={chapelSlug} />
-          path="admin" => <AdminBlockCalendar chapelSlug={chapelSlug} />
-        */}
-        <Route
-          index
-          element={<Calendar chapelSlug={chapelSlug} />}
-        />
+        {/* Subdomain style => index => <Calendar chapelSlug={chapelSlug} /> */}
+        <Route index element={<Calendar chapelSlug={chapelSlug} />} />
+
+        {/* Subdomain style => path="admin" => <AdminBlockCalendar chapelSlug={chapelSlug} /> */}
         <Route
           path="admin"
           element={<AdminBlockCalendar chapelSlug={chapelSlug} />}
         />
 
-        {/*
-          Path style => "/:chapelSlug" => <Calendar>
-          "/:chapelSlug/admin" => <AdminBlockCalendar>
-        */}
+        {/* Path style => "/:chapelSlug" => <Calendar> */}
         <Route
           path=":chapelSlug"
           element={<Calendar chapelSlug={chapelSlug} />}
         />
+
+        {/* Path style => "/:chapelSlug/admin" => <AdminBlockCalendar> */}
         <Route
           path=":chapelSlug/admin"
           element={<AdminBlockCalendar chapelSlug={chapelSlug} />}
@@ -154,14 +151,11 @@ export default function App() {
           <Route path="/" element={<WelcomePage />} />
         )}
 
-        {/* Manager, Leaderboard always accessible on main domain (or subdomain if you want) */}
+        {/* Manager, Leaderboard always accessible */}
         <Route path="/manager" element={<ManageChapelsPage />} />
         <Route path="/leaderboard" element={<LeaderboardPage />} />
 
-        {/*
-          Catch-all => ChapelLayout
-          This handles both subdomain-based and path-based chapel routes
-        */}
+        {/* Catch-all => ChapelLayout */}
         <Route path="/*" element={<ChapelLayout />} />
       </Routes>
     </Router>

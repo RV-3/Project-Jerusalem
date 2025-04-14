@@ -200,7 +200,6 @@ export default function Calendar({ chapelSlug }) {
         }`,
         { slug: chapelSlug }
       )
-      )
       if (!chapelDoc) {
         console.warn('No chapel found for slug:', chapelSlug)
         setLoading(false)
