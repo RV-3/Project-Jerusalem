@@ -1,3 +1,4 @@
+// ManageChapelsPage.js
 import React, { useEffect, useState, useCallback } from 'react'
 import client from './utils/sanityClient.js'
 import { useNavigate } from 'react-router-dom'
@@ -13,6 +14,31 @@ const TIMEZONE_OPTIONS = [
   'UTC'
 ]
 
+/**
+ * Helper to build the correct link for each chapel:
+ *
+ * - If the current domain is exactly "legiofidelis.org" or "www.legiofidelis.org",
+ *   return "https://CHAPEL.legiofidelis.org[/admin]"
+ * - Otherwise, fallback to "/CHAPEL[/admin]".
+ */
+function getChapelLink(chapelSlug, { admin = false } = {}) {
+  const hostname = window.location.hostname
+  const parts = hostname.split('.')
+
+  // If exactly "legiofidelis.org" or "www.legiofidelis.org" => subdomain approach
+  if (
+    hostname.endsWith('legiofidelis.org') &&
+    (parts.length === 2 || (parts.length === 3 && parts[0] === 'www'))
+  ) {
+    // e.g. "jerusalem.legiofidelis.org" or "jerusalem.legiofidelis.org/admin"
+    const base = `https://${chapelSlug}.legiofidelis.org`
+    return admin ? `${base}/admin` : base
+  }
+
+  // Fallback: path-based link, e.g. "/jerusalem" or "/jerusalem/admin"
+  return admin ? `/${chapelSlug}/admin` : `/${chapelSlug}`
+}
+
 export default function ManageChapelsPage() {
   const [chapels, setChapels] = useState([])
   const [name, setName] = useState('')
@@ -22,6 +48,7 @@ export default function ManageChapelsPage() {
 
   // For editing existing chapels
   const [editingChapelId, setEditingChapelId] = useState(null)
+  const [editNickname, setEditNickname] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editWhatsapp, setEditWhatsapp] = useState('')
   const [editImageFile, setEditImageFile] = useState(null) // for the user’s newly selected image
@@ -34,6 +61,7 @@ export default function ManageChapelsPage() {
         *[_type == "chapel"]{
           _id,
           name,
+          nickname,
           timezone,
           "slug": slug.current,
           description,
@@ -95,8 +123,9 @@ export default function ManageChapelsPage() {
   // 3) Start editing
   const startEditing = (chap) => {
     setEditingChapelId(chap._id)
+    setEditNickname(chap.nickname || '')
 
-    // Convert block array to text
+    // Convert block array to text for the description
     let descText = ''
     if (chap.description && Array.isArray(chap.description)) {
       descText = chap.description
@@ -107,6 +136,7 @@ export default function ManageChapelsPage() {
         .join('\n\n')
     }
     setEditDescription(descText)
+
     setEditWhatsapp(chap.whatsappNumber || '')
     setEditImageFile(null) // no file selected by default
   }
@@ -114,6 +144,7 @@ export default function ManageChapelsPage() {
   // 4) Cancel editing
   const cancelEditing = () => {
     setEditingChapelId(null)
+    setEditNickname('')
     setEditDescription('')
     setEditWhatsapp('')
     setEditImageFile(null)
@@ -146,6 +177,7 @@ export default function ManageChapelsPage() {
 
       // Build the patch data
       const patchData = {
+        nickname: editNickname,
         description: blockArray,
         whatsappNumber: editWhatsapp
       }
@@ -215,6 +247,18 @@ export default function ManageChapelsPage() {
     }
   }
 
+  // Utility: Navigate to either subdomain or path
+  function goToChapel(chapelSlug, admin = false) {
+    const chapelLink = getChapelLink(chapelSlug, { admin })
+    if (chapelLink.startsWith('/')) {
+      // It's a path-based link (dev/local environment, etc.)
+      navigate(chapelLink)
+    } else {
+      // It's a subdomain link => full page reload
+      window.location.href = chapelLink
+    }
+  }
+
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '1rem' }}>
       <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Manage Chapels</h2>
@@ -281,9 +325,10 @@ export default function ManageChapelsPage() {
       {!loading && chapels.length === 0 && (
         <p style={{ fontStyle: 'italic' }}>No chapels found.</p>
       )}
+
       <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
         {chapels.map((chap) => {
-          const isEditing = (editingChapelId === chap._id)
+          const isEditing = editingChapelId === chap._id
 
           // Convert existing blocks to text for display
           let displayedDesc = ''
@@ -305,6 +350,12 @@ export default function ManageChapelsPage() {
             >
               <strong>Name: </strong> {chap.name}
               <br />
+              {chap.nickname && (
+                <>
+                  <strong>Nickname: </strong> {chap.nickname}
+                  <br />
+                </>
+              )}
               <strong>Timezone: </strong> {chap.timezone}
               <br />
               {chap.slug ? (
@@ -312,7 +363,9 @@ export default function ManageChapelsPage() {
                   <strong>Slug URL: </strong> /{chap.slug}
                   <br />
                 </>
-              ) : <em>(no slug)</em>}
+              ) : (
+                <em>(no slug)</em>
+              )}
 
               {/* If there's an image, display thumbnail */}
               {chap.chapelImage?.asset?.url && (
@@ -350,16 +403,17 @@ export default function ManageChapelsPage() {
                 </>
               )}
 
-              {/* Buttons */}
+              {/* Action Buttons */}
               <div style={{ marginTop: '0.5rem' }}>
+                {/* "Visit Public Calendar" => subdomain or fallback path */}
                 <button
-                  onClick={() => navigate(`/${chap.slug}`)}
+                  onClick={() => goToChapel(chap.slug, false)}
                   style={{ marginRight: '1rem' }}
                 >
                   Visit Public Calendar
                 </button>
                 <button
-                  onClick={() => navigate(`/${chap.slug}/admin`)}
+                  onClick={() => goToChapel(chap.slug, true)}
                   style={{ marginRight: '1rem' }}
                 >
                   Go to Admin
@@ -393,6 +447,23 @@ export default function ManageChapelsPage() {
                     background: '#fafafa'
                   }}
                 >
+                  <label
+                    style={{
+                      display: 'block',
+                      fontWeight: 'bold',
+                      marginBottom: '4px'
+                    }}
+                  >
+                    Nickname
+                  </label>
+                  <input
+                    type="text"
+                    value={editNickname}
+                    onChange={(e) => setEditNickname(e.target.value)}
+                    placeholder="Optional short name or nickname"
+                    style={{ width: '100%', padding: '6px', marginBottom: '8px' }}
+                  />
+
                   <label
                     style={{
                       display: 'block',
@@ -450,7 +521,9 @@ export default function ManageChapelsPage() {
                     >
                       {loading ? 'Saving...' : 'Save'}
                     </button>
-                    <button onClick={cancelEditing}>Cancel</button>
+                    <button onClick={cancelEditing}>
+                      Cancel
+                    </button>
                   </div>
                 </div>
               )}
