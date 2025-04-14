@@ -146,7 +146,7 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
 }
 
 export default function Calendar({ chapelSlug }) {
-  const { language } = useLanguage()
+  const { language, setLanguage } = useLanguage()
   const t = useTranslate()
 
   const [chapel, setChapel] = useState(null)
@@ -179,13 +179,14 @@ export default function Calendar({ chapelSlug }) {
         return
       }
 
-      // Fetch the chapel doc
+      // Fetch the chapel doc (now including "language")
       const chapelDoc = await client.fetch(
         `*[_type == "chapel" && slug.current == $slug][0]{
           _id,
           name,
           nickname,
-          timezone
+          timezone,
+          language
         }`,
         { slug: chapelSlug }
       )
@@ -195,6 +196,11 @@ export default function Calendar({ chapelSlug }) {
         return
       }
       setChapel(chapelDoc)
+
+      // If chapelDoc has a language => override the global language context at load
+      if (chapelDoc.language) {
+        setLanguage(chapelDoc.language)
+      }
 
       // Fetch password doc
       const pwDoc = await client.fetch(
@@ -270,7 +276,7 @@ export default function Calendar({ chapelSlug }) {
     } finally {
       setLoading(false)
     }
-  }, [chapelSlug])
+  }, [chapelSlug, setLanguage])
 
   useEffect(() => {
     fetchData()
