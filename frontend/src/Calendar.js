@@ -192,8 +192,14 @@ export default function Calendar({ chapelSlug }) {
 
       // fetch the chapel doc
       const chapelDoc = await client.fetch(
-        `*[_type == "chapel" && slug.current == $slug][0]`,
+        `*[_type == "chapel" && slug.current == $slug][0]{
+          _id,
+          name,
+          nickname,
+          timezone
+        }`,
         { slug: chapelSlug }
+      )
       )
       if (!chapelDoc) {
         console.warn('No chapel found for slug:', chapelSlug)
