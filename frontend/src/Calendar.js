@@ -1,4 +1,3 @@
-// Calendar.js
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
@@ -155,22 +154,27 @@ export default function Calendar({ chapelSlug }) {
   const [isUnlocked, setIsUnlocked] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // Data arrays
   const [events, setEvents] = useState([])
   const [blockedTimes, setBlockedTimes] = useState([])
   const [autoBlockHours, setAutoBlockHours] = useState([])
   const [autoBlockDays, setAutoBlockDays] = useState(null)
   const [pastBlockEvent, setPastBlockEvent] = useState(null)
 
+  // UI state
   const calendarRef = useRef(null)
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedInfo, setSelectedInfo] = useState(null)
   const [formData, setFormData] = useState({ name: '', phone: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // We'll store the chapel's timezone or fallback
   const activeTZ = chapel?.timezone || TIMEZONE
 
-  // 1) Fetch data
-  const fetchData = useCallback(async () => {
+  // ------------------------------------------------------------------
+  // 1) Load the chapel doc (including .language) + password info
+  // ------------------------------------------------------------------
+  const fetchChapelDoc = useCallback(async () => {
     try {
       setLoading(true)
       if (!chapelSlug) {
@@ -179,7 +183,6 @@ export default function Calendar({ chapelSlug }) {
         return
       }
 
-      // Fetch the chapel doc (now including "language")
       const chapelDoc = await client.fetch(
         `*[_type == "chapel" && slug.current == $slug][0]{
           _id,
@@ -195,25 +198,23 @@ export default function Calendar({ chapelSlug }) {
         setLoading(false)
         return
       }
+
       setChapel(chapelDoc)
 
-      // If chapelDoc has a language => override the global language context at load
+      // If the chapel has a language set => override context
       if (chapelDoc.language) {
         setLanguage(chapelDoc.language)
       }
 
-      // Fetch password doc
+      // Fetch the password doc
       const pwDoc = await client.fetch(
-        `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{
-          _id,
-          password
-        }`,
+        `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{ password }`,
         { chapelId: chapelDoc._id }
       )
       const pw = pwDoc?.password || ''
       setCalendarPassword(pw)
 
-      // Check if user is unlocked
+      // Determine if user is already unlocked via localStorage or if no password
       let unlocked = false
       if (!pw) {
         unlocked = true
@@ -225,68 +226,93 @@ export default function Calendar({ chapelSlug }) {
       }
       setIsUnlocked(unlocked)
 
-      // If unlocked => fetch reservations, blocks, autoBlock
+      // If user is unlocked from the start => load the data
       if (unlocked) {
-        const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
-          client.fetch(
-            `*[_type=="reservation" && chapel._ref == $chapelId]{_id, name, phone, start, end}`,
-            { chapelId: chapelDoc._id }
-          ),
-          client.fetch(
-            `*[_type=="blocked" && chapel._ref == $chapelId]{_id, start, end}`,
-            { chapelId: chapelDoc._id }
-          ),
-          client.fetch(
-            `*[_type=="autoBlockedHours" && chapel._ref == $chapelId]{
-              _id,
-              startHour,
-              endHour,
-              timeExceptions[]{ date, startHour, endHour }
-            }`,
-            { chapelId: chapelDoc._id }
-          ),
-          client.fetch(
-            `*[_type=="autoBlockedDays" && chapel._ref == $chapelId]{
-              _id,
-              daysOfWeek,
-              timeExceptions[]{ date, startHour, endHour }
-            }`,
-            { chapelId: chapelDoc._id }
-          )
-        ])
-
-        setEvents(
-          resData.map((r) => ({
-            id: r._id,
-            title: r.name,
-            start: r.start,
-            end: r.end
-          }))
-        )
-        setBlockedTimes(
-          blocksData.map((b) => ({ _id: b._id, start: b.start, end: b.end }))
-        )
-        setAutoBlockHours(hourRules)
-        if (daysDocs.length) {
-          setAutoBlockDays(daysDocs[0])
-        }
+        await fetchUnlockedData(chapelDoc._id)
       }
     } catch (err) {
-      console.error('Error fetching chapel-based data:', err)
+      console.error('Error fetching chapel doc:', err)
     } finally {
       setLoading(false)
     }
   }, [chapelSlug, setLanguage])
 
-  useEffect(() => {
-    fetchData()
-  }, [fetchData])
+  // ------------------------------------------------------------------
+  // 2) Fetch reservations/blocks if user is "unlocked"
+  // ------------------------------------------------------------------
+  const fetchUnlockedData = useCallback(async (chapelId) => {
+    try {
+      // Load all data in parallel
+      const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
+        client.fetch(
+          `*[_type=="reservation" && chapel._ref == $chapelId]{_id, name, phone, start, end}`,
+          { chapelId }
+        ),
+        client.fetch(
+          `*[_type=="blocked" && chapel._ref == $chapelId]{_id, start, end}`,
+          { chapelId }
+        ),
+        client.fetch(
+          `*[_type=="autoBlockedHours" && chapel._ref == $chapelId]{
+            _id,
+            startHour,
+            endHour,
+            timeExceptions[]{ date, startHour, endHour }
+          }`,
+          { chapelId }
+        ),
+        client.fetch(
+          `*[_type=="autoBlockedDays" && chapel._ref == $chapelId]{
+            _id,
+            daysOfWeek,
+            timeExceptions[]{ date, startHour, endHour }
+          }`,
+          { chapelId }
+        )
+      ])
 
-  function handleCheckPassword() {
+      // Set them into our state
+      setEvents(
+        resData.map((r) => ({
+          id: r._id,
+          title: r.name,
+          start: r.start,
+          end: r.end
+        }))
+      )
+      setBlockedTimes(
+        blocksData.map((b) => ({
+          _id: b._id,
+          start: b.start,
+          end: b.end
+        }))
+      )
+      setAutoBlockHours(hourRules)
+      if (daysDocs.length) {
+        setAutoBlockDays(daysDocs[0])
+      }
+    } catch (err) {
+      console.error('Error fetching "unlocked" data:', err)
+    }
+  }, [])
+
+  // ------------------------------------------------------------------
+  // 3) On mount, fetch chapel doc
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    fetchChapelDoc()
+  }, [fetchChapelDoc])
+
+  // ------------------------------------------------------------------
+  // 4) When user enters password manually
+  // ------------------------------------------------------------------
+  async function handleCheckPassword() {
     if (enteredPw === calendarPassword) {
       setIsUnlocked(true)
       if (chapel?._id) {
         localStorage.setItem(`calendarUserPw-${chapel._id}`, enteredPw)
+        // Now that user is unlocked => fetch the data
+        await fetchUnlockedData(chapel._id)
       }
     } else {
       alert(
@@ -301,7 +327,9 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
-  // 2) Past-block overlay
+  // ------------------------------------------------------------------
+  // 5) Past-block overlay (if unlocked)
+  // ------------------------------------------------------------------
   useEffect(() => {
     if (!isUnlocked) return
     function updatePastBlockEvent() {
@@ -320,6 +348,9 @@ export default function Calendar({ chapelSlug }) {
     return () => clearInterval(interval)
   }, [activeTZ, isUnlocked])
 
+  // ------------------------------------------------------------------
+  // 6) Various checks (manual block, auto block, reservation)
+  // ------------------------------------------------------------------
   function isTimeBlockedByManual(start, end) {
     const s = moment.tz(start, activeTZ)
     const e = moment.tz(end, activeTZ)
@@ -362,7 +393,9 @@ export default function Calendar({ chapelSlug }) {
     })
   }
 
-  // 3) Disallow multi-hour selection in handleSelect (or via selectAllow)
+  // ------------------------------------------------------------------
+  // 7) Calendar selection logic
+  // ------------------------------------------------------------------
   function handleSelect(info) {
     if (!isUnlocked) return
     const { startStr, endStr } = info
@@ -447,7 +480,9 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
-  // 4) Provide events to the calendar
+  // ------------------------------------------------------------------
+  // 8) FullCalendar events / display logic
+  // ------------------------------------------------------------------
   function loadEvents(fetchInfo, successCallback) {
     if (!isUnlocked) {
       successCallback([])
@@ -496,7 +531,6 @@ export default function Calendar({ chapelSlug }) {
     successCallback(loaded)
   }
 
-  // 5) Additional logic to disallow selection if you prefer
   function selectAllow(selectInfo) {
     const now = moment.tz(activeTZ)
     const start = moment.tz(selectInfo.startStr, activeTZ)
@@ -516,10 +550,14 @@ export default function Calendar({ chapelSlug }) {
     return true
   }
 
+  // We'll constrain the calendar to a 7-day past window and 30 days in future
   const now = moment.tz(activeTZ)
   const validRangeStart = now.clone().subtract(7, 'days').startOf('day')
   const validRangeEnd = now.clone().add(30, 'days').endOf('day')
 
+  // ------------------------------------------------------------------
+  // 9) Render
+  // ------------------------------------------------------------------
   if (loading) {
     return (
       <>
@@ -653,7 +691,7 @@ export default function Calendar({ chapelSlug }) {
               momentPlugin,
               momentTimezonePlugin
             ]}
-            // Now includes Arabic for ar
+            // Now includes Arabic for "ar"
             locale={
               language === 'ar'
                 ? 'ar'
