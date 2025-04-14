@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { isIOS } from 'react-device-detect'
 import FullCalendar from '@fullcalendar/react'
 import allLocales from '@fullcalendar/core/locales-all'
-import { TIMEZONE } from './config' // Fallback if chapel.timezone is missing
+import { TIMEZONE } from './config'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import scrollGridPlugin from '@fullcalendar/scrollgrid'
 import interactionPlugin from '@fullcalendar/interaction'
@@ -13,13 +13,11 @@ import client from './utils/sanityClient.js'
 import Modal from 'react-modal'
 import './Calendar.css'
 
-// Our custom translation
 import useTranslate from './useTranslate'
 import { useLanguage } from './LanguageContext'
 
 Modal.setAppElement('#root')
 
-// Increase the delay by ~20% to reduce "touch sensitivity"
 const platformDelay = isIOS ? 100 : 46
 
 function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
@@ -172,77 +170,11 @@ export default function Calendar({ chapelSlug }) {
   const activeTZ = chapel?.timezone || TIMEZONE
 
   // ------------------------------------------------------------------
-  // 1) Load the chapel doc (including .language) + password info
-  // ------------------------------------------------------------------
-  const fetchChapelDoc = useCallback(async () => {
-    try {
-      setLoading(true)
-      if (!chapelSlug) {
-        console.warn('No chapelSlug provided to Calendar')
-        setLoading(false)
-        return
-      }
-
-      const chapelDoc = await client.fetch(
-        `*[_type == "chapel" && slug.current == $slug][0]{
-          _id,
-          name,
-          nickname,
-          timezone,
-          language
-        }`,
-        { slug: chapelSlug }
-      )
-      if (!chapelDoc) {
-        console.warn('No chapel found for slug:', chapelSlug)
-        setLoading(false)
-        return
-      }
-
-      setChapel(chapelDoc)
-
-      // If the chapel has a language set => override context
-      if (chapelDoc.language) {
-        setLanguage(chapelDoc.language)
-      }
-
-      // Fetch the password doc
-      const pwDoc = await client.fetch(
-        `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{ password }`,
-        { chapelId: chapelDoc._id }
-      )
-      const pw = pwDoc?.password || ''
-      setCalendarPassword(pw)
-
-      // Determine if user is already unlocked via localStorage or if no password
-      let unlocked = false
-      if (!pw) {
-        unlocked = true
-      } else {
-        const cachedPw = localStorage.getItem(`calendarUserPw-${chapelDoc._id}`)
-        if (cachedPw && cachedPw === pw) {
-          unlocked = true
-        }
-      }
-      setIsUnlocked(unlocked)
-
-      // If user is unlocked from the start => load the data
-      if (unlocked) {
-        await fetchUnlockedData(chapelDoc._id)
-      }
-    } catch (err) {
-      console.error('Error fetching chapel doc:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [chapelSlug, setLanguage])
-
-  // ------------------------------------------------------------------
-  // 2) Fetch reservations/blocks if user is "unlocked"
+  // 1) Fetch reservations/blocks if user is "unlocked"
+  //    define with empty deps => stable identity
   // ------------------------------------------------------------------
   const fetchUnlockedData = useCallback(async (chapelId) => {
     try {
-      // Load all data in parallel
       const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
         client.fetch(
           `*[_type=="reservation" && chapel._ref == $chapelId]{_id, name, phone, start, end}`,
@@ -271,7 +203,6 @@ export default function Calendar({ chapelSlug }) {
         )
       ])
 
-      // Set them into our state
       setEvents(
         resData.map((r) => ({
           id: r._id,
@@ -294,11 +225,71 @@ export default function Calendar({ chapelSlug }) {
     } catch (err) {
       console.error('Error fetching "unlocked" data:', err)
     }
-  }, [])
+  }, []) // no dependencies => stable
 
   // ------------------------------------------------------------------
-  // 3) On mount, fetch chapel doc
+  // 2) Load the chapel doc (including .language) + password info
+  //    includes fetchUnlockedData in deps
   // ------------------------------------------------------------------
+  const fetchChapelDoc = useCallback(async () => {
+    try {
+      setLoading(true)
+      if (!chapelSlug) {
+        console.warn('No chapelSlug provided to Calendar')
+        setLoading(false)
+        return
+      }
+
+      const chapelDoc = await client.fetch(
+        `*[_type == "chapel" && slug.current == $slug][0]{
+          _id,
+          name,
+          nickname,
+          timezone,
+          language
+        }`,
+        { slug: chapelSlug }
+      )
+      if (!chapelDoc) {
+        console.warn('No chapel found for slug:', chapelSlug)
+        setLoading(false)
+        return
+      }
+
+      setChapel(chapelDoc)
+      if (chapelDoc.language) {
+        setLanguage(chapelDoc.language)
+      }
+
+      const pwDoc = await client.fetch(
+        `*[_type == "calendarPassword" && chapel._ref == $chapelId][0]{ password }`,
+        { chapelId: chapelDoc._id }
+      )
+      const pw = pwDoc?.password || ''
+      setCalendarPassword(pw)
+
+      let unlocked = false
+      if (!pw) {
+        unlocked = true
+      } else {
+        const cachedPw = localStorage.getItem(`calendarUserPw-${chapelDoc._id}`)
+        if (cachedPw && cachedPw === pw) {
+          unlocked = true
+        }
+      }
+      setIsUnlocked(unlocked)
+
+      if (unlocked) {
+        await fetchUnlockedData(chapelDoc._id)
+      }
+    } catch (err) {
+      console.error('Error fetching chapel doc:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [chapelSlug, setLanguage, fetchUnlockedData])
+
+  // 3) On mount, fetch chapel doc
   useEffect(() => {
     fetchChapelDoc()
   }, [fetchChapelDoc])
@@ -311,7 +302,7 @@ export default function Calendar({ chapelSlug }) {
       setIsUnlocked(true)
       if (chapel?._id) {
         localStorage.setItem(`calendarUserPw-${chapel._id}`, enteredPw)
-        // Now that user is unlocked => fetch the data
+        // fetch reservations/blocks now that user is unlocked
         await fetchUnlockedData(chapel._id)
       }
     } else {
@@ -327,9 +318,7 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
-  // ------------------------------------------------------------------
-  // 5) Past-block overlay (if unlocked)
-  // ------------------------------------------------------------------
+  // 5) Past-block overlay
   useEffect(() => {
     if (!isUnlocked) return
     function updatePastBlockEvent() {
@@ -349,7 +338,7 @@ export default function Calendar({ chapelSlug }) {
   }, [activeTZ, isUnlocked])
 
   // ------------------------------------------------------------------
-  // 6) Various checks (manual block, auto block, reservation)
+  // 6) Checks for manual/auto block + reservation
   // ------------------------------------------------------------------
   function isTimeBlockedByManual(start, end) {
     const s = moment.tz(start, activeTZ)
@@ -365,7 +354,6 @@ export default function Calendar({ chapelSlug }) {
     if (autoBlockDays?.daysOfWeek?.length) {
       const dayName = moment.tz(start, activeTZ).format('dddd')
       if (autoBlockDays.daysOfWeek.includes(dayName)) {
-        // If there's a matching day, check exceptions
         if (!isHourExcepted(autoBlockDays.timeExceptions, start, end, activeTZ)) {
           return true
         }
@@ -393,9 +381,7 @@ export default function Calendar({ chapelSlug }) {
     })
   }
 
-  // ------------------------------------------------------------------
-  // 7) Calendar selection logic
-  // ------------------------------------------------------------------
+  // 7) Calendar selection
   function handleSelect(info) {
     if (!isUnlocked) return
     const { startStr, endStr } = info
@@ -480,9 +466,7 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
-  // ------------------------------------------------------------------
-  // 8) FullCalendar events / display logic
-  // ------------------------------------------------------------------
+  // 8) FullCalendar events
   function loadEvents(fetchInfo, successCallback) {
     if (!isUnlocked) {
       successCallback([])
@@ -555,9 +539,6 @@ export default function Calendar({ chapelSlug }) {
   const validRangeStart = now.clone().subtract(7, 'days').startOf('day')
   const validRangeEnd = now.clone().add(30, 'days').endOf('day')
 
-  // ------------------------------------------------------------------
-  // 9) Render
-  // ------------------------------------------------------------------
   if (loading) {
     return (
       <>
@@ -625,7 +606,6 @@ export default function Calendar({ chapelSlug }) {
         </div>
       ) : (
         <>
-          {/* 1) Static image/logo */}
           <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
             <img
               src="/assets/ladyofgrace.png"
@@ -640,7 +620,6 @@ export default function Calendar({ chapelSlug }) {
             />
           </div>
 
-          {/* 2) Example "Connect" sticky bar */}
           <div className="sticky-connect">
             <div
               style={{
@@ -651,7 +630,9 @@ export default function Calendar({ chapelSlug }) {
                 gap: '0.4rem'
               }}
             >
-              <span>{t({ en: 'Connect', de: 'Verbinden', es: 'Conectar', ar: 'تواصل' })}</span>
+              <span>
+                {t({ en: 'Connect', de: 'Verbinden', es: 'Conectar', ar: 'تواصل' })}
+              </span>
               <a
                 href="https://instagram.com/legio.fidelis"
                 target="_blank"
@@ -691,7 +672,6 @@ export default function Calendar({ chapelSlug }) {
               momentPlugin,
               momentTimezonePlugin
             ]}
-            // Now includes Arabic for "ar"
             locale={
               language === 'ar'
                 ? 'ar'
@@ -720,7 +700,6 @@ export default function Calendar({ chapelSlug }) {
             }}
             stickyHeaderDates
             stickyFooterScrollbar={false}
-            // Increased delays to reduce sensitivity
             longPressDelay={platformDelay}
             selectLongPressDelay={platformDelay}
             eventLongPressDelay={platformDelay}
@@ -748,7 +727,6 @@ export default function Calendar({ chapelSlug }) {
               return []
             }}
             eventContent={(arg) => {
-              // Hide text for background or "blocked" events
               if (
                 arg.event.id.startsWith('blocked-') ||
                 arg.event.id.startsWith('auto-') ||
@@ -843,10 +821,7 @@ export default function Calendar({ chapelSlug }) {
                         ar: 'احجز'
                       })}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setModalIsOpen(false)}
-                >
+                <button type="button" onClick={() => setModalIsOpen(false)}>
                   {t({ en: 'Cancel', de: 'Abbrechen', es: 'Cancelar', ar: 'إلغاء' })}
                 </button>
               </div>
