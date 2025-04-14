@@ -283,7 +283,14 @@ export default function Calendar({ chapelSlug }) {
         localStorage.setItem(`calendarUserPw-${chapel._id}`, enteredPw)
       }
     } else {
-      alert('Incorrect password')
+      alert(
+        t({
+          en: 'Incorrect password',
+          de: 'Falsches Passwort',
+          es: 'Contraseña incorrecta',
+          ar: 'كلمة المرور غير صحيحة'
+        })
+      )
       setEnteredPw('')
     }
   }
@@ -425,7 +432,8 @@ export default function Calendar({ chapelSlug }) {
         t({
           en: 'Failed to create reservation. Please try again.',
           de: 'Fehler beim Erstellen der Reservierung. Bitte erneut versuchen.',
-          es: 'No se pudo crear la reserva. Inténtalo de nuevo.'
+          es: 'No se pudo crear la reserva. Inténtalo de nuevo.',
+          ar: 'حدث خطأ أثناء إنشاء الحجز. يرجى المحاولة مرة أخرى.'
         })
       )
     } finally {
@@ -482,7 +490,7 @@ export default function Calendar({ chapelSlug }) {
     successCallback(loaded)
   }
 
-  // 5) Additional logic to disallow selection if you prefer (though handleSelect also enforces 1 hour)
+  // 5) Additional logic to disallow selection if you prefer
   function selectAllow(selectInfo) {
     const now = moment.tz(activeTZ)
     const start = moment.tz(selectInfo.startStr, activeTZ)
@@ -527,7 +535,14 @@ export default function Calendar({ chapelSlug }) {
               animation: 'spin 1s linear infinite'
             }}
           />
-          <p style={{ marginTop: '1rem', color: '#999' }}>Loading...</p>
+          <p style={{ marginTop: '1rem', color: '#999' }}>
+            {t({
+              en: 'Loading...',
+              de: 'Laden...',
+              es: 'Cargando...',
+              ar: 'جارٍ التحميل...'
+            })}
+          </p>
         </div>
       </>
     )
@@ -542,12 +557,14 @@ export default function Calendar({ chapelSlug }) {
               ? t({
                   en: `Enter password for chapel: ${chapel.name}`,
                   de: `Passwort für Kapelle ${chapel.name} eingeben`,
-                  es: `Ingrese la contraseña para la capilla: ${chapel.name}`
+                  es: `Ingrese la contraseña para la capilla: ${chapel.name}`,
+                  ar: `أدخل كلمة المرور للكنيسة: ${chapel.name}`
                 })
               : t({
                   en: 'Enter Calendar Password',
                   de: 'Kalender-Passwort eingeben',
-                  es: 'Ingrese la contraseña del calendario'
+                  es: 'Ingrese la contraseña del calendario',
+                  ar: 'أدخل كلمة مرور التقويم'
                 })}
           </h2>
           <input
@@ -559,7 +576,7 @@ export default function Calendar({ chapelSlug }) {
           />
           <br />
           <button onClick={handleCheckPassword}>
-            {t({ en: 'Submit', de: 'Abschicken', es: 'Enviar' })}
+            {t({ en: 'Submit', de: 'Abschicken', es: 'Enviar', ar: 'إرسال' })}
           </button>
         </div>
       ) : (
@@ -590,7 +607,7 @@ export default function Calendar({ chapelSlug }) {
                 gap: '0.4rem'
               }}
             >
-              <span>Connect</span>
+              <span>{t({ en: 'Connect', de: 'Verbinden', es: 'Conectar', ar: 'تواصل' })}</span>
               <a
                 href="https://instagram.com/legio.fidelis"
                 target="_blank"
@@ -630,7 +647,16 @@ export default function Calendar({ chapelSlug }) {
               momentPlugin,
               momentTimezonePlugin
             ]}
-            locale={language === 'de' ? 'de' : language === 'es' ? 'es' : 'en'}
+            // Now includes Arabic for ar
+            locale={
+              language === 'ar'
+                ? 'ar'
+                : language === 'de'
+                ? 'de'
+                : language === 'es'
+                ? 'es'
+                : 'en'
+            }
             timeZone={activeTZ}
             initialView="timeGrid30Day"
             views={{
@@ -700,7 +726,8 @@ export default function Calendar({ chapelSlug }) {
             contentLabel={t({
               en: 'Reservation Form',
               de: 'Reservierungsformular',
-              es: 'Formulario de Reserva'
+              es: 'Formulario de Reserva',
+              ar: 'نموذج الحجز'
             })}
             style={{
               overlay: { backgroundColor: 'rgba(0, 0, 0, 0.5)', zIndex: 1000 },
@@ -722,7 +749,8 @@ export default function Calendar({ chapelSlug }) {
               {t({
                 en: 'Reserve a Time Slot',
                 de: 'Zeitfenster reservieren',
-                es: 'Reservar un intervalo de tiempo'
+                es: 'Reservar un intervalo de tiempo',
+                ar: 'احجز فترة زمنية'
               })}
             </h2>
             <p style={{ marginBottom: '15px', fontStyle: 'italic' }}>
@@ -730,7 +758,7 @@ export default function Calendar({ chapelSlug }) {
             </p>
             <form onSubmit={handleSubmit}>
               <label>
-                {t({ en: 'Name:', de: 'Name:', es: 'Nombre:' })}
+                {t({ en: 'Name:', de: 'Name:', es: 'Nombre:', ar: 'الاسم:' })}
               </label>
               <input
                 type="text"
@@ -741,7 +769,7 @@ export default function Calendar({ chapelSlug }) {
               />
 
               <label>
-                {t({ en: 'Phone:', de: 'Telefon:', es: 'Teléfono:' })}
+                {t({ en: 'Phone:', de: 'Telefon:', es: 'Teléfono:', ar: 'الهاتف:' })}
               </label>
               <input
                 type="tel"
@@ -758,14 +786,24 @@ export default function Calendar({ chapelSlug }) {
                   style={{ marginRight: '10px' }}
                 >
                   {isSubmitting
-                    ? t({ en: 'Reserving...', de: 'Reservieren...', es: 'Reservando...' })
-                    : t({ en: 'Reserve', de: 'Reservieren', es: 'Reservar' })}
+                    ? t({
+                        en: 'Reserving...',
+                        de: 'Reservieren...',
+                        es: 'Reservando...',
+                        ar: 'جاري الحجز...'
+                      })
+                    : t({
+                        en: 'Reserve',
+                        de: 'Reservieren',
+                        es: 'Reservar',
+                        ar: 'احجز'
+                      })}
                 </button>
                 <button
                   type="button"
                   onClick={() => setModalIsOpen(false)}
                 >
-                  {t({ en: 'Cancel', de: 'Abbrechen', es: 'Cancelar' })}
+                  {t({ en: 'Cancel', de: 'Abbrechen', es: 'Cancelar', ar: 'إلغاء' })}
                 </button>
               </div>
             </form>

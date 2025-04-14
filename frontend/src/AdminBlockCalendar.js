@@ -1,6 +1,5 @@
 // AdminBlockCalendar.js
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-// Remove: import { useParams } from 'react-router-dom'
 import FullCalendar from '@fullcalendar/react'
 import { TIMEZONE } from './config'
 import allLocales from '@fullcalendar/core/locales-all'
@@ -36,39 +35,34 @@ function getLocalMidnightXDaysAgo(daysAgo, tz) {
   return moment.tz(tz).startOf('day').subtract(daysAgo, 'days').toDate()
 }
 
-/**
- * Updated AdminBlockCalendar now receives a prop { chapelSlug }
- */
 export default function AdminBlockCalendar({ chapelSlug }) {
-  // 1) Remove useParams, we rely on the prop
-  // const { chapelSlug } = useParams()
-
-  // 2) Language + Auth
-  const { language } = useLanguage()
+  const { language, setLanguage } = useLanguage()
   const t = useTranslate()
   const [authenticated, setAuthenticated] = useState(
     localStorage.getItem('isAdmin') === 'true'
   )
 
-  // 3) Chapel + password data
+  // Chapel + password data
   const [chapel, setChapel] = useState(null)
   const [calendarPasswordDocId, setCalendarPasswordDocId] = useState(null)
   const [currentCalendarPassword, setCurrentCalendarPassword] = useState('')
 
-  // 4) Data: blocks, reservations, autoBlock
+  // Manual blocks, reservations, autoBlock
   const [blocks, setBlocks] = useState([])
   const [reservations, setReservations] = useState([])
   const [autoBlockRules, setAutoBlockRules] = useState([])
   const [autoBlockDays, setAutoBlockDays] = useState(null)
   const [pastBlockEvent, setPastBlockEvent] = useState(null)
 
-  // 5) UI state
+  // UI state
   const calendarRef = useRef(null)
   const platformDelay = isIOS ? 100 : 47
   const [modalIsOpen, setModalIsOpen] = useState(false)
   const [selectedReservation, setSelectedReservation] = useState(null)
 
-  // 6) Admin password doc fetch
+  /**
+   * 1) Fetch the Chapel password doc
+   */
   const fetchCalendarPassword = useCallback(async (chapelId) => {
     try {
       const pwDoc = await client.fetch(
@@ -90,67 +84,78 @@ export default function AdminBlockCalendar({ chapelSlug }) {
       setCalendarPasswordDocId(null)
       setCurrentCalendarPassword('')
     }
-  }, [])
+  }, [setCalendarPasswordDocId, setCurrentCalendarPassword])
 
   const handleSavePassword = useCallback(
     async (newPw, chapelId, existingDocId) => {
       if (!chapelId) {
-        alert('No chapel ID found. Cannot save password.')
+        alert(t({ en: 'No chapel ID found. Cannot save password.' }))
         return
       }
       try {
         const finalDocId = existingDocId || `calendarPassword-${chapelId}`
-        const result = await client.createOrReplace({
+        await client.createOrReplace({
           _id: finalDocId,
           _type: 'calendarPassword',
           chapel: { _ref: chapelId, _type: 'reference' },
           password: newPw
         })
-        alert('Password saved to Sanity.')
+        alert(t({ en: 'Password saved to Sanity.' }))
         setCurrentCalendarPassword(newPw)
-        setCalendarPasswordDocId(result._id)
+        setCalendarPasswordDocId(finalDocId)
       } catch (err) {
         console.error('Error saving password:', err)
-        alert('Failed to save password.')
+        alert(t({ en: 'Failed to save password.' }))
       }
     },
-    []
+    [t]
   )
 
-  const handleRemovePassword = useCallback(async (chapelId, docId) => {
-    if (!window.confirm('Are you sure you want to remove the calendar password?')) {
-      return
-    }
-    if (!docId) {
-      alert('No password doc for this chapel. Nothing to remove.')
-      return
-    }
-    try {
-      await client.createOrReplace({
-        _id: docId,
-        _type: 'calendarPassword',
-        chapel: { _ref: chapelId, _type: 'reference' },
-        password: ''
-      })
-      alert('Password removed (set to empty).')
-      setCurrentCalendarPassword('')
-    } catch (err) {
-      console.error('Error removing password:', err)
-      alert('Failed to remove password.')
-    }
-  }, [])
+  const handleRemovePassword = useCallback(
+    async (chapelId, docId) => {
+      if (!window.confirm(t({ en: 'Are you sure you want to remove the calendar password?' }))) {
+        return
+      }
+      if (!docId) {
+        alert(t({ en: 'No password doc for this chapel. Nothing to remove.' }))
+        return
+      }
+      try {
+        await client.createOrReplace({
+          _id: docId,
+          _type: 'calendarPassword',
+          chapel: { _ref: chapelId, _type: 'reference' },
+          password: ''
+        })
+        alert(t({ en: 'Password removed (set to empty).' }))
+        setCurrentCalendarPassword('')
+      } catch (err) {
+        console.error('Error removing password:', err)
+        alert(t({ en: 'Failed to remove password.' }))
+      }
+    },
+    [t]
+  )
 
-  // 7) Data fetch
+  /**
+   * 2) Load the Chapel doc (including .language) + all block/res data
+   */
   const fetchData = useCallback(async () => {
-    if (!chapelSlug) return // no slug => skip
+    if (!chapelSlug) return
 
     const calendarApi = calendarRef.current?.getApi()
     const currentViewDate = calendarApi?.getDate()
 
     try {
-      // 1) Chapel doc
+      // Chapel doc (including .language)
       const chapelDoc = await client.fetch(
-        `*[_type == "chapel" && slug.current == $slug][0]`,
+        `*[_type == "chapel" && slug.current == $slug][0]{
+          _id,
+          name,
+          nickname,
+          timezone,
+          language
+        }`,
         { slug: chapelSlug }
       )
       if (!chapelDoc) {
@@ -159,17 +164,22 @@ export default function AdminBlockCalendar({ chapelSlug }) {
       }
       setChapel(chapelDoc)
 
-      // 2) password doc
+      // If the Chapel has a language set => override the global language
+      if (chapelDoc.language) {
+        setLanguage(chapelDoc.language)
+      }
+
+      // Password doc
       await fetchCalendarPassword(chapelDoc._id)
 
-      // 3) Manual blocks
+      // Manual blocks
       const blocksData = await client.fetch(
         `*[_type == "blocked" && chapel._ref == $chapelId]{_id, start, end}`,
         { chapelId: chapelDoc._id }
       )
       setBlocks(blocksData)
 
-      // 4) Reservations
+      // Reservations
       const resData = await client.fetch(
         `*[_type == "reservation" && chapel._ref == $chapelId]{
           _id,
@@ -182,7 +192,7 @@ export default function AdminBlockCalendar({ chapelSlug }) {
       )
       setReservations(resData)
 
-      // 5) Hour-based autoBlock
+      // Hour-based autoBlock
       const autoData = await client.fetch(
         `*[_type == "autoBlockedHours" && chapel._ref == $chapelId]{
           _id,
@@ -194,7 +204,7 @@ export default function AdminBlockCalendar({ chapelSlug }) {
       )
       setAutoBlockRules(autoData)
 
-      // 6) Day-based autoBlock
+      // Day-based autoBlock
       const daysDocArr = await client.fetch(
         `*[_type == "autoBlockedDays" && chapel._ref == $chapelId]{
           _id,
@@ -205,14 +215,14 @@ export default function AdminBlockCalendar({ chapelSlug }) {
       )
       setAutoBlockDays(daysDocArr.length ? daysDocArr[0] : null)
 
-      // 7) Keep FullCalendar on existing date
+      // Restore the view date if possible
       if (calendarApi && currentViewDate) {
         calendarApi.gotoDate(currentViewDate)
       }
     } catch (err) {
       console.error('Error loading data from Sanity:', err)
     }
-  }, [chapelSlug, fetchCalendarPassword])
+  }, [chapelSlug, setLanguage, fetchCalendarPassword])
 
   useEffect(() => {
     if (authenticated) {
@@ -220,7 +230,24 @@ export default function AdminBlockCalendar({ chapelSlug }) {
     }
   }, [authenticated, fetchData])
 
-  // 8) Past-block overlay
+  /**
+   * 3) (Optional) Patch Chapel doc’s language manually if you want to
+   *    But we no longer call this since <LanguageDropdown> does the patch.
+   */
+  // async function handleLanguageChange(newLang) {
+  //   setLanguage(newLang)
+  //   if (chapel?._id) {
+  //     try {
+  //       await client.patch(chapel._id).set({ language: newLang }).commit()
+  //     } catch (err) {
+  //       console.error('Failed to update chapel language in Sanity:', err)
+  //     }
+  //   }
+  // }
+
+  /**
+   * 4) Past-block overlay
+   */
   useEffect(() => {
     if (!chapel?.timezone) return
     function updatePastBlockEvent() {
@@ -240,24 +267,21 @@ export default function AdminBlockCalendar({ chapelSlug }) {
     return () => clearInterval(interval)
   }, [chapel])
 
-  // If not admin => show auth
   if (!authenticated) {
     return <AdminAuthScreen onSuccess={setAuthenticated} />
   }
 
-  // 9) Use chapel's timezone for everything
+  // Use Chapel's timezone or fallback
   const adminTZ = chapel?.timezone || TIMEZONE
 
+  // --------------- BLOCK / RESERVATION LOGIC ---------------
   function isRangeCompletelyBlocked(info) {
     const slotStart = new Date(info.start)
-    const slotEnd   = new Date(info.end)
+    const slotEnd = new Date(info.end)
     let cursor = slotStart
     while (cursor < slotEnd) {
       const nextHour = new Date(cursor.getTime() + 3600000)
-      if (
-        !isManuallyBlocked(cursor, nextHour, blocks) &&
-        !isAutoBlocked(cursor, nextHour)
-      ) {
+      if (!isManuallyBlocked(cursor, nextHour, blocks) && !isAutoBlocked(cursor, nextHour)) {
         return false
       }
       cursor = nextHour
@@ -266,9 +290,6 @@ export default function AdminBlockCalendar({ chapelSlug }) {
   }
 
   function isAutoBlocked(hStart, hEnd) {
-    if (!chapel) return false
-    // Similar logic to Calendar for autoBlock checks
-    // Checking day-based + hour-based rules
     if (autoBlockDays?.daysOfWeek?.length) {
       const dayName = moment.tz(hStart, adminTZ).format('dddd')
       if (autoBlockDays.daysOfWeek.includes(dayName)) {
@@ -277,54 +298,55 @@ export default function AdminBlockCalendar({ chapelSlug }) {
         }
       }
     }
-    return autoBlockRules.some((rule) =>
-      hourRuleCheck(rule, hStart, hEnd)
-    )
+    return autoBlockRules.some((rule) => hourRuleCheck(rule, hStart, hEnd))
   }
 
   function dayExceptionCheck(hStart, hEnd) {
+    // Using the global autoBlockDays
     if (!autoBlockDays?.timeExceptions?.length) return false
     const sLocal = moment.tz(hStart, adminTZ)
-    const eLocal = moment.tz(hEnd,   adminTZ)
+    const eLocal = moment.tz(hEnd, adminTZ)
     const dateStr = sLocal.format('YYYY-MM-DD')
     return autoBlockDays.timeExceptions.some((ex) => {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
-      const exDay   = sLocal.clone().startOf('day')
+      const exDay = sLocal.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
       return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
     })
   }
 
   function hourRuleCheck(rule, hStart, hEnd) {
     const sLocal = moment.tz(hStart, adminTZ)
-    const eLocal = moment.tz(hEnd,   adminTZ)
+    const eLocal = moment.tz(hEnd, adminTZ)
     const dayAnchor = sLocal.clone().startOf('day')
     const rStart = dayAnchor.clone().hour(parseInt(rule.startHour, 10))
-    const rEnd   = dayAnchor.clone().hour(parseInt(rule.endHour,   10))
+    const rEnd = dayAnchor.clone().hour(parseInt(rule.endHour, 10))
 
-    if (sLocal.isBefore(rStart) || eLocal.isAfter(rEnd)) return false
-
-    // Check if there's an exception for this hour
-    if ((rule.timeExceptions || []).some((ex) => {
-      if (!ex.date) return false
-      if (ex.date.slice(0, 10) !== sLocal.format('YYYY-MM-DD')) return false
-      const exDay   = sLocal.clone().startOf('day')
-      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
-      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
-    })) {
+    // If outside the rule's window => not covered
+    if (sLocal.isBefore(rStart) || eLocal.isAfter(rEnd)) {
       return false
     }
-    return true
+    // Check exceptions
+    return !rule.timeExceptions?.some((ex) => {
+      if (!ex.date) return false
+      if (ex.date.slice(0, 10) !== sLocal.format('YYYY-MM-DD')) return false
+      const exDay = sLocal.clone().startOf('day')
+      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
+      const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
+      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
+    })
   }
 
+  /**
+   * Build the events array for FullCalendar
+   */
   function loadEvents(fetchInfo, successCallback) {
     const { start, end } = fetchInfo
     const evts = []
 
-    // 1) Reservations
+    // 1) Real Reservations
     reservations.forEach((r) => {
       evts.push({
         id: r._id,
@@ -392,14 +414,17 @@ export default function AdminBlockCalendar({ chapelSlug }) {
   function getHourSlices(rule, dayStart, dayEnd) {
     const slices = []
     const startLocal = moment.tz(dayStart, adminTZ).startOf('day')
-    const endLocal   = moment.tz(dayEnd,   adminTZ).endOf('day')
+    const endLocal = moment.tz(dayEnd, adminTZ).endOf('day')
 
     while (startLocal.isSameOrBefore(endLocal, 'day')) {
       for (let h = parseInt(rule.startHour, 10); h < parseInt(rule.endHour, 10); h++) {
         const sliceStart = startLocal.clone().hour(h)
-        const sliceEnd   = sliceStart.clone().add(1, 'hour')
+        const sliceEnd = sliceStart.clone().add(1, 'hour')
+
         if (sliceEnd <= dayStart || sliceStart >= dayEnd) continue
-        if (hourRuleExcepted(rule, sliceStart, sliceEnd)) continue
+        if (!hourRuleCheck(rule, sliceStart.toDate(), sliceEnd.toDate())) {
+          continue
+        }
         slices.push([sliceStart.toDate(), sliceEnd.toDate()])
       }
       startLocal.add(1, 'day').startOf('day')
@@ -407,35 +432,25 @@ export default function AdminBlockCalendar({ chapelSlug }) {
     return mergeSlices(slices)
   }
 
-  function hourRuleExcepted(rule, sLocal, eLocal) {
-    // check rule's timeExceptions
-    const exArr = rule.timeExceptions || []
-    const dateStr = sLocal.format('YYYY-MM-DD')
-    return exArr.some((ex) => {
-      if (!ex.date) return false
-      if (ex.date.slice(0, 10) !== dateStr) return false
-      const exDay   = sLocal.clone().startOf('day')
-      const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
-      return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
-    })
-  }
-
   function getDaySlices(dayDoc, rangeStart, rangeEnd) {
     const slices = []
     if (!dayDoc.daysOfWeek?.length) return slices
 
     const currentLocal = moment.tz(rangeStart, adminTZ).startOf('day')
-    const limitLocal   = moment.tz(rangeEnd,   adminTZ).endOf('day')
+    const limitLocal = moment.tz(rangeEnd, adminTZ).endOf('day')
 
     while (currentLocal.isBefore(limitLocal)) {
       const dayName = currentLocal.format('dddd')
       if (dayDoc.daysOfWeek.includes(dayName)) {
         for (let h = 0; h < 24; h++) {
           const sliceStart = currentLocal.clone().hour(h)
-          const sliceEnd   = sliceStart.clone().add(1, 'hour')
+          const sliceEnd = sliceStart.clone().add(1, 'hour')
+
           if (sliceEnd <= rangeStart || sliceStart >= rangeEnd) continue
-          if (dayLevelExcepted(dayDoc, sliceStart, sliceEnd)) continue
+          // If the dayDoc has timeExceptions => skip
+          if (dayDocExceptionCheck(dayDoc, sliceStart.toDate(), sliceEnd.toDate())) {
+            continue
+          }
           slices.push([sliceStart.toDate(), sliceEnd.toDate()])
         }
       }
@@ -444,15 +459,17 @@ export default function AdminBlockCalendar({ chapelSlug }) {
     return mergeSlices(slices)
   }
 
-  function dayLevelExcepted(dayDoc, sLocal, eLocal) {
-    if (!dayDoc.timeExceptions?.length) return false
+  function dayDocExceptionCheck(dayDoc, hStart, hEnd) {
+    if (!dayDoc?.timeExceptions?.length) return false
+    const sLocal = moment.tz(hStart, adminTZ)
+    const eLocal = moment.tz(hEnd, adminTZ)
     const dateStr = sLocal.format('YYYY-MM-DD')
     return dayDoc.timeExceptions.some((ex) => {
       if (!ex.date) return false
       if (ex.date.slice(0, 10) !== dateStr) return false
-      const exDay   = sLocal.clone().startOf('day')
+      const exDay = sLocal.clone().startOf('day')
       const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10))
-      const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10))
+      const exEnd = exDay.clone().hour(parseInt(ex.endHour || '0', 10))
       return sLocal.isBefore(exEnd) && eLocal.isAfter(exStart)
     })
   }
@@ -500,15 +517,7 @@ export default function AdminBlockCalendar({ chapelSlug }) {
 
   async function handleDeleteReservation() {
     if (!selectedReservation) return
-    if (
-      !window.confirm(
-        t({
-          en: 'Delete this reservation?',
-          de: 'Diese Reservierung löschen?',
-          es: '¿Eliminar esta reserva?'
-        })
-      )
-    ) {
+    if (!window.confirm(t({ en: 'Delete this reservation?' }))) {
       return
     }
     await client.delete(selectedReservation._id)
@@ -519,7 +528,7 @@ export default function AdminBlockCalendar({ chapelSlug }) {
 
   function handleBlock(info) {
     if (!chapel) {
-      alert('No chapel found. Cannot block.')
+      alert(t({ en: 'No chapel found. Cannot block.' }))
       return
     }
     return rawHandleBlock(info, blocks, t, fetchData, chapel._id, adminTZ)
@@ -539,24 +548,39 @@ export default function AdminBlockCalendar({ chapelSlug }) {
 
   return (
     <div style={{ padding: '1rem' }}>
+      {/*
+        --------------------------------------------------------------------------------
+        The IMPORTANT fix: we now pass the chapel's _id to <LanguageDropdown chapelId=... />
+        --------------------------------------------------------------------------------
+      */}
       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-        <LanguageDropdown />
+        {chapel && (
+          <LanguageDropdown chapelId={chapel._id} />
+        )}
       </div>
 
       <h2 style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1.8rem' }}>
         {t({
           en: 'Admin Panel',
           de: 'Admin-Bereich',
-          es: 'Panel de Administración'
+          es: 'Panel de Administración',
+          ar: 'لوحة الإدارة'
         })}
       </h2>
 
       {chapel && (
         <p style={{ textAlign: 'center', fontWeight: 'bold' }}>
-          Managing Chapel: {chapel.name}
+          {t({
+            en: 'Managing Chapel: ',
+            de: 'Verwaltung der Kapelle: ',
+            es: 'Gestionando capilla: ',
+            ar: 'إدارة الكنيسة: '
+          })}
+          {chapel.name}
         </p>
       )}
 
+      {/* Password Panel */}
       <CalendarPasswordPanel
         chapelId={chapel?._id || null}
         existingPasswordDocId={calendarPasswordDocId}
@@ -565,6 +589,7 @@ export default function AdminBlockCalendar({ chapelSlug }) {
         onRemovePassword={handleRemovePassword}
       />
 
+      {/* Auto-Block Controls */}
       <AutoBlockControls
         chapelId={chapel?._id || null}
         autoBlockRules={autoBlockRules}
@@ -577,7 +602,15 @@ export default function AdminBlockCalendar({ chapelSlug }) {
       <FullCalendar
         ref={calendarRef}
         locales={allLocales}
-        locale={language === 'de' ? 'de' : language === 'es' ? 'es' : 'en'}
+        locale={
+          language === 'ar'
+            ? 'ar'
+            : language === 'de'
+            ? 'de'
+            : language === 'es'
+            ? 'es'
+            : 'en'
+        }
         plugins={[
           timeGridPlugin,
           scrollGridPlugin,
@@ -619,7 +652,8 @@ export default function AdminBlockCalendar({ chapelSlug }) {
                 t({
                   en: 'Unblock this time slot?',
                   de: 'Dieses Zeitfenster freigeben?',
-                  es: '¿Desbloquear este intervalo de tiempo?'
+                  es: '¿Desbloquear este intervalo de tiempo?',
+                  ar: 'هل تريد إلغاء حظر هذه الفترة الزمنية؟'
                 })
               )
             ) {
@@ -631,7 +665,8 @@ export default function AdminBlockCalendar({ chapelSlug }) {
                 t({
                   en: 'Block this time slot?',
                   de: 'Dieses Zeitfenster blockieren?',
-                  es: '¿Bloquear este intervalo de tiempo?'
+                  es: '¿Bloquear este intervalo de tiempo?',
+                  ar: 'هل تريد حظر هذه الفترة الزمنية؟'
                 })
               )
             ) {
