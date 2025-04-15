@@ -4,65 +4,59 @@ import React, {
   useRef,
   useMemo,
   useCallback
-} from 'react';
-import { Link } from 'react-router-dom';
-import { Map, Marker, Popup, GeolocateControl } from 'react-map-gl/mapbox';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import { createClient } from '@sanity/client';
-import supercluster from 'supercluster';
-import './map.css'; // Your custom CSS overrides
+} from 'react'
+import { Link } from 'react-router-dom'
+import { Map, Marker, Popup, GeolocateControl } from 'react-map-gl/mapbox'
+import 'mapbox-gl/dist/mapbox-gl.css'
+import { createClient } from '@sanity/client'
+import supercluster from 'supercluster'
+import './map.css' // Your custom overrides
 
-import { MapPin, Calendar, MessageCircle } from 'lucide-react';
+import { MapPin, Calendar, MessageCircle } from 'lucide-react'
 
 /** --- SANITY CLIENT --- **/
 const sanityClient = createClient({
-  projectId: 'gt19q25e', // replace with your actual project ID
+  projectId: 'gt19q25e',
   dataset: 'production',
   apiVersion: '2023-01-01',
   useCdn: true
-});
+})
 
 /** --- MAPBOX TOKEN --- **/
 const MAPBOX_TOKEN =
-  'pk.eyJ1Ijoic2VudGluZWwxMiIsImEiOiJjbTlpZXA5YnAwMTdyMmpzY3NpdG11d2l6In0.TGPH36urzsXnF9N3mlN_Og';
+  'pk.eyJ1Ijoic2VudGluZWwxMiIsImEiOiJjbTlpZXA5YnAwMTdyMmpzY3NpdG11d2l6In0.TGPH36urzsXnF9N3mlN_Og'
 
-/**
- * Convert Sanity block-based description => plain text
- */
 function parseDescription(blocks) {
-  if (!blocks || !Array.isArray(blocks)) return '';
+  if (!blocks || !Array.isArray(blocks)) return ''
   return blocks
     .map((block) => {
-      if (!block.children) return '';
-      return block.children.map((span) => span.text).join('');
+      if (!block.children) return ''
+      return block.children.map((span) => span.text).join('')
     })
-    .join('\n\n');
+    .join('\n\n')
 }
 
-/**
- * Build a WhatsApp link from phone number
- */
 function getWhatsappLink(num) {
   if (!num || !num.trim()) {
-    return 'https://wa.me/0000000000';
+    return 'https://wa.me/0000000000'
   }
-  const cleaned = num.replace(/\D+/g, '');
-  return `https://wa.me/${cleaned}`;
+  const cleaned = num.replace(/\D+/g, '')
+  return `https://wa.me/${cleaned}`
 }
 
 export default function MapPage() {
-  const [chapels, setChapels] = useState([]);
-  const [selectedChapel, setSelectedChapel] = useState(null);
+  const [chapels, setChapels] = useState([])
+  const [selectedChapel, setSelectedChapel] = useState(null)
 
   const [viewState, setViewState] = useState({
     longitude: -40,
     latitude: 20,
     zoom: 2.5
-  });
-  const [bounds, setBounds] = useState(null);
-  const mapRef = useRef(null);
+  })
+  const [bounds, setBounds] = useState(null)
+  const mapRef = useRef(null)
 
-  // 1) Fetch chapel data on mount
+  // 1) Fetch data
   useEffect(() => {
     sanityClient
       .fetch(`*[_type == "chapel"]{
@@ -81,13 +75,13 @@ export default function MapPage() {
         "lng": coalesce(location.lng, 0)
       }`)
       .then((data) => {
-        console.log('Fetched chapels =>', data);
-        setChapels(data);
+        console.log('Fetched chapels =>', data)
+        setChapels(data)
       })
-      .catch(console.error);
-  }, []);
+      .catch(console.error)
+  }, [])
 
-  // 2) Convert chapels => GeoJSON features for supercluster
+  // 2) Convert chapels => GeoJSON features
   const points = useMemo(() => {
     return chapels.map((chap) => ({
       type: 'Feature',
@@ -99,82 +93,71 @@ export default function MapPage() {
         type: 'Point',
         coordinates: [chap.lng, chap.lat]
       }
-    }));
-  }, [chapels]);
+    }))
+  }, [chapels])
 
   // 3) Build supercluster
   const clusterIndex = useMemo(() => {
-    return new supercluster({
-      radius: 50,
-      maxZoom: 14
-    }).load(points);
-  }, [points]);
+    return new supercluster({ radius: 50, maxZoom: 14 }).load(points)
+  }, [points])
 
-  // 4) Get clusters for the bounding box
+  // 4) Compute clusters for current bounds
   const clusters = useMemo(() => {
-    if (!bounds) return [];
-    const zoom = Math.floor(viewState.zoom);
-    return clusterIndex.getClusters(bounds, zoom);
-  }, [clusterIndex, bounds, viewState.zoom]);
+    if (!bounds) return []
+    const zoom = Math.floor(viewState.zoom)
+    return clusterIndex.getClusters(bounds, zoom)
+  }, [clusterIndex, bounds, viewState.zoom])
 
-  // onMove => update viewState
-  const handleMove = (evt) => {
-    setViewState(evt.viewState);
-  };
+  const handleMove = (evt) => setViewState(evt.viewState)
 
-  // onMoveEnd => update bounds
   const handleMoveEnd = useCallback(() => {
-    const mapbox = mapRef.current?.getMap();
-    if (!mapbox) return;
-    const newBounds = mapbox.getBounds();
+    const mapbox = mapRef.current?.getMap()
+    if (!mapbox) return
+    const newBounds = mapbox.getBounds()
     setBounds([
       newBounds.getWest(),
       newBounds.getSouth(),
       newBounds.getEast(),
       newBounds.getNorth()
-    ]);
-  }, []);
+    ])
+  }, [])
 
-  // 5) Marker click => expand cluster or open single-chapel popup
+  // 5) Expand or popup
   const handleMarkerClick = (feature, event) => {
-    event.originalEvent.stopPropagation();
-    const { cluster: isCluster, cluster_id: clusterId } = feature.properties;
+    event.originalEvent.stopPropagation()
+
+    const { cluster: isCluster, cluster_id: clusterId } = feature.properties
 
     if (isCluster) {
-      console.log('Clicked a cluster => expanding...');
-      const expansionZoom = clusterIndex.getClusterExpansionZoom(clusterId);
+      const expansionZoom = clusterIndex.getClusterExpansionZoom(clusterId)
       setViewState((prev) => ({
         ...prev,
         longitude: feature.geometry.coordinates[0],
         latitude: feature.geometry.coordinates[1],
         zoom: expansionZoom,
         transitionDuration: 500
-      }));
+      }))
     } else {
-      // Single chapel => open popup & recenter with offset
-      const chapelId = feature.properties.chapelId;
-      const found = chapels.find((c) => c._id === chapelId);
-      console.log('Clicked a single chapel =>', found);
-      setSelectedChapel(found || null);
+      const chapelId = feature.properties.chapelId
+      const found = chapels.find((c) => c._id === chapelId)
+      setSelectedChapel(found || null)
 
-      // We'll "easeTo" the same zoom, but offset upwards so popup is fully visible on mobile
+      // SHIFT THE MAP HIGHER to reveal entire popup on mobile
       if (found && mapRef.current) {
-        const mapbox = mapRef.current.getMap();
-        const currentZoom = mapbox.getZoom();
-        const offsetY = window.innerHeight * 0.25; // shift up 25% of screen height
+        const mapbox = mapRef.current.getMap()
+        const currentZoom = mapbox.getZoom()
+
+        // Use a negative offset for the Y-axis to move popup higher on screen
+        const offsetY = -window.innerHeight * 0.4 // 40% of screen height
         mapbox.easeTo({
           center: [found.lng, found.lat],
           zoom: currentZoom,
-          offset: [0, offsetY],
+          offset: [0, -150],
           duration: 700
-        });
+        })
       }
     }
-  };
-
-  useEffect(() => {
-    console.log('selectedChapel changed =>', selectedChapel);
-  }, [selectedChapel]);
+  }
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
@@ -186,12 +169,8 @@ export default function MapPage() {
         mapboxAccessToken={MAPBOX_TOKEN}
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
-        onClick={() => {
-          console.log('Map clicked => clearing selectedChapel');
-          setSelectedChapel(null);
-        }}
+        onClick={() => setSelectedChapel(null)}
       >
-        {/* "Locate Me" control */}
         <GeolocateControl
           position="top-right"
           trackUserLocation
@@ -199,14 +178,12 @@ export default function MapPage() {
           style={{ margin: '10px' }}
         />
 
-        {/* Render cluster or single-chapel markers */}
         {clusters.map((feature) => {
-          const [longitude, latitude] = feature.geometry.coordinates;
+          const [longitude, latitude] = feature.geometry.coordinates
           const { cluster: isCluster, point_count: pointCount } =
-            feature.properties;
+            feature.properties
 
           if (isCluster) {
-            // cluster marker => bigger pin + count badge
             return (
               <Marker
                 key={`cluster-${feature.id}`}
@@ -238,9 +215,8 @@ export default function MapPage() {
                   </div>
                 </div>
               </Marker>
-            );
+            )
           } else {
-            // single chapel => smaller pin
             return (
               <Marker
                 key={feature.properties.chapelId}
@@ -256,21 +232,17 @@ export default function MapPage() {
                   style={{ cursor: 'pointer' }}
                 />
               </Marker>
-            );
+            )
           }
         })}
 
-        {/* Show popup if a single chapel is selected */}
         {selectedChapel && (
           <Popup
-            className="dark-popup"
+            className="dark-popup bigger-close"
             longitude={selectedChapel.lng}
             latitude={selectedChapel.lat}
             anchor="top"
-            onClose={() => {
-              console.log('Popup closed');
-              setSelectedChapel(null);
-            }}
+            onClose={() => setSelectedChapel(null)}
             closeOnClick={false}
             maxWidth="350px"
           >
@@ -290,18 +262,13 @@ export default function MapPage() {
         )}
       </Map>
     </div>
-  );
+  )
 }
 
-/**
- * Popup content
- */
 function PopupContent({ chapel }) {
-  const displayedDesc = parseDescription(chapel.description);
-  const whatsappLink = getWhatsappLink(chapel.whatsappNumber);
-  const chapelImageUrl = chapel.chapelImage?.asset?.url || '';
-
-  console.log('Rendering PopupContent for chapel =>', chapel.name);
+  const displayedDesc = parseDescription(chapel.description)
+  const whatsappLink = getWhatsappLink(chapel.whatsappNumber)
+  const chapelImageUrl = chapel.chapelImage?.asset?.url || ''
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -315,7 +282,6 @@ function PopupContent({ chapel }) {
         {chapel.name}
       </h3>
 
-      {/* Image or fallback */}
       {chapelImageUrl ? (
         <div
           style={{
@@ -364,13 +330,7 @@ function PopupContent({ chapel }) {
         {displayedDesc.trim() ? displayedDesc : 'No description yet.'}
       </p>
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '2rem'
-        }}
-      >
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem' }}>
         <Link
           to={`/${chapel.slug}`}
           style={{
@@ -382,16 +342,14 @@ function PopupContent({ chapel }) {
             transition: 'color 0.2s ease'
           }}
           onMouseOver={(e) => {
-            e.currentTarget.style.color = '#ddd';
+            e.currentTarget.style.color = '#ddd'
           }}
           onMouseOut={(e) => {
-            e.currentTarget.style.color = '#fff';
+            e.currentTarget.style.color = '#fff'
           }}
         >
           <Calendar size={30} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
-            Calendar
-          </span>
+          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>Calendar</span>
         </Link>
 
         <a
@@ -407,18 +365,16 @@ function PopupContent({ chapel }) {
             transition: 'color 0.2s ease'
           }}
           onMouseOver={(e) => {
-            e.currentTarget.style.color = '#ddd';
+            e.currentTarget.style.color = '#ddd'
           }}
           onMouseOut={(e) => {
-            e.currentTarget.style.color = '#fff';
+            e.currentTarget.style.color = '#fff'
           }}
         >
           <MessageCircle size={30} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
-            Contact
-          </span>
+          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>Contact</span>
         </a>
       </div>
     </div>
-  );
+  )
 }
