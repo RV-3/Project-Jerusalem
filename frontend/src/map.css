@@ -27,4 +27,18 @@
   border: none !important;
   box-shadow: none !important;
   opacity: 1 !important;
+  font-size: 1.1rem !important; /* Normal size on desktop */
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+}
+
+/* Enlarge the close button for mobile (under 768px) */
+@media (max-width: 768px) {
+  .dark-popup .mapboxgl-popup-close-button {
+    font-size: 1.6rem !important;
+    width: 40px !important;
+    height: 40px !important;
+    line-height: 40px !important;
+  }
 }

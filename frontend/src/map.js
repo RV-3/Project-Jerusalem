@@ -51,7 +51,9 @@ export default function MapPage() {
   const [viewState, setViewState] = useState({
     longitude: -40,
     latitude: 20,
-    zoom: 2.5
+    zoom: 2.5,
+    bearing: 0, // ensure initial upright
+    pitch: 0
   })
   const [bounds, setBounds] = useState(null)
   const mapRef = useRef(null)
@@ -108,11 +110,19 @@ export default function MapPage() {
     return clusterIndex.getClusters(bounds, zoom)
   }, [clusterIndex, bounds, viewState.zoom])
 
-  const handleMove = (evt) => setViewState(evt.viewState)
+  // If user drags/rotates => update viewState
+  const handleMove = (evt) => {
+    setViewState(evt.viewState)
+  }
 
+  // onMoveEnd => we do two things:
+  //   1) update bounds
+  //   2) if user left the map rotated or pitched, snap to upright
   const handleMoveEnd = useCallback(() => {
     const mapbox = mapRef.current?.getMap()
     if (!mapbox) return
+
+    // Update bounds
     const newBounds = mapbox.getBounds()
     setBounds([
       newBounds.getWest(),
@@ -120,9 +130,22 @@ export default function MapPage() {
       newBounds.getEast(),
       newBounds.getNorth()
     ])
+
+    // Snap back if bearing/pitch not zero
+    const currentBearing = mapbox.getBearing()
+    const currentPitch = mapbox.getPitch()
+
+    if (currentBearing !== 0 || currentPitch !== 0) {
+      // easeTo -> bearing=0, pitch=0
+      mapbox.easeTo({
+        bearing: 0,
+        pitch: 0,
+        duration: 500
+      })
+    }
   }, [])
 
-  // 5) Expand or popup
+  // 5) Expand cluster or show popup
   const handleMarkerClick = (feature, event) => {
     event.originalEvent.stopPropagation()
 
@@ -146,9 +169,7 @@ export default function MapPage() {
       if (found && mapRef.current) {
         const mapbox = mapRef.current.getMap()
         const currentZoom = mapbox.getZoom()
-
-        // Use a negative offset for the Y-axis to move popup higher on screen
-        const offsetY = -window.innerHeight * 0.36 // 40% of screen height
+        const offsetY = -window.innerHeight * 0.36
         mapbox.easeTo({
           center: [found.lng, found.lat],
           zoom: currentZoom,
@@ -164,6 +185,9 @@ export default function MapPage() {
       <Map
         ref={mapRef}
         {...viewState}
+        // This optional prop ensures user can rotate while dragging,
+        // but we snap back after releasing in onMoveEnd
+        dragRotate={true}
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
@@ -349,7 +373,9 @@ function PopupContent({ chapel }) {
           }}
         >
           <Calendar size={30} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>Calendar</span>
+          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+            Calendar
+          </span>
         </Link>
 
         <a
@@ -372,7 +398,9 @@ function PopupContent({ chapel }) {
           }}
         >
           <MessageCircle size={30} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>Contact</span>
+          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+            Contact
+          </span>
         </a>
       </div>
     </div>
