@@ -4,15 +4,15 @@ import React, {
   useRef,
   useMemo,
   useCallback
-} from 'react'
-import { Link } from 'react-router-dom'
-import { Map, Marker, Popup, GeolocateControl } from 'react-map-gl/mapbox'
-import 'mapbox-gl/dist/mapbox-gl.css'
-import { createClient } from '@sanity/client'
-import supercluster from 'supercluster'
-import './map.css'
+} from 'react';
+import { Link } from 'react-router-dom';
+import { Map, Marker, Popup, GeolocateControl } from 'react-map-gl/mapbox';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { createClient } from '@sanity/client';
+import supercluster from 'supercluster';
+import './map.css';
 
-import { MapPin, Calendar, MessageCircle } from 'lucide-react'
+import { MapPin, Calendar, MessageCircle } from 'lucide-react';
 
 /** --- SANITY CLIENT --- **/
 const sanityClient = createClient({
@@ -20,41 +20,45 @@ const sanityClient = createClient({
   dataset: 'production',
   apiVersion: '2023-01-01',
   useCdn: true
-})
+});
 
 /** --- MAPBOX TOKEN --- **/
 const MAPBOX_TOKEN =
-  'pk.eyJ1Ijoic2VudGluZWwxMiIsImEiOiJjbTlpZXA5YnAwMTdyMmpzY3NpdG11d2l6In0.TGPH36urzsXnF9N3mlN_Og'
+  'pk.eyJ1Ijoic2VudGluZWwxMiIsImEiOiJjbTlpZXA5YnAwMTdyMmpzY3NpdG11d2l6In0.TGPH36urzsXnF9N3mlN_Og';
 
+/** Helper: parse block-based description */
 function parseDescription(blocks) {
-  if (!blocks || !Array.isArray(blocks)) return ''
+  if (!blocks || !Array.isArray(blocks)) return '';
   return blocks
     .map((block) => {
       if (!block.children) return ''
       return block.children.map((span) => span.text).join('')
     })
-    .join('\n\n')
+    .join('\n\n');
 }
 
+/** Helper: build WhatsApp link */
 function getWhatsappLink(num) {
   if (!num || !num.trim()) {
-    return 'https://wa.me/0000000000'
+    return 'https://wa.me/0000000000';
   }
-  const cleaned = num.replace(/\D+/g, '')
-  return `https://wa.me/${cleaned}`
+  const cleaned = num.replace(/\D+/g, '');
+  return `https://wa.me/${cleaned}`;
 }
 
 export default function MapPage() {
-  const [chapels, setChapels] = useState([])
-  const [selectedChapel, setSelectedChapel] = useState(null)
+  const [chapels, setChapels] = useState([]);
+  const [selectedChapel, setSelectedChapel] = useState(null);
 
   const [viewState, setViewState] = useState({
     longitude: -40,
     latitude: 20,
     zoom: 2.5
-  })
-  const [bounds, setBounds] = useState(null)
-  const mapRef = useRef(null)
+  });
+  const [bounds, setBounds] = useState(null);
+
+  // We'll need a ref to get the underlying Map instance
+  const mapRef = useRef(null);
 
   // 1) Fetch chapel data
   useEffect(() => {
@@ -75,11 +79,11 @@ export default function MapPage() {
         "lng": coalesce(location.lng, 0)
       }`)
       .then((data) => {
-        console.log('Fetched chapels =>', data)
-        setChapels(data)
+        console.log('Fetched chapels =>', data);
+        setChapels(data);
       })
-      .catch(console.error)
-  }, [])
+      .catch(console.error);
+  }, []);
 
   // 2) Convert chapels => GeoJSON features for supercluster
   const points = useMemo(() => {
@@ -93,97 +97,112 @@ export default function MapPage() {
         type: 'Point',
         coordinates: [chap.lng, chap.lat]
       }
-    }))
-  }, [chapels])
+    }));
+  }, [chapels]);
 
   // 3) Build supercluster
   const clusterIndex = useMemo(() => {
-    return new supercluster({ radius: 50, maxZoom: 14 }).load(points)
-  }, [points])
+    return new supercluster({
+      radius: 50,
+      maxZoom: 14
+    }).load(points);
+  }, [points]);
 
-  // 4) Compute clusters
+  // 4) Compute clusters each time bounds or zoom changes
   const clusters = useMemo(() => {
-    if (!bounds) return []
-    const zoom = Math.floor(viewState.zoom)
-    return clusterIndex.getClusters(bounds, zoom)
-  }, [clusterIndex, bounds, viewState.zoom])
+    if (!bounds) return [];
+    const zoom = Math.floor(viewState.zoom);
+    return clusterIndex.getClusters(bounds, zoom);
+  }, [clusterIndex, bounds, viewState.zoom]);
 
   // Track user dragging => update viewState
   const handleMove = (evt) => {
-    setViewState(evt.viewState)
-  }
+    setViewState(evt.viewState);
+  };
 
-  // onMoveEnd => update bounds, but also forcibly set bearing/pitch=0 as fallback
+  // onMoveEnd => update bounds, also forcibly reset bearing/pitch if any leftover
   const handleMoveEnd = useCallback(() => {
-    const mapbox = mapRef.current?.getMap()
-    if (!mapbox) return
+    const mapbox = mapRef.current?.getMap();
+    if (!mapbox) return;
 
-    const newBounds = mapbox.getBounds()
+    const newBounds = mapbox.getBounds();
     setBounds([
       newBounds.getWest(),
       newBounds.getSouth(),
       newBounds.getEast(),
       newBounds.getNorth()
-    ])
+    ]);
 
     // If there's leftover rotation/pitch, force them back to 0
     if (mapbox.getBearing() !== 0 || mapbox.getPitch() !== 0) {
-      mapbox.setBearing(0)
-      mapbox.setPitch(0)
+      mapbox.setBearing(0);
+      mapbox.setPitch(0);
     }
-  }, [])
+  }, []);
 
-  // 5) Click cluster => expand, or single => popup
+  // 5) On marker click => either expand cluster or show single chapel popup
   const handleMarkerClick = (feature, event) => {
-    event.originalEvent.stopPropagation()
-    const { cluster: isCluster, cluster_id: clusterId } = feature.properties
+    event.originalEvent.stopPropagation();
+    const { cluster: isCluster, cluster_id: clusterId } = feature.properties;
 
     if (isCluster) {
-      const expansionZoom = clusterIndex.getClusterExpansionZoom(clusterId)
+      const expansionZoom = clusterIndex.getClusterExpansionZoom(clusterId);
       setViewState((prev) => ({
         ...prev,
         longitude: feature.geometry.coordinates[0],
         latitude: feature.geometry.coordinates[1],
         zoom: expansionZoom,
         transitionDuration: 500
-      }))
+      }));
     } else {
-      const chapelId = feature.properties.chapelId
-      const found = chapels.find((c) => c._id === chapelId)
-      setSelectedChapel(found || null)
+      const chapelId = feature.properties.chapelId;
+      const found = chapels.find((c) => c._id === chapelId);
+      setSelectedChapel(found || null);
 
       // SHIFT MAP for mobile
       if (found && mapRef.current) {
-        const mapbox = mapRef.current.getMap()
-        const currentZoom = mapbox.getZoom()
-        const offsetY = -window.innerHeight * 0.36
+        const mapbox = mapRef.current.getMap();
+        const currentZoom = mapbox.getZoom();
+        const offsetY = -window.innerHeight * 0.36; // push popup up ~36% of screen
         mapbox.easeTo({
           center: [found.lng, found.lat],
           zoom: currentZoom,
           offset: [0, offsetY],
           duration: 700
-        })
+        });
       }
     }
-  }
+  };
 
-  // 6) Also forcibly block any "rotate" or "pitch" events that might still sneak in on iOS
+  // 6) Disable tilt/rotation in useEffect after map loads
   useEffect(() => {
-    const mapbox = mapRef.current?.getMap()
-    if (!mapbox) return
+    const mapbox = mapRef.current?.getMap();
+    if (!mapbox) return;
 
-    // "rotate" event => forcibly reset
-    const handleRotate = () => {
-      mapbox.setBearing(0)
-      mapbox.setPitch(0)
+    // 6a) Touch: disable pinch-rotate
+    if (mapbox.touchZoomRotate) {
+      mapbox.touchZoomRotate.disableRotation();
+    }
+    // 6b) If a separate "touchPitch" handler exists, disable it
+    if (mapbox.touchPitch) {
+      mapbox.touchPitch.disable();
+    }
+    // 6c) Keyboard rotation
+    if (mapbox.keyboard) {
+      mapbox.keyboard.disableRotation();
     }
 
-    mapbox.on('rotate', handleRotate)
+    // 6d) Extra safety: if user tries to rotate anyway, forcibly revert
+    const handleRotate = () => {
+      mapbox.setBearing(0);
+      mapbox.setPitch(0);
+    };
+    mapbox.on('rotate', handleRotate);
 
     return () => {
-      mapbox.off('rotate', handleRotate)
-    }
-  }, [])
+      mapbox.off('rotate', handleRotate);
+    };
+  }, []);
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
@@ -194,13 +213,12 @@ export default function MapPage() {
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
 
-        /* Hard disable any tilt/rotation: */
+        /* Hard disable tilt/rotation: */
         dragRotate={false}
         pitchWithRotate={false}
         touchZoomRotate={{ pinchToZoom: true, rotate: false }}
         minPitch={0}
         maxPitch={0}
-        // We'll rely on handleMoveEnd + handleRotate fallback, too
 
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
@@ -213,10 +231,10 @@ export default function MapPage() {
           style={{ margin: '10px' }}
         />
 
+        {/* Render cluster markers or single chapel markers */}
         {clusters.map((feature) => {
-          const [longitude, latitude] = feature.geometry.coordinates
-          const { cluster: isCluster, point_count: pointCount } =
-            feature.properties
+          const [longitude, latitude] = feature.geometry.coordinates;
+          const { cluster: isCluster, point_count: pointCount } = feature.properties;
 
           if (isCluster) {
             return (
@@ -250,7 +268,7 @@ export default function MapPage() {
                   </div>
                 </div>
               </Marker>
-            )
+            );
           } else {
             return (
               <Marker
@@ -267,10 +285,11 @@ export default function MapPage() {
                   style={{ cursor: 'pointer' }}
                 />
               </Marker>
-            )
+            );
           }
         })}
 
+        {/* If user clicked a single chapel => show popup */}
         {selectedChapel && (
           <Popup
             className="dark-popup bigger-close"
@@ -297,13 +316,13 @@ export default function MapPage() {
         )}
       </Map>
     </div>
-  )
+  );
 }
 
 function PopupContent({ chapel }) {
-  const displayedDesc = parseDescription(chapel.description)
-  const whatsappLink = getWhatsappLink(chapel.whatsappNumber)
-  const chapelImageUrl = chapel.chapelImage?.asset?.url || ''
+  const displayedDesc = parseDescription(chapel.description);
+  const whatsappLink = getWhatsappLink(chapel.whatsappNumber);
+  const chapelImageUrl = chapel.chapelImage?.asset?.url || '';
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -403,5 +422,5 @@ function PopupContent({ chapel }) {
         </a>
       </div>
     </div>
-  )
+  );
 }
