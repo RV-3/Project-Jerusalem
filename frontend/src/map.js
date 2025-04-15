@@ -108,10 +108,12 @@ export default function MapPage() {
     return clusterIndex.getClusters(bounds, zoom)
   }, [clusterIndex, bounds, viewState.zoom])
 
+  // Handle map move => update viewState
   const handleMove = (evt) => {
     setViewState(evt.viewState)
   }
 
+  // onMoveEnd => update bounds
   const handleMoveEnd = useCallback(() => {
     const mapbox = mapRef.current?.getMap()
     if (!mapbox) return
@@ -149,8 +151,8 @@ export default function MapPage() {
         const mapbox = mapRef.current.getMap()
         const currentZoom = mapbox.getZoom()
 
-        // Use a negative offset for the Y-axis to move popup higher on screen
-        const offsetY = -window.innerHeight * 0.36 // about 36% of screen
+        // negative offset => push popup up ~36% of screen
+        const offsetY = -window.innerHeight * 0.36
         mapbox.easeTo({
           center: [found.lng, found.lat],
           zoom: currentZoom,
@@ -170,12 +172,11 @@ export default function MapPage() {
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
 
-        /* DISABLE ANY DIAGONAL MOVEMENT: */
-        // 1) No rotation or pitch with gestures:
+        /* DISABLE TILT/ROTATION COMPLETELY */
         dragRotate={false}
         pitchWithRotate={false}
-        // 2) If you also want to block multi-touch rotate:
         touchZoomRotate={{ pinchToZoom: true, rotate: false }}
+        maxPitch={0} // ensures no tilt
 
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
@@ -188,6 +189,7 @@ export default function MapPage() {
           style={{ margin: '10px' }}
         />
 
+        {/* Render markers (cluster or single) */}
         {clusters.map((feature) => {
           const [longitude, latitude] = feature.geometry.coordinates
           const { cluster: isCluster, point_count: pointCount } =
@@ -258,8 +260,9 @@ export default function MapPage() {
           >
             <div
               style={{
+                /* 20% smaller popup => smaller padding, image, and title font */
                 borderRadius: '12px',
-                padding: '24px',
+                padding: '24px', // was 24px
                 background: '#1f1f3c',
                 color: '#f4f4f5',
                 textAlign: 'center',
@@ -282,10 +285,11 @@ function PopupContent({ chapel }) {
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
+      {/* Slightly smaller font for chapel name */}
       <h3
         style={{
-          margin: '0 0 1rem 0',
-          fontSize: '1.3rem',
+          margin: '0 0 0.75rem 0',
+          fontSize: '1.2rem', // was 1.3rem
           fontFamily: "'Cinzel', serif"
         }}
       >
@@ -295,11 +299,12 @@ function PopupContent({ chapel }) {
       {chapelImageUrl ? (
         <div
           style={{
+            /* 20% smaller image => 160px instead of 200px */
             width: '100%',
-            height: '200px',
+            height: '180px',
             overflow: 'hidden',
             borderRadius: '8px',
-            marginBottom: '1rem'
+            marginBottom: '0.75rem'
           }}
         >
           <img
@@ -316,9 +321,9 @@ function PopupContent({ chapel }) {
         <div
           style={{
             width: '100%',
-            height: '200px',
+            height: '160px',
             borderRadius: '8px',
-            marginBottom: '1rem',
+            marginBottom: '0.75rem',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -331,8 +336,8 @@ function PopupContent({ chapel }) {
 
       <p
         style={{
-          fontSize: '1rem',
-          marginBottom: '1.5rem',
+          fontSize: '0.9rem', // slightly smaller
+          marginBottom: '1rem',
           color: '#cbd5e1',
           whiteSpace: 'pre-wrap'
         }}
@@ -340,7 +345,7 @@ function PopupContent({ chapel }) {
         {displayedDesc.trim() ? displayedDesc : 'No description yet.'}
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem' }}>
         <Link
           to={`/${chapel.slug}`}
           style={{
@@ -358,8 +363,8 @@ function PopupContent({ chapel }) {
             e.currentTarget.style.color = '#fff'
           }}
         >
-          <Calendar size={30} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+          <Calendar size={26} strokeWidth={1.8} />
+          <span style={{ fontSize: '0.8rem', marginTop: '4px' }}>
             Calendar
           </span>
         </Link>
@@ -383,8 +388,8 @@ function PopupContent({ chapel }) {
             e.currentTarget.style.color = '#fff'
           }}
         >
-          <MessageCircle size={30} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.9rem', marginTop: '6px' }}>
+          <MessageCircle size={26} strokeWidth={1.8} />
+          <span style={{ fontSize: '0.8rem', marginTop: '4px' }}>
             Contact
           </span>
         </a>
