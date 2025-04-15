@@ -10,14 +10,13 @@ import { Map, Marker, Popup, GeolocateControl } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { createClient } from '@sanity/client';
 import supercluster from 'supercluster';
-import './map.css'; // <-- Import the custom CSS overrides
+import './map.css'; // Your custom CSS overrides
 
-// Lucide icons
 import { MapPin, Calendar, MessageCircle } from 'lucide-react';
 
 /** --- SANITY CLIENT --- **/
 const sanityClient = createClient({
-  projectId: 'gt19q25e', // Your project ID
+  projectId: 'gt19q25e', // replace with your actual project ID
   dataset: 'production',
   apiVersion: '2023-01-01',
   useCdn: true
@@ -55,17 +54,12 @@ export default function MapPage() {
   const [chapels, setChapels] = useState([]);
   const [selectedChapel, setSelectedChapel] = useState(null);
 
-  // For react-map-gl: track map view
   const [viewState, setViewState] = useState({
     longitude: -40,
     latitude: 20,
     zoom: 2.5
   });
-
-  // We'll store map bounds for supercluster
   const [bounds, setBounds] = useState(null);
-
-  // Reference to the map instance
   const mapRef = useRef(null);
 
   // 1) Fetch chapel data on mount
@@ -87,15 +81,13 @@ export default function MapPage() {
         "lng": coalesce(location.lng, 0)
       }`)
       .then((data) => {
-        console.log('Fetched chapels =>', data); // Log the array of chapels
+        console.log('Fetched chapels =>', data);
         setChapels(data);
       })
-      .catch((err) => {
-        console.error('Error fetching chapels:', err);
-      });
+      .catch(console.error);
   }, []);
 
-  // 2) Convert chapels => an array of GeoJSON Features for supercluster
+  // 2) Convert chapels => GeoJSON features for supercluster
   const points = useMemo(() => {
     return chapels.map((chap) => ({
       type: 'Feature',
@@ -110,34 +102,31 @@ export default function MapPage() {
     }));
   }, [chapels]);
 
-  // 3) Build supercluster index
+  // 3) Build supercluster
   const clusterIndex = useMemo(() => {
     return new supercluster({
-      radius: 50, // px
+      radius: 50,
       maxZoom: 14
     }).load(points);
   }, [points]);
 
-  // 4) Compute clusters for the bounding box + current zoom
+  // 4) Get clusters for the bounding box
   const clusters = useMemo(() => {
     if (!bounds) return [];
     const zoom = Math.floor(viewState.zoom);
-    const c = clusterIndex.getClusters(bounds, zoom);
-    return c;
+    return clusterIndex.getClusters(bounds, zoom);
   }, [clusterIndex, bounds, viewState.zoom]);
 
-  // 5) Handle map "move" => update viewState
+  // onMove => update viewState
   const handleMove = (evt) => {
     setViewState(evt.viewState);
   };
 
-  // On move end => update bounding box from map
+  // onMoveEnd => update bounds
   const handleMoveEnd = useCallback(() => {
     const mapbox = mapRef.current?.getMap();
     if (!mapbox) return;
-
     const newBounds = mapbox.getBounds();
-    // west, south, east, north
     setBounds([
       newBounds.getWest(),
       newBounds.getSouth(),
@@ -146,7 +135,7 @@ export default function MapPage() {
     ]);
   }, []);
 
-  // 6) Marker click => either expand cluster or show single-chapel popup
+  // 5) Marker click => expand cluster or open single-chapel popup
   const handleMarkerClick = (feature, event) => {
     event.originalEvent.stopPropagation();
     const { cluster: isCluster, cluster_id: clusterId } = feature.properties;
@@ -162,14 +151,27 @@ export default function MapPage() {
         transitionDuration: 500
       }));
     } else {
+      // Single chapel => open popup & recenter with offset
       const chapelId = feature.properties.chapelId;
       const found = chapels.find((c) => c._id === chapelId);
       console.log('Clicked a single chapel =>', found);
       setSelectedChapel(found || null);
+
+      // We'll "easeTo" the same zoom, but offset upwards so popup is fully visible on mobile
+      if (found && mapRef.current) {
+        const mapbox = mapRef.current.getMap();
+        const currentZoom = mapbox.getZoom();
+        const offsetY = window.innerHeight * 0.25; // shift up 25% of screen height
+        mapbox.easeTo({
+          center: [found.lng, found.lat],
+          zoom: currentZoom,
+          offset: [0, offsetY],
+          duration: 700
+        });
+      }
     }
   };
 
-  // Log whenever selectedChapel changes
   useEffect(() => {
     console.log('selectedChapel changed =>', selectedChapel);
   }, [selectedChapel]);
@@ -189,6 +191,7 @@ export default function MapPage() {
           setSelectedChapel(null);
         }}
       >
+        {/* "Locate Me" control */}
         <GeolocateControl
           position="top-right"
           trackUserLocation
@@ -196,14 +199,14 @@ export default function MapPage() {
           style={{ margin: '10px' }}
         />
 
-        {/* Render cluster or single chapel markers */}
+        {/* Render cluster or single-chapel markers */}
         {clusters.map((feature) => {
           const [longitude, latitude] = feature.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } =
             feature.properties;
 
           if (isCluster) {
-            // cluster => big pin + count badge
+            // cluster marker => bigger pin + count badge
             return (
               <Marker
                 key={`cluster-${feature.id}`}
@@ -257,10 +260,10 @@ export default function MapPage() {
           }
         })}
 
-        {/* If a chapel is selected => show the popup */}
+        {/* Show popup if a single chapel is selected */}
         {selectedChapel && (
           <Popup
-            className="dark-popup" // To override mapbox defaults
+            className="dark-popup"
             longitude={selectedChapel.lng}
             latitude={selectedChapel.lat}
             anchor="top"
@@ -279,7 +282,6 @@ export default function MapPage() {
                 color: '#f4f4f5',
                 textAlign: 'center',
                 boxShadow: '0 0 8px rgba(139, 92, 246, 0.4)'
-
               }}
             >
               <PopupContent chapel={selectedChapel} />
