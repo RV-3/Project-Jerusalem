@@ -51,9 +51,7 @@ export default function MapPage() {
   const [viewState, setViewState] = useState({
     longitude: -40,
     latitude: 20,
-    zoom: 2.5,
-    bearing: 0, // ensure initial upright
-    pitch: 0
+    zoom: 2.5
   })
   const [bounds, setBounds] = useState(null)
   const mapRef = useRef(null)
@@ -110,19 +108,13 @@ export default function MapPage() {
     return clusterIndex.getClusters(bounds, zoom)
   }, [clusterIndex, bounds, viewState.zoom])
 
-  // If user drags/rotates => update viewState
   const handleMove = (evt) => {
     setViewState(evt.viewState)
   }
 
-  // onMoveEnd => we do two things:
-  //   1) update bounds
-  //   2) if user left the map rotated or pitched, snap to upright
   const handleMoveEnd = useCallback(() => {
     const mapbox = mapRef.current?.getMap()
     if (!mapbox) return
-
-    // Update bounds
     const newBounds = mapbox.getBounds()
     setBounds([
       newBounds.getWest(),
@@ -130,22 +122,9 @@ export default function MapPage() {
       newBounds.getEast(),
       newBounds.getNorth()
     ])
-
-    // Snap back if bearing/pitch not zero
-    const currentBearing = mapbox.getBearing()
-    const currentPitch = mapbox.getPitch()
-
-    if (currentBearing !== 0 || currentPitch !== 0) {
-      // easeTo -> bearing=0, pitch=0
-      mapbox.easeTo({
-        bearing: 0,
-        pitch: 0,
-        duration: 500
-      })
-    }
   }, [])
 
-  // 5) Expand cluster or show popup
+  // 5) Expand or popup
   const handleMarkerClick = (feature, event) => {
     event.originalEvent.stopPropagation()
 
@@ -169,7 +148,9 @@ export default function MapPage() {
       if (found && mapRef.current) {
         const mapbox = mapRef.current.getMap()
         const currentZoom = mapbox.getZoom()
-        const offsetY = -window.innerHeight * 0.36
+
+        // Use a negative offset for the Y-axis to move popup higher on screen
+        const offsetY = -window.innerHeight * 0.36 // about 36% of screen
         mapbox.easeTo({
           center: [found.lng, found.lat],
           zoom: currentZoom,
@@ -185,12 +166,17 @@ export default function MapPage() {
       <Map
         ref={mapRef}
         {...viewState}
-        // This optional prop ensures user can rotate while dragging,
-        // but we snap back after releasing in onMoveEnd
-        dragRotate={true}
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
+
+        /* DISABLE ANY DIAGONAL MOVEMENT: */
+        // 1) No rotation or pitch with gestures:
+        dragRotate={false}
+        pitchWithRotate={false}
+        // 2) If you also want to block multi-touch rotate:
+        touchZoomRotate={{ pinchToZoom: true, rotate: false }}
+
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
         onClick={() => setSelectedChapel(null)}
