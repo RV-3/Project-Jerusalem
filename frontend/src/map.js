@@ -31,8 +31,8 @@ function parseDescription(blocks) {
   if (!blocks || !Array.isArray(blocks)) return '';
   return blocks
     .map((block) => {
-      if (!block.children) return ''
-      return block.children.map((span) => span.text).join('')
+      if (!block.children) return '';
+      return block.children.map((span) => span.text).join('');
     })
     .join('\n\n');
 }
@@ -133,7 +133,7 @@ export default function MapPage() {
       newBounds.getNorth()
     ]);
 
-    // If there's leftover rotation/pitch, force them back to 0
+    // Fallback: If there's any leftover rotation/pitch, force them back to 0
     if (mapbox.getBearing() !== 0 || mapbox.getPitch() !== 0) {
       mapbox.setBearing(0);
       mapbox.setPitch(0);
@@ -174,34 +174,28 @@ export default function MapPage() {
     }
   };
 
-  // 6) Disable tilt/rotation in useEffect after map loads
-  useEffect(() => {
-    const mapbox = mapRef.current?.getMap();
-    if (!mapbox) return;
+  // 6) Definitively disable rotation & tilt after map loads
+  const handleMapLoad = useCallback(() => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
 
-    // 6a) Touch: disable pinch-rotate
-    if (mapbox.touchZoomRotate) {
-      mapbox.touchZoomRotate.disableRotation();
-    }
-    // 6b) If a separate "touchPitch" handler exists, disable it
-    if (mapbox.touchPitch) {
-      mapbox.touchPitch.disable();
-    }
-    // 6c) Keyboard rotation
-    if (mapbox.keyboard) {
-      mapbox.keyboard.disableRotation();
-    }
+    // Lock the map pitch to 0 (top-down)
+    map.setMinPitch(0);
+    map.setMaxPitch(0);
 
-    // 6d) Extra safety: if user tries to rotate anyway, forcibly revert
-    const handleRotate = () => {
-      mapbox.setBearing(0);
-      mapbox.setPitch(0);
-    };
-    mapbox.on('rotate', handleRotate);
+    // Disable two-finger drag tilt on mobile
+    map.touchPitch.disable();
 
-    return () => {
-      mapbox.off('rotate', handleRotate);
-    };
+    // Disable rotation interactions
+    map.dragRotate.disable();
+    map.touchZoomRotate.disableRotation();
+    map.keyboard.disableRotation();
+
+    // (Optional) If you want to forcibly revert any rotation from code
+    map.on('rotate', () => {
+      map.setBearing(0);
+      map.setPitch(0);
+    });
   }, []);
 
   return (
@@ -213,13 +207,14 @@ export default function MapPage() {
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
 
-        /* Hard disable tilt/rotation: */
+        /* Hard disable tilt/rotation via props, too: */
         dragRotate={false}
         pitchWithRotate={false}
         touchZoomRotate={{ pinchToZoom: true, rotate: false }}
         minPitch={0}
         maxPitch={0}
 
+        onLoad={handleMapLoad}
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
         onClick={() => setSelectedChapel(null)}
