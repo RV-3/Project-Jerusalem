@@ -148,7 +148,7 @@ export default function MapPage() {
         const currentZoom = mapbox.getZoom()
 
         // Use a negative offset for the Y-axis to move popup higher on screen
-        const offsetY = -window.innerHeight * 0.4 // 40% of screen height
+        const offsetY = -window.innerHeight * 0.36 // 40% of screen height
         mapbox.easeTo({
           center: [found.lng, found.lat],
           zoom: currentZoom,
