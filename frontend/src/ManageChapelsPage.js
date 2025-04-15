@@ -51,7 +51,11 @@ export default function ManageChapelsPage() {
   const [editNickname, setEditNickname] = useState('')
   const [editDescription, setEditDescription] = useState('')
   const [editWhatsapp, setEditWhatsapp] = useState('')
-  const [editImageFile, setEditImageFile] = useState(null) // for the user’s newly selected image
+  const [editImageFile, setEditImageFile] = useState(null)
+
+  // New: Track lat/lng fields
+  const [editLat, setEditLat] = useState('')
+  const [editLng, setEditLng] = useState('')
 
   // 1) Fetch chapels
   const fetchChapels = useCallback(async () => {
@@ -71,7 +75,8 @@ export default function ManageChapelsPage() {
               _id,
               url
             }
-          }
+          },
+          location
         } | order(name asc)
       `)
       setChapels(data)
@@ -138,7 +143,11 @@ export default function ManageChapelsPage() {
     setEditDescription(descText)
 
     setEditWhatsapp(chap.whatsappNumber || '')
-    setEditImageFile(null) // no file selected by default
+    setEditImageFile(null)
+
+    // New: Populate lat/lng from the existing location
+    setEditLat(chap.location?.lat?.toString() ?? '')
+    setEditLng(chap.location?.lng?.toString() ?? '')
   }
 
   // 4) Cancel editing
@@ -148,6 +157,8 @@ export default function ManageChapelsPage() {
     setEditDescription('')
     setEditWhatsapp('')
     setEditImageFile(null)
+    setEditLat('')
+    setEditLng('')
   }
 
   // 5) Handle file input for image
@@ -166,13 +177,13 @@ export default function ManageChapelsPage() {
 
       // Convert the description text to a single block array
       const blockArray = editDescription.trim()
-        ? [{
-            _type: 'block',
-            children: [
-              { _type: 'span', text: editDescription, marks: [] }
-            ],
-            markDefs: []
-          }]
+        ? [
+            {
+              _type: 'block',
+              children: [{ _type: 'span', text: editDescription, marks: [] }],
+              markDefs: []
+            }
+          ]
         : []
 
       // Build the patch data
@@ -182,7 +193,23 @@ export default function ManageChapelsPage() {
         whatsappNumber: editWhatsapp
       }
 
-      // If user selected a new image file => upload it => attach reference
+      // If location fields are filled => parse floats => set on patchData
+      const latVal = parseFloat(editLat)
+      const lngVal = parseFloat(editLng)
+      if (!isNaN(latVal) && !isNaN(lngVal)) {
+        patchData.location = {
+          _type: 'geopoint',
+          lat: latVal,
+          lng: lngVal
+        }
+      } else {
+        // If user left them blank or invalid => you can decide to skip or remove location
+        // For now, we skip if empty.
+        // If you want to remove location entirely, you could do:
+        // patchData.location = null
+      }
+
+      // If user selected a new image file => upload => attach reference
       if (editImageFile) {
         const asset = await client.assets.upload('image', editImageFile, {
           filename: editImageFile.name
@@ -197,10 +224,7 @@ export default function ManageChapelsPage() {
       }
 
       // Patch the doc
-      await client
-        .patch(chapelId)
-        .set(patchData)
-        .commit()
+      await client.patch(chapelId).set(patchData).commit()
 
       alert('Chapel updated!')
       cancelEditing()
@@ -334,7 +358,10 @@ export default function ManageChapelsPage() {
           let displayedDesc = ''
           if (chap.description && Array.isArray(chap.description)) {
             displayedDesc = chap.description
-              .map((block) => block.children?.map((span) => span.text).join('') || '')
+              .map(
+                (block) =>
+                  block.children?.map((span) => span.text).join('') || ''
+              )
               .join('\n\n')
           }
 
@@ -398,6 +425,14 @@ export default function ManageChapelsPage() {
                   {chap.whatsappNumber && (
                     <>
                       <strong>WhatsApp: </strong> {chap.whatsappNumber}
+                      <br />
+                    </>
+                  )}
+                  {chap.location && (
+                    <>
+                      <strong>Location: </strong>
+                      Lat {chap.location.lat}, Lng {chap.location.lng}
+                      <br />
                     </>
                   )}
                 </>
@@ -511,6 +546,41 @@ export default function ManageChapelsPage() {
                     accept="image/*"
                     onChange={handleImageChange}
                     style={{ marginBottom: '0.5rem' }}
+                  />
+
+                  {/* NEW: Lat/Lng Fields */}
+                  <label
+                    style={{
+                      display: 'block',
+                      fontWeight: 'bold',
+                      margin: '8px 0 4px'
+                    }}
+                  >
+                    Latitude
+                  </label>
+                  <input
+                    type="text"
+                    value={editLat}
+                    onChange={(e) => setEditLat(e.target.value)}
+                    placeholder="e.g. 48.210033"
+                    style={{ width: '100%', padding: '6px', marginBottom: '8px' }}
+                  />
+
+                  <label
+                    style={{
+                      display: 'block',
+                      fontWeight: 'bold',
+                      marginBottom: '4px'
+                    }}
+                  >
+                    Longitude
+                  </label>
+                  <input
+                    type="text"
+                    value={editLng}
+                    onChange={(e) => setEditLng(e.target.value)}
+                    placeholder="e.g. 16.363449"
+                    style={{ width: '100%', padding: '6px', marginBottom: '8px' }}
                   />
 
                   <div style={{ marginTop: '0.5rem' }}>

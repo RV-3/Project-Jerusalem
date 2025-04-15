@@ -1,0 +1,30 @@
+.dark-popup .mapboxgl-popup-content {
+  box-shadow: none !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+/* Force child <div> to be transparent with no padding,
+   overriding possible inline styles from Mapbox or your code */
+.dark-popup .mapboxgl-popup-content > div {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+}
+
+.dark-popup .mapboxgl-popup-tip {
+  background: #1f1f3c !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.dark-popup .mapboxgl-popup-close-button {
+  color: #fff !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+}

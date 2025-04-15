@@ -19,6 +19,9 @@ import AdminBlockCalendar from './AdminBlockCalendar'
 import ManageChapelsPage from './ManageChapelsPage'
 import LeaderboardPage from './LeaderboardPage'
 
+// >>> IMPORT your map page
+import MapPage from './map' // or wherever your map page file is located
+
 // Helper: subdomain => e.g. "jerusalem" from "jerusalem.legiofidelis.org"
 function getSubdomainOrNull() {
   const hostname = window.location.hostname
@@ -152,10 +155,13 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        {/* If subdomain => skip welcome */}
+        {/* If subdomain => skip WelcomePage */}
         {!subdomain && (
           <Route path="/" element={<WelcomePage />} />
         )}
+
+        {/* Add our new Map route */}
+        <Route path="/map" element={<MapPage />} />
 
         {/* Manager, Leaderboard always accessible */}
         <Route path="/manager" element={<ManageChapelsPage />} />

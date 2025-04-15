@@ -112,11 +112,10 @@ export default function WelcomePage() {
           position: 'absolute',
           top: 0,
           left: 0,
-          width: '100vw',   // so it can't shrink on iPhone
+          width: '100vw', // so it can't shrink on iPhone
           height: '100vh',
           transform: `translateX(${mainSlideX}px)`,
           transition: 'transform 0.3s ease',
-          // "display: flex; flex-direction: column; align-items: center; etc." for your layout
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -230,14 +229,18 @@ export default function WelcomePage() {
                   border: 'none',
                   cursor: 'pointer'
                 }}
-                onMouseOver={(e) =>
-                  (e.currentTarget.style.transform = 'scale(1.05)')
-                }
-                onMouseOut={(e) =>
-                  (e.currentTarget.style.transform = 'scale(1)'
-                )}
-                onMouseDown={(e) => (e.currentTarget.style.opacity = '0.8')}
-                onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.05)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)'
+                }}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.opacity = '0.8'
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.opacity = '1'
+                }}
               >
                 {chapelItem.name}
               </button>
@@ -329,7 +332,7 @@ export default function WelcomePage() {
           </Link>
 
           <Link
-            to="/leaderboard"
+            to="/manager"
             style={{
               color: '#fff',
               textDecoration: 'none',
@@ -350,11 +353,10 @@ export default function WelcomePage() {
             onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
           >
             Manager
-
           </Link>
 
           <Link
-            to="/leaderboard"
+            to="/map"
             style={{
               color: '#fff',
               textDecoration: 'none',
@@ -375,7 +377,6 @@ export default function WelcomePage() {
             onMouseUp={(e) => (e.currentTarget.style.opacity = '1')}
           >
             Map
-            
           </Link>
           {/* More links, etc. */}
         </nav>
