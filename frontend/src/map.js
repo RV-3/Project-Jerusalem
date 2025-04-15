@@ -10,7 +10,7 @@ import { Map, Marker, Popup, GeolocateControl } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { createClient } from '@sanity/client'
 import supercluster from 'supercluster'
-import './map.css' // Your custom overrides
+import './map.css'
 
 import { MapPin, Calendar, MessageCircle } from 'lucide-react'
 
@@ -56,7 +56,7 @@ export default function MapPage() {
   const [bounds, setBounds] = useState(null)
   const mapRef = useRef(null)
 
-  // 1) Fetch data
+  // 1) Fetch chapel data
   useEffect(() => {
     sanityClient
       .fetch(`*[_type == "chapel"]{
@@ -81,7 +81,7 @@ export default function MapPage() {
       .catch(console.error)
   }, [])
 
-  // 2) Convert chapels => GeoJSON features
+  // 2) Convert chapels => GeoJSON features for supercluster
   const points = useMemo(() => {
     return chapels.map((chap) => ({
       type: 'Feature',
@@ -101,22 +101,23 @@ export default function MapPage() {
     return new supercluster({ radius: 50, maxZoom: 14 }).load(points)
   }, [points])
 
-  // 4) Compute clusters for current bounds
+  // 4) Compute clusters
   const clusters = useMemo(() => {
     if (!bounds) return []
     const zoom = Math.floor(viewState.zoom)
     return clusterIndex.getClusters(bounds, zoom)
   }, [clusterIndex, bounds, viewState.zoom])
 
-  // Handle map move => update viewState
+  // Track user dragging => update viewState
   const handleMove = (evt) => {
     setViewState(evt.viewState)
   }
 
-  // onMoveEnd => update bounds
+  // onMoveEnd => update bounds, but also forcibly set bearing/pitch=0 as fallback
   const handleMoveEnd = useCallback(() => {
     const mapbox = mapRef.current?.getMap()
     if (!mapbox) return
+
     const newBounds = mapbox.getBounds()
     setBounds([
       newBounds.getWest(),
@@ -124,12 +125,17 @@ export default function MapPage() {
       newBounds.getEast(),
       newBounds.getNorth()
     ])
+
+    // If there's leftover rotation/pitch, force them back to 0
+    if (mapbox.getBearing() !== 0 || mapbox.getPitch() !== 0) {
+      mapbox.setBearing(0)
+      mapbox.setPitch(0)
+    }
   }, [])
 
-  // 5) Expand or popup
+  // 5) Click cluster => expand, or single => popup
   const handleMarkerClick = (feature, event) => {
     event.originalEvent.stopPropagation()
-
     const { cluster: isCluster, cluster_id: clusterId } = feature.properties
 
     if (isCluster) {
@@ -146,12 +152,10 @@ export default function MapPage() {
       const found = chapels.find((c) => c._id === chapelId)
       setSelectedChapel(found || null)
 
-      // SHIFT THE MAP HIGHER to reveal entire popup on mobile
+      // SHIFT MAP for mobile
       if (found && mapRef.current) {
         const mapbox = mapRef.current.getMap()
         const currentZoom = mapbox.getZoom()
-
-        // negative offset => push popup up ~36% of screen
         const offsetY = -window.innerHeight * 0.36
         mapbox.easeTo({
           center: [found.lng, found.lat],
@@ -163,6 +167,24 @@ export default function MapPage() {
     }
   }
 
+  // 6) Also forcibly block any "rotate" or "pitch" events that might still sneak in on iOS
+  useEffect(() => {
+    const mapbox = mapRef.current?.getMap()
+    if (!mapbox) return
+
+    // "rotate" event => forcibly reset
+    const handleRotate = () => {
+      mapbox.setBearing(0)
+      mapbox.setPitch(0)
+    }
+
+    mapbox.on('rotate', handleRotate)
+
+    return () => {
+      mapbox.off('rotate', handleRotate)
+    }
+  }, [])
+
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <Map
@@ -172,11 +194,13 @@ export default function MapPage() {
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
 
-        /* DISABLE TILT/ROTATION COMPLETELY */
+        /* Hard disable any tilt/rotation: */
         dragRotate={false}
         pitchWithRotate={false}
         touchZoomRotate={{ pinchToZoom: true, rotate: false }}
-        maxPitch={0} // ensures no tilt
+        minPitch={0}
+        maxPitch={0}
+        // We'll rely on handleMoveEnd + handleRotate fallback, too
 
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
@@ -189,7 +213,6 @@ export default function MapPage() {
           style={{ margin: '10px' }}
         />
 
-        {/* Render markers (cluster or single) */}
         {clusters.map((feature) => {
           const [longitude, latitude] = feature.geometry.coordinates
           const { cluster: isCluster, point_count: pointCount } =
@@ -260,9 +283,8 @@ export default function MapPage() {
           >
             <div
               style={{
-                /* 20% smaller popup => smaller padding, image, and title font */
                 borderRadius: '12px',
-                padding: '24px', // was 24px
+                padding: '20px',
                 background: '#1f1f3c',
                 color: '#f4f4f5',
                 textAlign: 'center',
@@ -285,11 +307,10 @@ function PopupContent({ chapel }) {
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
-      {/* Slightly smaller font for chapel name */}
       <h3
         style={{
           margin: '0 0 0.75rem 0',
-          fontSize: '1.2rem', // was 1.3rem
+          fontSize: '1.2rem',
           fontFamily: "'Cinzel', serif"
         }}
       >
@@ -299,7 +320,6 @@ function PopupContent({ chapel }) {
       {chapelImageUrl ? (
         <div
           style={{
-            /* 20% smaller image => 160px instead of 200px */
             width: '100%',
             height: '180px',
             overflow: 'hidden',
@@ -321,7 +341,7 @@ function PopupContent({ chapel }) {
         <div
           style={{
             width: '100%',
-            height: '160px',
+            height: '180px',
             borderRadius: '8px',
             marginBottom: '0.75rem',
             display: 'flex',
@@ -336,7 +356,7 @@ function PopupContent({ chapel }) {
 
       <p
         style={{
-          fontSize: '0.9rem', // slightly smaller
+          fontSize: '0.95rem',
           marginBottom: '1rem',
           color: '#cbd5e1',
           whiteSpace: 'pre-wrap'
@@ -356,17 +376,11 @@ function PopupContent({ chapel }) {
             alignItems: 'center',
             transition: 'color 0.2s ease'
           }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.color = '#ddd'
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.color = '#fff'
-          }}
+          onMouseOver={(e) => (e.currentTarget.style.color = '#ddd')}
+          onMouseOut={(e) => (e.currentTarget.style.color = '#fff')}
         >
-          <Calendar size={26} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.8rem', marginTop: '4px' }}>
-            Calendar
-          </span>
+          <Calendar size={28} strokeWidth={1.8} />
+          <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Calendar</span>
         </Link>
 
         <a
@@ -381,17 +395,11 @@ function PopupContent({ chapel }) {
             alignItems: 'center',
             transition: 'color 0.2s ease'
           }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.color = '#ddd'
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.color = '#fff'
-          }}
+          onMouseOver={(e) => (e.currentTarget.style.color = '#ddd')}
+          onMouseOut={(e) => (e.currentTarget.style.color = '#fff')}
         >
-          <MessageCircle size={26} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.8rem', marginTop: '4px' }}>
-            Contact
-          </span>
+          <MessageCircle size={28} strokeWidth={1.8} />
+          <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Contact</span>
         </a>
       </div>
     </div>
