@@ -60,12 +60,14 @@ export default function MapPage() {
   // We'll need a ref to get the underlying Map instance
   const mapRef = useRef(null);
 
-  // 1) Fetch chapel data
+  // 1) Fetch chapel data (including nickname + city)
   useEffect(() => {
     sanityClient
       .fetch(`*[_type == "chapel"]{
         _id,
         name,
+        nickname,
+        city,
         "slug": slug.current,
         description,
         whatsappNumber,
@@ -321,16 +323,25 @@ function PopupContent({ chapel }) {
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
+      {/* Chapel nickname */}
       <h3
         style={{
-          margin: '0 0 0.75rem 0',
+          margin: '0 0 0.5rem 0',
           fontSize: '1.2rem',
           fontFamily: "'Cinzel', serif"
         }}
       >
-        {chapel.name}
+        {chapel.nickname}
       </h3>
 
+      {/* City in bold if present */}
+      {chapel.city && (
+        <p style={{ margin: '0 0 0.75rem', fontWeight: 'bold' }}>
+          {chapel.city}
+        </p>
+      )}
+
+      {/* Chapel Image */}
       {chapelImageUrl ? (
         <div
           style={{
@@ -368,6 +379,7 @@ function PopupContent({ chapel }) {
         </div>
       )}
 
+      {/* Description */}
       <p
         style={{
           fontSize: '0.95rem',
@@ -379,6 +391,7 @@ function PopupContent({ chapel }) {
         {displayedDesc.trim() ? displayedDesc : 'No description yet.'}
       </p>
 
+      {/* Calendar & WhatsApp Links */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem' }}>
         <Link
           to={`/${chapel.slug}`}

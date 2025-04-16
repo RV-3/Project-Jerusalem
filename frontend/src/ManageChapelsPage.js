@@ -1,4 +1,3 @@
-// ManageChapelsPage.js
 import React, { useEffect, useState, useCallback } from 'react'
 import client from './utils/sanityClient.js'
 import { useNavigate } from 'react-router-dom'
@@ -53,9 +52,12 @@ export default function ManageChapelsPage() {
   const [editWhatsapp, setEditWhatsapp] = useState('')
   const [editImageFile, setEditImageFile] = useState(null)
 
-  // New: Track lat/lng fields
+  // Lat/lng fields
   const [editLat, setEditLat] = useState('')
   const [editLng, setEditLng] = useState('')
+
+  // NEW: City field
+  const [editCity, setEditCity] = useState('')
 
   // 1) Fetch chapels
   const fetchChapels = useCallback(async () => {
@@ -76,7 +78,8 @@ export default function ManageChapelsPage() {
               url
             }
           },
-          location
+          location,
+          city
         } | order(name asc)
       `)
       setChapels(data)
@@ -141,13 +144,15 @@ export default function ManageChapelsPage() {
         .join('\n\n')
     }
     setEditDescription(descText)
-
     setEditWhatsapp(chap.whatsappNumber || '')
     setEditImageFile(null)
 
-    // New: Populate lat/lng from the existing location
+    // Populate lat/lng
     setEditLat(chap.location?.lat?.toString() ?? '')
     setEditLng(chap.location?.lng?.toString() ?? '')
+
+    // NEW: Populate city
+    setEditCity(chap.city || '')
   }
 
   // 4) Cancel editing
@@ -159,6 +164,7 @@ export default function ManageChapelsPage() {
     setEditImageFile(null)
     setEditLat('')
     setEditLng('')
+    setEditCity('')
   }
 
   // 5) Handle file input for image
@@ -190,10 +196,11 @@ export default function ManageChapelsPage() {
       const patchData = {
         nickname: editNickname,
         description: blockArray,
-        whatsappNumber: editWhatsapp
+        whatsappNumber: editWhatsapp,
+        city: editCity
       }
 
-      // If location fields are filled => parse floats => set on patchData
+      // If location fields are valid => parse floats => set on patchData
       const latVal = parseFloat(editLat)
       const lngVal = parseFloat(editLng)
       if (!isNaN(latVal) && !isNaN(lngVal)) {
@@ -202,12 +209,8 @@ export default function ManageChapelsPage() {
           lat: latVal,
           lng: lngVal
         }
-      } else {
-        // If user left them blank or invalid => you can decide to skip or remove location
-        // For now, we skip if empty.
-        // If you want to remove location entirely, you could do:
-        // patchData.location = null
       }
+      // else skip or set location to null, your choice
 
       // If user selected a new image file => upload => attach reference
       if (editImageFile) {
@@ -393,6 +396,12 @@ export default function ManageChapelsPage() {
               ) : (
                 <em>(no slug)</em>
               )}
+              {chap.city && (
+                <>
+                  <strong>City: </strong> {chap.city}
+                  <br />
+                </>
+              )}
 
               {/* If there's an image, display thumbnail */}
               {chap.chapelImage?.asset?.url && (
@@ -548,7 +557,23 @@ export default function ManageChapelsPage() {
                     style={{ marginBottom: '0.5rem' }}
                   />
 
-                  {/* NEW: Lat/Lng Fields */}
+                  <label
+                    style={{
+                      display: 'block',
+                      fontWeight: 'bold',
+                      margin: '8px 0 4px'
+                    }}
+                  >
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    value={editCity}
+                    onChange={(e) => setEditCity(e.target.value)}
+                    placeholder="City or region"
+                    style={{ width: '100%', padding: '6px', marginBottom: '8px' }}
+                  />
+
                   <label
                     style={{
                       display: 'block',
