@@ -56,8 +56,11 @@ export default function ManageChapelsPage() {
   const [editLat, setEditLat] = useState('')
   const [editLng, setEditLng] = useState('')
 
-  // NEW: City field
+  // City field
   const [editCity, setEditCity] = useState('')
+
+  // NEW: Google Maps link field
+  const [editGoogleMapsLink, setEditGoogleMapsLink] = useState('')
 
   // 1) Fetch chapels
   const fetchChapels = useCallback(async () => {
@@ -79,7 +82,8 @@ export default function ManageChapelsPage() {
             }
           },
           location,
-          city
+          city,
+          googleMapsLink
         } | order(name asc)
       `)
       setChapels(data)
@@ -151,8 +155,11 @@ export default function ManageChapelsPage() {
     setEditLat(chap.location?.lat?.toString() ?? '')
     setEditLng(chap.location?.lng?.toString() ?? '')
 
-    // NEW: Populate city
+    // City
     setEditCity(chap.city || '')
+
+    // NEW: Google Maps link
+    setEditGoogleMapsLink(chap.googleMapsLink || '')
   }
 
   // 4) Cancel editing
@@ -165,6 +172,7 @@ export default function ManageChapelsPage() {
     setEditLat('')
     setEditLng('')
     setEditCity('')
+    setEditGoogleMapsLink('')
   }
 
   // 5) Handle file input for image
@@ -197,7 +205,8 @@ export default function ManageChapelsPage() {
         nickname: editNickname,
         description: blockArray,
         whatsappNumber: editWhatsapp,
-        city: editCity
+        city: editCity,
+        googleMapsLink: editGoogleMapsLink
       }
 
       // If location fields are valid => parse floats => set on patchData
@@ -210,7 +219,7 @@ export default function ManageChapelsPage() {
           lng: lngVal
         }
       }
-      // else skip or set location to null, your choice
+      // else skip or set location = null if you prefer
 
       // If user selected a new image file => upload => attach reference
       if (editImageFile) {
@@ -444,6 +453,19 @@ export default function ManageChapelsPage() {
                       <br />
                     </>
                   )}
+                  {chap.googleMapsLink && (
+                    <>
+                      <strong>Google Maps Link:</strong>{' '}
+                      <a
+                        href={chap.googleMapsLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {chap.googleMapsLink}
+                      </a>
+                      <br />
+                    </>
+                  )}
                 </>
               )}
 
@@ -571,6 +593,23 @@ export default function ManageChapelsPage() {
                     value={editCity}
                     onChange={(e) => setEditCity(e.target.value)}
                     placeholder="City or region"
+                    style={{ width: '100%', padding: '6px', marginBottom: '8px' }}
+                  />
+
+                  <label
+                    style={{
+                      display: 'block',
+                      fontWeight: 'bold',
+                      margin: '8px 0 4px'
+                    }}
+                  >
+                    Google Maps Link
+                  </label>
+                  <input
+                    type="text"
+                    value={editGoogleMapsLink}
+                    onChange={(e) => setEditGoogleMapsLink(e.target.value)}
+                    placeholder="https://maps.google.com/..."
                     style={{ width: '100%', padding: '6px', marginBottom: '8px' }}
                   />
 

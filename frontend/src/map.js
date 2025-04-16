@@ -60,7 +60,7 @@ export default function MapPage() {
   // We'll need a ref to get the underlying Map instance
   const mapRef = useRef(null);
 
-  // 1) Fetch chapel data (including nickname + city)
+  // 1) Fetch chapel data, now including googleMapsLink
   useEffect(() => {
     sanityClient
       .fetch(`*[_type == "chapel"]{
@@ -68,6 +68,7 @@ export default function MapPage() {
         name,
         nickname,
         city,
+        googleMapsLink,
         "slug": slug.current,
         description,
         whatsappNumber,
@@ -135,7 +136,7 @@ export default function MapPage() {
       newBounds.getNorth()
     ]);
 
-    // Fallback: If there's any leftover rotation/pitch, force them back to 0
+    // Fallback: If there's leftover rotation/pitch, force them back to 0
     if (mapbox.getBearing() !== 0 || mapbox.getPitch() !== 0) {
       mapbox.setBearing(0);
       mapbox.setPitch(0);
@@ -176,24 +177,18 @@ export default function MapPage() {
     }
   };
 
-  // 6) Definitively disable rotation & tilt after map loads
+  // 6) Disable rotation & tilt after map loads
   const handleMapLoad = useCallback(() => {
     const map = mapRef.current?.getMap();
     if (!map) return;
 
-    // Lock the map pitch to 0 (top-down)
     map.setMinPitch(0);
     map.setMaxPitch(0);
-
-    // Disable two-finger drag tilt on mobile
     map.touchPitch.disable();
-
-    // Disable rotation interactions
     map.dragRotate.disable();
     map.touchZoomRotate.disableRotation();
     map.keyboard.disableRotation();
 
-    // (Optional) If you want to forcibly revert any rotation from code
     map.on('rotate', () => {
       map.setBearing(0);
       map.setPitch(0);
@@ -208,14 +203,11 @@ export default function MapPage() {
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
-
-        /* Hard disable tilt/rotation via props, too: */
         dragRotate={false}
         pitchWithRotate={false}
         touchZoomRotate={{ pinchToZoom: true, rotate: false }}
         minPitch={0}
         maxPitch={0}
-
         onLoad={handleMapLoad}
         onMove={handleMove}
         onMoveEnd={handleMoveEnd}
@@ -228,7 +220,6 @@ export default function MapPage() {
           style={{ margin: '10px' }}
         />
 
-        {/* Render cluster markers or single chapel markers */}
         {clusters.map((feature) => {
           const [longitude, latitude] = feature.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } = feature.properties;
@@ -286,7 +277,6 @@ export default function MapPage() {
           }
         })}
 
-        {/* If user clicked a single chapel => show popup */}
         {selectedChapel && (
           <Popup
             className="dark-popup bigger-close"
@@ -323,22 +313,44 @@ function PopupContent({ chapel }) {
 
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
-      {/* Chapel nickname */}
-      <h3
-        style={{
-          margin: '0 0 0.5rem 0',
-          fontSize: '1.2rem',
-          fontFamily: "'Cinzel', serif"
-        }}
-      >
-        {chapel.nickname}
-      </h3>
+      {/* Display only the nickname in the title (no chapel.name) */}
+      {chapel.nickname && (
+        <h3
+          style={{
+            margin: '0 0 0.5rem 0',
+            fontSize: '1.2rem',
+            fontFamily: "'Cinzel', serif"
+          }}
+        >
+          {chapel.nickname}
+        </h3>
+      )}
 
-      {/* City in bold if present */}
+      {/* City + clickable pin, if present */}
       {chapel.city && (
-        <p style={{ margin: '0 0 0.75rem', fontWeight: 'bold' }}>
-          {chapel.city}
-        </p>
+        <div style={{ margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {chapel.googleMapsLink ? (
+            <a
+              href={chapel.googleMapsLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 'bold',
+                color: 'inherit',
+                textDecoration: 'none'
+              }}
+            >
+              <MapPin size={18} strokeWidth={2} />
+              {chapel.city}
+            </a>
+          ) : (
+            // If there's no googleMapsLink, just show the city text
+            <strong>{chapel.city}</strong>
+          )}
+        </div>
       )}
 
       {/* Chapel Image */}
@@ -354,7 +366,7 @@ function PopupContent({ chapel }) {
         >
           <img
             src={chapelImageUrl}
-            alt={chapel.name}
+            alt={chapel.nickname || 'Chapel'}
             style={{
               width: '100%',
               height: '100%',
