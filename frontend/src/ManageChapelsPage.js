@@ -59,8 +59,11 @@ export default function ManageChapelsPage() {
   // City field
   const [editCity, setEditCity] = useState('')
 
-  // NEW: Google Maps link field
+  // Google Maps link field
   const [editGoogleMapsLink, setEditGoogleMapsLink] = useState('')
+
+  // NEW: Filter text
+  const [filterText, setFilterText] = useState('')
 
   // 1) Fetch chapels
   const fetchChapels = useCallback(async () => {
@@ -158,7 +161,7 @@ export default function ManageChapelsPage() {
     // City
     setEditCity(chap.city || '')
 
-    // NEW: Google Maps link
+    // Google Maps link
     setEditGoogleMapsLink(chap.googleMapsLink || '')
   }
 
@@ -295,6 +298,23 @@ export default function ManageChapelsPage() {
     }
   }
 
+  // NEW: Filtered chapels. If filterText is not empty, filter by name/nickname/city
+  const filteredChapels = chapels.filter((chap) => {
+    if (!filterText.trim()) return true // no filter => show all
+
+    const text = filterText.toLowerCase()
+    const name = chap.name?.toLowerCase() || ''
+    const nickname = chap.nickname?.toLowerCase() || ''
+    const city = chap.city?.toLowerCase() || ''
+
+    // Return true if filterText found in name OR nickname OR city
+    return (
+      name.includes(text) ||
+      nickname.includes(text) ||
+      city.includes(text)
+    )
+  })
+
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '1rem' }}>
       <h2 style={{ textAlign: 'center', marginBottom: '1rem' }}>Manage Chapels</h2>
@@ -355,7 +375,20 @@ export default function ManageChapelsPage() {
         </button>
       </form>
 
-      {/* Existing chapels */}
+      {/* Existing Chapels - Filter Input */}
+      <div style={{ marginBottom: '1rem' }}>
+        <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>
+          Filter Chapels:
+        </label>
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          style={{ width: '100%', padding: '8px' }}
+          placeholder="Type a name, nickname, or city..."
+        />
+      </div>
+
       <h3 style={{ marginBottom: '0.5rem' }}>Existing Chapels</h3>
       {loading && <p>Loading...</p>}
       {!loading && chapels.length === 0 && (
@@ -363,7 +396,8 @@ export default function ManageChapelsPage() {
       )}
 
       <ul style={{ listStyle: 'none', paddingLeft: 0 }}>
-        {chapels.map((chap) => {
+        {/* Now map over filteredChapels instead of chapels */}
+        {filteredChapels.map((chap) => {
           const isEditing = editingChapelId === chap._id
 
           // Convert existing blocks to text for display
