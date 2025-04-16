@@ -19,8 +19,11 @@ import AdminBlockCalendar from './AdminBlockCalendar'
 import ManageChapelsPage from './ManageChapelsPage'
 import LeaderboardPage from './LeaderboardPage'
 
-// >>> IMPORT your map page
-import MapPage from './map' // or wherever your map page file is located
+// Import your map page
+import MapPage from './map'
+
+// Import MapPin for the clickable icon
+import { MapPin } from 'lucide-react'
 
 // Helper: subdomain => e.g. "jerusalem" from "jerusalem.legiofidelis.org"
 function getSubdomainOrNull() {
@@ -51,9 +54,16 @@ function ChapelLayout() {
 
   useEffect(() => {
     if (chapelSlug) {
+      // 1) Fetch city & googleMapsLink in addition to name, nickname, etc.
       client
         .fetch(
-          `*[_type == "chapel" && slug.current == $slug][0]{name, nickname, timezone}`,
+          `*[_type == "chapel" && slug.current == $slug][0]{
+            name,
+            nickname,
+            city,
+            googleMapsLink,
+            timezone
+          }`,
           { slug: chapelSlug }
         )
         .then((doc) => {
@@ -78,11 +88,11 @@ function ChapelLayout() {
           fontSize: '2rem',
           color: 'black',
           textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
-          marginBottom: '1.5rem'
+          marginBottom: '1rem'
         }}
       >
         {
-          // Show nickname if available, otherwise name, otherwise a translated fallback
+          // Show nickname if available, otherwise name, otherwise fallback
           chapelInfo?.nickname ||
           chapelInfo?.name ||
           t({
@@ -94,13 +104,39 @@ function ChapelLayout() {
         }
       </h2>
 
+      {/* 2) Display City + Clickable Pin if available */}
+      {chapelInfo?.city && (
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          {chapelInfo.googleMapsLink ? (
+            <a
+              href={chapelInfo.googleMapsLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: 'inherit',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontWeight: 'bold'
+              }}
+            >
+              <MapPin size={16} />
+              {chapelInfo.city}
+            </a>
+          ) : (
+            <strong>{chapelInfo.city}</strong>
+          )}
+        </div>
+      )}
+
       <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
         <LiveClock timezone={chapelInfo?.timezone || 'UTC'} />
       </div>
 
       {chapelSlug && (
         <nav style={{ textAlign: 'center', marginBottom: '1rem' }}>
-          {/* If subdomain => link to "/" and "/admin", otherwise link to "/[chapelSlug]" and "/[chapelSlug]/admin" */}
+          {/* If subdomain => link to "/" and "/admin", otherwise link to "/:chapelSlug" and "/:chapelSlug/admin" */}
           <Link
             to={subdomain ? '/' : `/${chapelSlug}`}
             style={{ marginRight: '1rem' }}
