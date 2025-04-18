@@ -1,3 +1,5 @@
+// File: MapPage.jsx
+
 import React, {
   useState,
   useEffect,
@@ -6,64 +8,78 @@ import React, {
   useCallback
 } from 'react';
 import { Link } from 'react-router-dom';
-import { Map, Marker, Popup, GeolocateControl } from 'react-map-gl/mapbox';
+import mapboxgl from 'mapbox-gl';
+import { Map, Marker, Popup } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+
 import { createClient } from '@sanity/client';
 import supercluster from 'supercluster';
+
+import {
+  MapPin,
+  Calendar,
+  MessageCircle,
+  Navigation,
+  Menu,
+  Award,
+  Settings
+} from 'lucide-react';
+
 import './map.css';
 
-import { MapPin, Calendar, MessageCircle } from 'lucide-react';
-
-/** --- SANITY CLIENT --- **/
+/* ─────────────────────────── Sanity client ───────────────────────── */
 const sanityClient = createClient({
   projectId: 'gt19q25e',
-  dataset: 'production',
-  apiVersion: '2023-01-01',
-  useCdn: true
+  dataset:   'production',
+  apiVersion:'2023-01-01',
+  useCdn:    true
 });
 
-/** --- MAPBOX TOKEN --- **/
+/* ─────────────────────────── Mapbox Token ────────────────────────── */
 const MAPBOX_TOKEN =
   'pk.eyJ1Ijoic2VudGluZWwxMiIsImEiOiJjbTlpZXA5YnAwMTdyMmpzY3NpdG11d2l6In0.TGPH36urzsXnF9N3mlN_Og';
 
-/** Helper: parse block-based description */
+/* ────────────────────────── Helpers ──────────────────────────────── */
 function parseDescription(blocks) {
-  if (!blocks || !Array.isArray(blocks)) return '';
+  if (!Array.isArray(blocks)) return '';
   return blocks
-    .map((block) => {
-      if (!block.children) return '';
-      return block.children.map((span) => span.text).join('');
-    })
+    .map((b) => (b.children ? b.children.map((s) => s.text).join('') : ''))
     .join('\n\n');
 }
 
-/** Helper: build WhatsApp link */
 function getWhatsappLink(num) {
-  if (!num || !num.trim()) {
-    return 'https://wa.me/0000000000';
-  }
-  const cleaned = num.replace(/\D+/g, '');
-  return `https://wa.me/${cleaned}`;
+  if (!num?.trim()) return 'https://wa.me/0000000000';
+  return `https://wa.me/${num.replace(/\D+/g, '')}`;
 }
 
+/* ═══════════════════════════════ COMPONENT ══════════════════════════════ */
 export default function MapPage() {
-  const [chapels, setChapels] = useState([]);
+  // --------------------------------------
+  // State
+  // --------------------------------------
+  const [chapels,        setChapels]        = useState([]);
   const [selectedChapel, setSelectedChapel] = useState(null);
 
   const [viewState, setViewState] = useState({
     longitude: -40,
-    latitude: 20,
-    zoom: 2.5
+    latitude:  20,
+    zoom:      2.5
   });
-  const [bounds, setBounds] = useState(null);
+  const [bounds,   setBounds]   = useState(null);
 
-  // We'll need a ref to get the underlying Map instance
-  const mapRef = useRef(null);
+  // Toggle hidden drawer
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // 1) Fetch chapel data, now including googleMapsLink
+  // Refs
+  const mapRef        = useRef(null);
+  const geoControlRef = useRef(null);
+
+  // --------------------------------------
+  // 1) fetch chapels from Sanity
+  // --------------------------------------
   useEffect(() => {
     sanityClient
-      .fetch(`*[_type == "chapel"]{
+      .fetch(`*[_type=="chapel"]{
         _id,
         name,
         nickname,
@@ -72,166 +88,311 @@ export default function MapPage() {
         "slug": slug.current,
         description,
         whatsappNumber,
-        chapelImage{
-          asset-> {
-            _id,
-            url
-          }
-        },
+        chapelImage { asset->{_id, url} },
         "lat": coalesce(location.lat, 0),
         "lng": coalesce(location.lng, 0)
       }`)
-      .then((data) => {
-        console.log('Fetched chapels =>', data);
-        setChapels(data);
-      })
+      .then(setChapels)
       .catch(console.error);
   }, []);
 
-  // 2) Convert chapels => GeoJSON features for supercluster
-  const points = useMemo(() => {
-    return chapels.map((chap) => ({
-      type: 'Feature',
-      properties: {
-        cluster: false,
-        chapelId: chap._id
-      },
-      geometry: {
-        type: 'Point',
-        coordinates: [chap.lng, chap.lat]
-      }
-    }));
-  }, [chapels]);
+  // --------------------------------------
+  // 2) supercluster prep
+  // --------------------------------------
+  const points = useMemo(
+    () =>
+      chapels.map((c) => ({
+        type: 'Feature',
+        properties: { cluster: false, chapelId: c._id },
+        geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
+      })),
+    [chapels]
+  );
 
-  // 3) Build supercluster
-  const clusterIndex = useMemo(() => {
-    return new supercluster({
-      radius: 50,
-      maxZoom: 14
-    }).load(points);
-  }, [points]);
+  const clusterIndex = useMemo(
+    () => new supercluster({ radius: 50, maxZoom: 14 }).load(points),
+    [points]
+  );
 
-  // 4) Compute clusters each time bounds or zoom changes
   const clusters = useMemo(() => {
     if (!bounds) return [];
-    const zoom = Math.floor(viewState.zoom);
-    return clusterIndex.getClusters(bounds, zoom);
+    return clusterIndex.getClusters(bounds, Math.floor(viewState.zoom));
   }, [clusterIndex, bounds, viewState.zoom]);
 
-  // Track user dragging => update viewState
-  const handleMove = (evt) => {
-    setViewState(evt.viewState);
-  };
+  // --------------------------------------
+  // Map move handlers
+  // --------------------------------------
+  const handleMove = (e) => setViewState(e.viewState);
 
-  // onMoveEnd => update bounds, also forcibly reset bearing/pitch if any leftover
   const handleMoveEnd = useCallback(() => {
-    const mapbox = mapRef.current?.getMap();
-    if (!mapbox) return;
+    const m = mapRef.current?.getMap();
+    if (!m) return;
 
-    const newBounds = mapbox.getBounds();
-    setBounds([
-      newBounds.getWest(),
-      newBounds.getSouth(),
-      newBounds.getEast(),
-      newBounds.getNorth()
-    ]);
+    const b = m.getBounds();
+    setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
 
-    // Fallback: If there's leftover rotation/pitch, force them back to 0
-    if (mapbox.getBearing() !== 0 || mapbox.getPitch() !== 0) {
-      mapbox.setBearing(0);
-      mapbox.setPitch(0);
+    // Force no rotation/pitch if user tries
+    if (m.getBearing() !== 0 || m.getPitch() !== 0) {
+      m.setBearing(0);
+      m.setPitch(0);
     }
   }, []);
 
-  // 5) On marker click => either expand cluster or show single chapel popup
-  const handleMarkerClick = (feature, event) => {
-    event.originalEvent.stopPropagation();
-    const { cluster: isCluster, cluster_id: clusterId } = feature.properties;
+  // --------------------------------------
+  // Marker click
+  // --------------------------------------
+  const handleMarkerClick = (feature, e) => {
+    e.originalEvent.stopPropagation();
 
-    if (isCluster) {
-      const expansionZoom = clusterIndex.getClusterExpansionZoom(clusterId);
-      setViewState((prev) => ({
-        ...prev,
+    if (feature.properties.cluster) {
+      const zoom = clusterIndex.getClusterExpansionZoom(feature.properties.cluster_id);
+      setViewState((v) => ({
+        ...v,
         longitude: feature.geometry.coordinates[0],
-        latitude: feature.geometry.coordinates[1],
-        zoom: expansionZoom,
+        latitude:  feature.geometry.coordinates[1],
+        zoom,
         transitionDuration: 500
       }));
     } else {
-      const chapelId = feature.properties.chapelId;
-      const found = chapels.find((c) => c._id === chapelId);
-      setSelectedChapel(found || null);
+      const chap = chapels.find((c) => c._id === feature.properties.chapelId);
+      setSelectedChapel(chap || null);
 
-      // SHIFT MAP for mobile
-      if (found && mapRef.current) {
-        const mapbox = mapRef.current.getMap();
-        const currentZoom = mapbox.getZoom();
-        const offsetY = -window.innerHeight * 0.36; // push popup up ~36% of screen
-        mapbox.easeTo({
-          center: [found.lng, found.lat],
-          zoom: currentZoom,
-          offset: [0, offsetY],
+      if (chap && mapRef.current) {
+        const m = mapRef.current.getMap();
+        m.easeTo({
+          center: [chap.lng, chap.lat],
+          offset: [0, -window.innerHeight * 0.36],
           duration: 700
         });
       }
     }
   };
 
-  // 6) Disable rotation & tilt after map loads
+  // --------------------------------------
+  // onLoad: Lock rotation/pitch; add geolocate but hide default icon
+  // --------------------------------------
   const handleMapLoad = useCallback(() => {
-    const map = mapRef.current?.getMap();
-    if (!map) return;
+    const m = mapRef.current?.getMap();
+    if (!m) return;
 
-    map.setMinPitch(0);
-    map.setMaxPitch(0);
-    map.touchPitch.disable();
-    map.dragRotate.disable();
-    map.touchZoomRotate.disableRotation();
-    map.keyboard.disableRotation();
-
-    map.on('rotate', () => {
-      map.setBearing(0);
-      map.setPitch(0);
+    // Lock out rotation/pitch
+    m.setMinPitch(0);
+    m.setMaxPitch(0);
+    m.touchPitch.disable();
+    m.dragRotate.disable();
+    m.touchZoomRotate.disableRotation();
+    m.keyboard.disableRotation();
+    m.on('rotate', () => {
+      m.setBearing(0);
+      m.setPitch(0);
     });
+
+    // Add hidden GeolocateControl once
+    if (!geoControlRef.current) {
+      const ctrl = new mapboxgl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true },
+        trackUserLocation: false,
+        showAccuracyCircle: false
+      });
+      geoControlRef.current = ctrl;
+      m.addControl(ctrl);
+
+      // Hide its default "crosshair" button with CSS
+      const styleEl = document.createElement('style');
+      styleEl.innerHTML = '.mapboxgl-ctrl-geolocate { display: none !important; }';
+      document.head.appendChild(styleEl);
+    }
   }, []);
 
+  // --------------------------------------
+  // Drawer & Button Styles
+  // --------------------------------------
+  const drawerContainerStyle = {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: '240px',
+    height: '100%',
+    background: '#1e1e2f',
+    borderLeft: '2px solid #64748b',
+    transition: 'transform 0.3s ease-in-out',
+    transform: menuOpen ? 'translateX(0%)' : 'translateX(100%)',
+    zIndex: 999,
+    display: 'flex',
+    flexDirection: 'column'
+  };
+
+  // Drawer header with hamburger + "Menu" on the same row
+  const drawerHeaderStyle = {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    height: '60px',
+    padding: '0 1rem',
+    borderBottom: '1px solid #64748b'
+  };
+
+  // Two style objects for the hamburger
+  const hamburgerButtonClosed = {
+    position: 'absolute',
+    top: '50%',
+    left: '-48px',
+    transform: 'translateY(-50%)',
+    width: '42px',
+    height: '42px',
+    borderRadius: '8px',
+    background: '#1e1e2f',
+    border: '2px solid #64748b',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease'
+  };
+
+  // When open, fade it out
+  const hamburgerButtonOpen = {
+    ...hamburgerButtonClosed,
+    background: 'transparent',
+    border: 'none',
+    opacity: 0.5
+  };
+
+  // "Menu" text: clickable
+  const menuTitleStyle = {
+    margin: 0,
+    marginLeft: '2rem',
+    color: '#cbd5e1',
+    fontSize: '1.1rem',
+    fontWeight: 600,
+    cursor: 'pointer' // so user sees it's clickable
+  };
+
+  const navContainerStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '1rem',
+    gap: '0.5rem'
+  };
+
+  const linkStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: '#cbd5e1',
+    textDecoration: 'none',
+    fontWeight: '500',
+    padding: '8px',
+    borderRadius: '6px',
+    transition: 'background 0.2s'
+  };
+  const linkHoverStyle = {
+    background: '#2e2e44'
+  };
+
+  // --------------------------------------
+  // Render
+  // --------------------------------------
   return (
-    <div style={{ width: '100vw', height: '100vh' }}>
+    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       <Map
         ref={mapRef}
         {...viewState}
-        style={{ width: '100%', height: '100%' }}
+        onLoad={handleMapLoad}
+        onMove={handleMove}
+        onMoveEnd={handleMoveEnd}
+        onClick={() => setSelectedChapel(null)}
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
+        style={{ width: '100%', height: '100%' }}
         dragRotate={false}
         pitchWithRotate={false}
         touchZoomRotate={{ pinchToZoom: true, rotate: false }}
         minPitch={0}
         maxPitch={0}
-        onLoad={handleMapLoad}
-        onMove={handleMove}
-        onMoveEnd={handleMoveEnd}
-        onClick={() => setSelectedChapel(null)}
       >
-        <GeolocateControl
-          position="top-right"
-          trackUserLocation
-          showUserHeading
-          style={{ margin: '10px' }}
-        />
+        {/* Bottom-right arrow button for geolocation */}
+        <button
+          onClick={() => geoControlRef.current?.trigger()}
+          style={{
+            position: 'absolute',
+            right: '16px',
+            bottom: '25%',
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: '#1e1e2f',
+            border: '2px solid #64748b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 6px rgba(0,0,0,0.4)',
+            cursor: 'pointer',
+            zIndex: 5
+          }}
+        >
+          <Navigation size={26} strokeWidth={2.2} color="#cbd5e1" />
+        </button>
 
+        {/* Hidden Drawer (slides in/out) */}
+        <div style={drawerContainerStyle}>
+          {/* Header with hamburger + "Menu" horizontally aligned */}
+          <div style={drawerHeaderStyle}>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              style={menuOpen ? hamburgerButtonOpen : hamburgerButtonClosed}
+            >
+              <Menu size={24} strokeWidth={2} color="#cbd5e1" />
+            </button>
+
+            {/* Clicking the text toggles the drawer, too */}
+            <h2
+              style={menuTitleStyle}
+              onClick={() => setMenuOpen(o => !o)}
+            >
+              Menu
+            </h2>
+          </div>
+
+          {/* Nav Links */}
+          <nav style={navContainerStyle}>
+            <Link
+              to="/leaderboard"
+              style={linkStyle}
+              onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              onClick={() => setMenuOpen(false)}
+            >
+              <Award size={22} strokeWidth={2} color="#cbd5e1" />
+              <span>Leaderboard</span>
+            </Link>
+
+            <Link
+              to="/manager"
+              style={linkStyle}
+              onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              onClick={() => setMenuOpen(false)}
+            >
+              <Settings size={22} strokeWidth={2} color="#cbd5e1" />
+              <span>Manager</span>
+            </Link>
+          </nav>
+        </div>
+
+        {/* CLUSTERS & MARKERS */}
         {clusters.map((feature) => {
-          const [longitude, latitude] = feature.geometry.coordinates;
+          const [lng, lat] = feature.geometry.coordinates;
           const { cluster: isCluster, point_count: pointCount } = feature.properties;
 
           if (isCluster) {
             return (
               <Marker
                 key={`cluster-${feature.id}`}
-                longitude={longitude}
-                latitude={latitude}
+                longitude={lng}
+                latitude={lat}
                 anchor="bottom"
-                onClick={(evt) => handleMarkerClick(feature, evt)}
+                onClick={(e) => handleMarkerClick(feature, e)}
               >
                 <div style={{ position: 'relative', cursor: 'pointer' }}>
                   <MapPin size={38} strokeWidth={2.8} color="#c084fc" />
@@ -257,26 +418,28 @@ export default function MapPage() {
                 </div>
               </Marker>
             );
-          } else {
-            return (
-              <Marker
-                key={feature.properties.chapelId}
-                longitude={longitude}
-                latitude={latitude}
-                anchor="bottom"
-                onClick={(evt) => handleMarkerClick(feature, evt)}
-              >
-                <MapPin
-                  size={28}
-                  strokeWidth={2.5}
-                  color="#c084fc"
-                  style={{ cursor: 'pointer' }}
-                />
-              </Marker>
-            );
           }
+
+          // Single chapel
+          return (
+            <Marker
+              key={feature.properties.chapelId}
+              longitude={lng}
+              latitude={lat}
+              anchor="bottom"
+              onClick={(e) => handleMarkerClick(feature, e)}
+            >
+              <MapPin
+                size={28}
+                strokeWidth={2.5}
+                color="#c084fc"
+                style={{ cursor: 'pointer' }}
+              />
+            </Marker>
+          );
         })}
 
+        {/* POPUP */}
         {selectedChapel && (
           <Popup
             className="dark-popup bigger-close"
@@ -294,7 +457,7 @@ export default function MapPage() {
                 background: '#1f1f3c',
                 color: '#f4f4f5',
                 textAlign: 'center',
-                boxShadow: '0 0 8px rgba(139, 92, 246, 0.4)'
+                boxShadow: '0 0 8px rgba(139,92,246,0.4)'
               }}
             >
               <PopupContent chapel={selectedChapel} />
@@ -306,27 +469,20 @@ export default function MapPage() {
   );
 }
 
+/* ═════════════════════ POPUP CONTENT ═════════════════════ */
 function PopupContent({ chapel }) {
   const displayedDesc = parseDescription(chapel.description);
-  const whatsappLink = getWhatsappLink(chapel.whatsappNumber);
-  const chapelImageUrl = chapel.chapelImage?.asset?.url || '';
+  const whatsappLink  = getWhatsappLink(chapel.whatsappNumber);
+  const imgUrl        = chapel.chapelImage?.asset?.url || '';
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif" }}>
-      {/* Display only the nickname in the title (no chapel.name) */}
+    <div style={{ fontFamily: "'Inter',sans-serif" }}>
       {chapel.nickname && (
-        <h3
-          style={{
-            margin: '0 0 0.5rem 0',
-            fontSize: '1.2rem',
-            fontFamily: "'Cinzel', serif"
-          }}
-        >
+        <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.2rem', fontFamily: "'Cinzel',serif" }}>
           {chapel.nickname}
         </h3>
       )}
 
-      {/* City + clickable pin, if present */}
       {chapel.city && (
         <div style={{ margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {chapel.googleMapsLink ? (
@@ -347,31 +503,17 @@ function PopupContent({ chapel }) {
               {chapel.city}
             </a>
           ) : (
-            // If there's no googleMapsLink, just show the city text
             <strong>{chapel.city}</strong>
           )}
         </div>
       )}
 
-      {/* Chapel Image */}
-      {chapelImageUrl ? (
-        <div
-          style={{
-            width: '100%',
-            height: '180px',
-            overflow: 'hidden',
-            borderRadius: '8px',
-            marginBottom: '0.75rem'
-          }}
-        >
+      {imgUrl ? (
+        <div style={{ width: '100%', height: '180px', overflow: 'hidden', borderRadius: '8px', marginBottom: '0.75rem' }}>
           <img
-            src={chapelImageUrl}
+            src={imgUrl}
             alt={chapel.nickname || 'Chapel'}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover'
-            }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
         </div>
       ) : (
@@ -391,32 +533,14 @@ function PopupContent({ chapel }) {
         </div>
       )}
 
-      {/* Description */}
-      <p
-        style={{
-          fontSize: '0.95rem',
-          marginBottom: '1rem',
-          color: '#cbd5e1',
-          whiteSpace: 'pre-wrap'
-        }}
-      >
+      <p style={{ fontSize: '0.95rem', marginBottom: '1rem', color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>
         {displayedDesc.trim() ? displayedDesc : 'No description yet.'}
       </p>
 
-      {/* Calendar & WhatsApp Links */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem' }}>
         <Link
           to={`/${chapel.slug}`}
-          style={{
-            color: '#fff',
-            textDecoration: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            transition: 'color 0.2s ease'
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.color = '#ddd')}
-          onMouseOut={(e) => (e.currentTarget.style.color = '#fff')}
+          style={{ color: '#fff', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
         >
           <Calendar size={28} strokeWidth={1.8} />
           <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Calendar</span>
@@ -426,16 +550,7 @@ function PopupContent({ chapel }) {
           href={whatsappLink}
           target="_blank"
           rel="noopener noreferrer"
-          style={{
-            color: '#fff',
-            textDecoration: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            transition: 'color 0.2s ease'
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.color = '#ddd')}
-          onMouseOut={(e) => (e.currentTarget.style.color = '#fff')}
+          style={{ color: '#fff', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
         >
           <MessageCircle size={28} strokeWidth={1.8} />
           <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Contact</span>
