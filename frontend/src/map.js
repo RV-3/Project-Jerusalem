@@ -12,14 +12,12 @@ import mapboxgl from 'mapbox-gl';
 import { Map, Marker, Popup } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-// 1) Install & import Mapbox Geocoder
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
 
 import { createClient } from '@sanity/client';
 import supercluster from 'supercluster';
 
-// We'll make the Menu icon bigger with size={48}
 import {
   MapPin,
   Calendar,
@@ -27,7 +25,8 @@ import {
   Navigation,
   Menu,
   Award,
-  Settings
+  Settings,
+  XCircle
 } from 'lucide-react';
 
 import './map.css';
@@ -51,6 +50,7 @@ function parseDescription(blocks) {
     .map((b) => (b.children ? b.children.map((s) => s.text).join('') : ''))
     .join('\n\n');
 }
+
 function getWhatsappLink(num) {
   if (!num?.trim()) return 'https://wa.me/0000000000';
   return `https://wa.me/${num.replace(/\D+/g, '')}`;
@@ -64,7 +64,6 @@ export default function MapPage() {
   const [chapels,        setChapels]        = useState([]);
   const [selectedChapel, setSelectedChapel] = useState(null);
 
-  // Map position
   const [viewState, setViewState] = useState({
     longitude: -40,
     latitude:  20,
@@ -73,7 +72,9 @@ export default function MapPage() {
   const [bounds, setBounds] = useState(null);
 
   // Drawer open/close
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen,  setMenuOpen]  = useState(false);
+  // Whether to show the custom "X" after a search
+  const [showClear, setShowClear] = useState(false);
 
   // Refs
   const mapRef        = useRef(null);
@@ -81,7 +82,7 @@ export default function MapPage() {
   const geocoderRef   = useRef(null);
 
   // --------------------------------------
-  // 1) fetch chapels from Sanity
+  // 1) fetch chapels
   // --------------------------------------
   useEffect(() => {
     sanityClient
@@ -137,7 +138,7 @@ export default function MapPage() {
     const b = m.getBounds();
     setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
 
-    // Lock out rotation
+    // lock out rotation
     if (m.getBearing() !== 0 || m.getPitch() !== 0) {
       m.setBearing(0);
       m.setPitch(0);
@@ -175,7 +176,7 @@ export default function MapPage() {
   };
 
   // --------------------------------------
-  // onLoad: Lock rotation/pitch, geolocate, attach geocoder
+  // onLoad: create geocoder instance but do not add it yet
   // --------------------------------------
   const handleMapLoad = useCallback(() => {
     const m = mapRef.current?.getMap();
@@ -203,22 +204,21 @@ export default function MapPage() {
       geoControlRef.current = geoCtrl;
       m.addControl(geoCtrl);
 
-      // Hide default crosshair
+      // hide crosshair
       const styleEl = document.createElement('style');
       styleEl.innerHTML = '.mapboxgl-ctrl-geolocate { display: none !important; }';
       document.head.appendChild(styleEl);
     }
 
-    // Create & attach the geocoder to <div id="drawerGeocoder" />
+    // Create geocoder
     if (!geocoderRef.current) {
       const geocoder = new MapboxGeocoder({
         accessToken: MAPBOX_TOKEN,
         mapboxgl: mapboxgl,
         marker: false,
-        placeholder: 'Search ...',
-        container: 'drawerGeocoder'
+        placeholder: 'Search location...'
       });
-
+      // On place selected
       geocoder.on('result', (e) => {
         const coords = e.result?.geometry?.coordinates || [-40, 20];
         setViewState((prev) => ({
@@ -228,52 +228,84 @@ export default function MapPage() {
           zoom: 12,
           transitionDuration: 600
         }));
+        setShowClear(true);
       });
-
       geocoderRef.current = geocoder;
-      geocoder.onAdd(m);
-
-      // Additional custom style to ensure it's visible
-      const customStyle = `
-        #drawerGeocoder .mapboxgl-ctrl-geocoder {
-          background-color: rgba(31,31,60,0.3) !important;
-          border-radius: 8px !important;
-          border: 1px solid #64748b !important;
-          box-shadow: 0 0 6px rgba(139,92,246,0.4) !important;
-          width: 100% !important;
-          min-height: 44px !important; /* ensure we see an input box */
-        }
-        #drawerGeocoder .mapboxgl-ctrl-geocoder input[type="text"] {
-          background-color: transparent !important;
-          color: #fff !important; /* pure white text for clarity */
-          border: none !important;
-        }
-        #drawerGeocoder .suggestions {
-          background-color: rgba(31,31,60,0.5) !important;
-          border-radius: 8px !important;
-        }
-        .mapboxgl-ctrl-geocoder--pin-right { display: none !important; }
-      `;
-      const styleNode = document.createElement('style');
-      styleNode.innerHTML = customStyle;
-      document.head.appendChild(styleNode);
     }
   }, []);
 
   // --------------------------------------
-  // Drawer & Hamburger Styles
+  // Add/remove geocoder from #drawerGeocoder on drawer open/close
   // --------------------------------------
-  // White lines, transparent background
-  // "2X size" = size={48}
-  // More transparent when closed, fully visible when open
+  useEffect(() => {
+    const geocoder = geocoderRef.current;
+    const container = document.getElementById('drawerGeocoder');
+
+    if (!geocoder || !container) return;
+
+    if (menuOpen) {
+      geocoder.addTo(container);
+      container.style.display = 'block';
+      container.style.height  = '50px';
+      container.style.position = 'relative';
+
+      // Even darker background for the geocoder
+      // Suggestions also darker for high contrast
+      const customStyle = `
+        .mapboxgl-ctrl-geocoder {
+          background: rgba(10,10,30,0.8) !important;
+          border: 1px solid #64748b !important;
+          border-radius: 8px !important;
+          box-shadow: 0 0 6px rgba(139,92,246,0.4) !important;
+          width: 90% !important;
+          color: #fff !important;
+          position: relative !important;
+        }
+        .mapboxgl-ctrl-geocoder input[type="text"] {
+          background: transparent !important;
+          color: #fff !important;
+          border: none !important;
+          font-size: 1rem !important;
+          line-height: 1.6 !important;
+        }
+        .mapboxgl-ctrl-geocoder .suggestions {
+          background: rgba(10,10,30,0.85) !important;
+          border-radius: 8px !important;
+        }
+        .mapboxgl-ctrl-geocoder--pin-right { display: none !important; }
+        .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon-search {
+          fill: #fff !important;
+        }
+      `;
+      const styleNode = document.createElement('style');
+      styleNode.innerHTML = customStyle;
+      document.head.appendChild(styleNode);
+
+    } else {
+      geocoder.remove();
+      container.style.display = 'none';
+      setShowClear(false);
+    }
+  }, [menuOpen]);
+
+  // If user clicks "X", clear geocoder & hide X
+  const handleClear = (e) => {
+    e.stopPropagation();
+    geocoderRef.current?.clear();
+    setShowClear(false);
+  };
+
+  // --------------------------------------
+  // Drawer & hamburger styles
+  // --------------------------------------
   const hamburgerClosed = {
     position: 'absolute',
     top: '50%',
-    left: '-56px', // move it out a bit more if you like
+    left: '-46px',
     transform: 'translateY(-50%)',
     background: 'transparent',
     border: 'none',
-    opacity: 0.4,
+    opacity: 0.5,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -284,7 +316,6 @@ export default function MapPage() {
     opacity: 1
   };
 
-  // The drawer container
   const drawerContainerStyle = {
     position: 'absolute',
     top: 0,
@@ -300,27 +331,21 @@ export default function MapPage() {
     flexDirection: 'column'
   };
 
-  // The header with the hamburger + search container or "Menu"
   const drawerHeaderStyle = {
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
-    height: '60px',
+    height: '64px',
     padding: '0 1rem',
     borderBottom: '1px solid #64748b'
   };
 
-  // We'll always mount #drawerGeocoder but hide it if drawer is closed
+  // Container for geocoder
   const geocoderContainerStyle = {
+    display: 'none',
     width: '100%',
-    display: menuOpen ? 'block' : 'none'
-  };
-
-  const menuTitleStyle = {
-    margin: 0,
-    color: '#fff',
-    fontSize: '1.2rem',
-    fontWeight: 600
+    height: '0px',
+    position: 'relative'
   };
 
   const navContainerStyle = {
@@ -329,7 +354,6 @@ export default function MapPage() {
     padding: '1rem',
     gap: '0.5rem'
   };
-
   const linkStyle = {
     display: 'flex',
     alignItems: 'center',
@@ -343,6 +367,21 @@ export default function MapPage() {
   };
   const linkHoverStyle = {
     background: '#2e2e44'
+  };
+
+  // X button: shift up a bit more so it looks centered
+  const xButtonStyle = {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-60%)', // nudged up from -50% to -60%
+    right: '8px',
+    background: '	rgba(0,0,0,0.85)',
+    borderRadius: '50%',
+    padding: '2px',
+    border: 'none',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
+    zIndex: 9999
   };
 
   // --------------------------------------
@@ -391,37 +430,45 @@ export default function MapPage() {
           <Navigation size={26} strokeWidth={2.2} color="#fff" />
         </button>
 
-        {/* Drawer on the right */}
+        {/* Drawer */}
         <div style={drawerContainerStyle}>
           <div style={drawerHeaderStyle}>
-            {/* Big hamburger icon with white lines, transparent BG */}
+            {/* 32 sized hamburger, white lines */}
             <button
-              onClick={() => setMenuOpen(o => !o)}
+              onClick={() => setMenuOpen((o) => !o)}
               style={menuOpen ? hamburgerOpen : hamburgerClosed}
             >
-              <Menu size={32} strokeWidth={2.4} color="#fff" />
+              <Menu size={32} strokeWidth={2} color="#fff" />
             </button>
 
-            {/*
-              If drawer is open -> show geocoder
-              Else -> show "Menu" text
-            */}
-            <div style={{ marginLeft: '1rem', width: '100%' }}>
+            <div style={{ marginLeft: '1rem', width: '100%', position: 'relative' }}>
               {menuOpen ? (
-                <div id="drawerGeocoder" style={geocoderContainerStyle} />
+                <div id="drawerGeocoder" style={geocoderContainerStyle}>
+                  {/*
+                    Our custom "X" button if user typed something
+                    Nudged up by transform: translateY(-60%)
+                  */}
+                  {showClear && (
+                    <button
+                      style={xButtonStyle}
+                      onClick={handleClear}
+                    >
+                      <XCircle size={20} strokeWidth={2} color="#fff" />
+                    </button>
+                  )}
+                </div>
               ) : (
-                <h2 style={menuTitleStyle}>Menu</h2>
+                <h2 style={{ margin: 0, color: '#fff' }}>Menu</h2>
               )}
             </div>
           </div>
 
-          {/* Nav links */}
           <nav style={navContainerStyle}>
             <Link
               to="/leaderboard"
               style={linkStyle}
-              onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={(e) => Object.assign(e.currentTarget.style, linkHoverStyle)}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => setMenuOpen(false)}
             >
               <Award size={22} strokeWidth={2} color="#cbd5e1" />
@@ -431,8 +478,8 @@ export default function MapPage() {
             <Link
               to="/manager"
               style={linkStyle}
-              onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={(e) => Object.assign(e.currentTarget.style, linkHoverStyle)}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => setMenuOpen(false)}
             >
               <Settings size={22} strokeWidth={2} color="#cbd5e1" />
@@ -537,27 +584,27 @@ function PopupContent({ chapel }) {
   const imgUrl        = chapel.chapelImage?.asset?.url || '';
 
   return (
-    <div style={{ fontFamily: "'Inter',sans-serif" }}>
+    <div style={{ fontFamily:"'Inter',sans-serif" }}>
       {chapel.nickname && (
-        <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.2rem', fontFamily: "'Cinzel',serif" }}>
+        <h3 style={{ margin:'0 0 0.5rem', fontSize:'1.2rem', fontFamily:"'Cinzel',serif" }}>
           {chapel.nickname}
         </h3>
       )}
 
       {chapel.city && (
-        <div style={{ margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ margin:'0 0 0.75rem', display:'flex', alignItems:'center', justifyContent:'center' }}>
           {chapel.googleMapsLink ? (
             <a
               href={chapel.googleMapsLink}
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 'bold',
-                color: 'inherit',
-                textDecoration: 'none'
+                display:'inline-flex',
+                alignItems:'center',
+                gap:'6px',
+                fontWeight:'bold',
+                color:'inherit',
+                textDecoration:'none'
               }}
             >
               <MapPin size={18} strokeWidth={2} />
@@ -570,51 +617,51 @@ function PopupContent({ chapel }) {
       )}
 
       {imgUrl ? (
-        <div style={{ width: '100%', height: '180px', overflow: 'hidden', borderRadius: '8px', marginBottom: '0.75rem' }}>
+        <div style={{ width:'100%', height:'180px', overflow:'hidden', borderRadius:'8px', marginBottom:'0.75rem' }}>
           <img
             src={imgUrl}
             alt={chapel.nickname || 'Chapel'}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width:'100%', height:'100%', objectFit:'cover' }}
           />
         </div>
       ) : (
         <div
           style={{
-            width: '100%',
-            height: '180px',
-            borderRadius: '8px',
-            marginBottom: '0.75rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#3a3a5d'
+            width:'100%',
+            height:'180px',
+            borderRadius:'8px',
+            marginBottom:'0.75rem',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            background:'#3a3a5d'
           }}
         >
-          <span style={{ color: '#aaa' }}>No Image</span>
+          <span style={{ color:'#aaa' }}>No Image</span>
         </div>
       )}
 
-      <p style={{ fontSize: '0.95rem', marginBottom: '1rem', color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>
+      <p style={{ fontSize:'0.95rem', marginBottom:'1rem', color:'#cbd5e1', whiteSpace:'pre-wrap' }}>
         {displayedDesc.trim() ? displayedDesc : 'No description yet.'}
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem' }}>
+      <div style={{ display:'flex', justifyContent:'center', gap:'1.5rem' }}>
         <Link
           to={`/${chapel.slug}`}
-          style={{ color: '#fff', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+          style={{ color:'#fff', textDecoration:'none', display:'flex', flexDirection:'column', alignItems:'center' }}
         >
           <Calendar size={28} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Calendar</span>
+          <span style={{ fontSize:'0.85rem', marginTop:'4px' }}>Calendar</span>
         </Link>
 
         <a
-          href={whatsappLink}
+          href={getWhatsappLink(chapel.whatsappNumber)}
           target="_blank"
           rel="noopener noreferrer"
-          style={{ color: '#fff', textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center' }}
+          style={{ color:'#fff', textDecoration:'none', display:'flex', flexDirection:'column', alignItems:'center' }}
         >
           <MessageCircle size={28} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Contact</span>
+          <span style={{ fontSize:'0.85rem', marginTop:'4px' }}>Contact</span>
         </a>
       </div>
     </div>
