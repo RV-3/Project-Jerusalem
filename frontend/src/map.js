@@ -72,7 +72,7 @@ export default function MapPage() {
   });
   const [bounds, setBounds] = useState(null);
 
-  // Drawer open + custom "X"
+  // Drawer open + custom clear
   const [menuOpen,  setMenuOpen]  = useState(false);
   const [showClear, setShowClear] = useState(false);
 
@@ -81,7 +81,7 @@ export default function MapPage() {
   const geoControlRef = useRef(null);
   const geocoderRef   = useRef(null);
 
-  /* ───────────── Fetch data ───────────── */
+  /* ───────────────── Fetch data (Sanity) ───────────────── */
   useEffect(() => {
     sanityClient.fetch(`*[_type=="chapel"]{
       _id, name, nickname, city, googleMapsLink,
@@ -95,7 +95,7 @@ export default function MapPage() {
     .catch(console.error);
   }, []);
 
-  /* ───────────── Setup supercluster ───────────── */
+  /* ───────────────── Setup supercluster ───────────────── */
   const points = useMemo(() => (
     chapels.map((c) => ({
       type: 'Feature',
@@ -114,7 +114,7 @@ export default function MapPage() {
     return clusterIndex.getClusters(bounds, Math.floor(viewState.zoom));
   }, [clusterIndex, bounds, viewState.zoom]);
 
-  /* ───────────── Map move handlers ───────────── */
+  /* ───────────────── Map move handlers ───────────────── */
   const handleMove = (e) => setViewState(e.viewState);
 
   const handleMoveEnd = useCallback(() => {
@@ -122,14 +122,15 @@ export default function MapPage() {
     if (!m) return;
     const b = m.getBounds();
     setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
-    // remove any rotation
+
+    // reset rotation
     if (m.getBearing() !== 0 || m.getPitch() !== 0) {
       m.setBearing(0);
       m.setPitch(0);
     }
   }, []);
 
-  /* ───────────── Marker click ───────────── */
+  /* ───────────────── Marker click ───────────────── */
   const handleMarkerClick = (feature, e) => {
     e.originalEvent.stopPropagation();
     if (feature.properties.cluster) {
@@ -156,12 +157,12 @@ export default function MapPage() {
     }
   };
 
-  /* ───────────── onLoad: geolocate + geocoder ───────────── */
+  /* ───────────────── onLoad: geolocate + geocoder ───────────────── */
   const handleMapLoad = useCallback(() => {
     const m = mapRef.current?.getMap();
     if (!m) return;
 
-    // lock out rotation
+    // lock out rotation/pitch
     m.setMinPitch(0);
     m.setMaxPitch(0);
     m.touchPitch.disable();
@@ -183,7 +184,7 @@ export default function MapPage() {
       geoControlRef.current = geoCtrl;
       m.addControl(geoCtrl);
 
-      // Optionally hide crosshair
+      // Hide default crosshair
       const styleEl = document.createElement('style');
       styleEl.innerHTML = '.mapboxgl-ctrl-geolocate { display: none !important; }';
       document.head.appendChild(styleEl);
@@ -200,7 +201,7 @@ export default function MapPage() {
 
       geocoder.on('result', (e) => {
         setShowClear(true);
-        // Pan map to coords
+        // Pan map
         const coords = e.result?.geometry?.coordinates || [-40, 20];
         setViewState((v) => ({
           ...v,
@@ -215,26 +216,25 @@ export default function MapPage() {
     }
   }, []);
 
-  /* ───────────── Add/Remove geocoder on drawer open ───────────── */
+  /* ───────────────── Add/Remove geocoder on drawer open ───────────────── */
   useEffect(() => {
     const geocoder = geocoderRef.current;
     const container = document.getElementById('drawerGeocoder');
     if (!geocoder || !container) return;
 
     if (menuOpen) {
-      // Add geocoder
+      // Show geocoder UI
       geocoder.addTo(container);
-
-      // We want it centered in #drawerGeocoder, so we can do:
+      // flex center to position it nicely
       container.style.display = 'flex';
       container.style.alignItems = 'center';
       container.style.justifyContent = 'center';
-      container.style.height = '50px';
+      container.style.height = '30px';
       container.style.position = 'relative';
 
       /*
-        Inject custom CSS for curved edges, subtle glow, dark interior,
-        plus we can shift it "a bit" with margin-left if desired.
+        Subtle always-on glow around .mapboxgl-ctrl-geocoder,
+        plus curved edges, darker interior
       */
       const darkCSS = `
         .mapboxgl-ctrl-geocoder {
@@ -242,11 +242,14 @@ export default function MapPage() {
           border: 1px solid #64748b !important;
           border-radius: 10px !important;
           color: #fff !important;
-          /* subtle glow on focus */
+          /* small, constant glow even when not focused: */
+          box-shadow: 0 0 4px rgba(139,92,246,0.2) !important;
         }
+          /* If you also want a bigger glow on focus, uncomment: */
         .mapboxgl-ctrl-geocoder:focus-within {
-          box-shadow: 0 0 5.2px rgba(139, 92, 246, 0.4) !important;
+          box-shadow: 0 0 5.9px rgba(139,92,246,0.38) !important;
         }
+        */
         .mapboxgl-ctrl-geocoder .suggestions {
           background: rgba(0,0,0,0.9) !important;
           border-radius: 10px !important;
@@ -255,26 +258,18 @@ export default function MapPage() {
           fill: #fff !important;
         }
         .mapboxgl-ctrl-geocoder input[type="text"] {
-          background: #141421 !important; /* darker interior */
+          background: #141421 !important; /* darker inside */
           color: #fff !important;
           border: none !important;
           outline: none !important;
           border-radius: 8px !important;
-          /* optional margin-left if you want to shift text inside:
-             margin-left: 8px !important;
-          */
-        }
-        /* For centering or shifting the .mapboxgl-ctrl-geocoder itself: */
-        .mapboxgl-ctrl-geocoder {
-          width: 240px !important;     /* fixed width so it's not 100% of container */
-          margin: 0 auto !important;  /* center horizontally in the flex container */
-          /* optional offset:
-             margin-left: 20px !important;
-             or transform: translateX(20px);
-          */
         }
         .mapboxgl-ctrl-geocoder--pin-right {
           display: none !important;
+        }
+        /* fix a certain width so it's not full container */
+        .mapboxgl-ctrl-geocoder {
+          width: 240px !important;
         }
       `;
       const styleNode = document.createElement('style');
@@ -282,6 +277,7 @@ export default function MapPage() {
       document.head.appendChild(styleNode);
 
       return () => {
+        // if .remove() doesn't exist, manually hide
         if (typeof geocoder.remove === 'function') {
           geocoder.remove();
         } else {
@@ -303,7 +299,7 @@ export default function MapPage() {
     }
   }, [menuOpen]);
 
-  /* ───────────── Clear geocoder ───────────── */
+  /* ───────────────── Clear geocoder ───────────────── */
   const handleClear = (e) => {
     e.stopPropagation();
     geocoderRef.current?.clear();
@@ -374,11 +370,13 @@ export default function MapPage() {
     borderRadius: '6px',
     transition: 'background 0.2s'
   };
-  const linkHoverStyle = { background: '#2e2e44' };
+  const linkHoverStyle = {
+    background: '#2e2e44'
+  };
 
   const xButtonStyle = {
     position: 'absolute',
-    top: '55%',
+    top: '50%',
     right: '8px',
     transform: 'translateY(-50%)',
     background: 'transparent',
