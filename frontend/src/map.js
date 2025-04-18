@@ -12,7 +12,7 @@ import mapboxgl from 'mapbox-gl';
 import { Map, Marker, Popup } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
-/*  1) Install & import Mapbox Geocoder */
+// 1) Install & import Mapbox Geocoder
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
 
@@ -63,6 +63,7 @@ export default function MapPage() {
   const [chapels,        setChapels]        = useState([]);
   const [selectedChapel, setSelectedChapel] = useState(null);
 
+  // Map position
   const [viewState, setViewState] = useState({
     longitude: -40,
     latitude:  20,
@@ -70,7 +71,7 @@ export default function MapPage() {
   });
   const [bounds, setBounds] = useState(null);
 
-  // Toggle hidden drawer
+  // Drawer open/close
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Refs
@@ -101,7 +102,7 @@ export default function MapPage() {
   }, []);
 
   // --------------------------------------
-  // 2) supercluster prep
+  // 2) supercluster
   // --------------------------------------
   const points = useMemo(
     () =>
@@ -124,7 +125,7 @@ export default function MapPage() {
   }, [clusterIndex, bounds, viewState.zoom]);
 
   // --------------------------------------
-  // Map move handlers
+  // Map move/zoom
   // --------------------------------------
   const handleMove = (e) => setViewState(e.viewState);
 
@@ -135,7 +136,7 @@ export default function MapPage() {
     const b = m.getBounds();
     setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
 
-    // Force no rotation/pitch if user tries
+    // Lock out rotation
     if (m.getBearing() !== 0 || m.getPitch() !== 0) {
       m.setBearing(0);
       m.setPitch(0);
@@ -173,13 +174,13 @@ export default function MapPage() {
   };
 
   // --------------------------------------
-  // onLoad: Lock rotation/pitch; geolocate; geocoder; custom style
+  // onLoad: Lock rotation/pitch, geolocate, attach geocoder
   // --------------------------------------
   const handleMapLoad = useCallback(() => {
     const m = mapRef.current?.getMap();
     if (!m) return;
 
-    /* Lock out rotation/pitch */
+    // Lock out rotation/pitch
     m.setMinPitch(0);
     m.setMaxPitch(0);
     m.touchPitch.disable();
@@ -191,7 +192,7 @@ export default function MapPage() {
       m.setPitch(0);
     });
 
-    /* Add hidden GeolocateControl once */
+    // Geolocate
     if (!geoControlRef.current) {
       const geoCtrl = new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
@@ -207,74 +208,82 @@ export default function MapPage() {
       document.head.appendChild(styleEl);
     }
 
-    /* Add Mapbox Geocoder once */
+    // Create & attach the geocoder to <div id="drawerGeocoder" />
     if (!geocoderRef.current) {
       const geocoder = new MapboxGeocoder({
         accessToken: MAPBOX_TOKEN,
         mapboxgl: mapboxgl,
-        placeholder: 'Search...',
-        marker: false
+        marker: false,
+        placeholder: 'Search ...',
+        container: 'drawerGeocoder' // We'll keep this container hidden if the drawer is closed
       });
 
-      // Move map to selection
       geocoder.on('result', (e) => {
         const coords = e.result?.geometry?.coordinates || [-40, 20];
         setViewState((prev) => ({
           ...prev,
           longitude: coords[0],
           latitude:  coords[1],
-          zoom:      12,
+          zoom: 12,
           transitionDuration: 600
         }));
       });
 
-      m.addControl(geocoder, 'top-left');
       geocoderRef.current = geocoder;
-    }
+      geocoder.onAdd(m);
 
-    /* Inject custom style for a transparent dark geocoder with slight glow */
-    const customStyle = `
-      .mapboxgl-ctrl-geocoder {
-        background-color: rgba(31, 31, 60, 0.15) !important; /* transparent dark */
-        border-radius: 8px !important;
-        border: none !important;
-        width: 280px !important;
-        padding: 0 5px !important;
-        box-shadow: 0 0 1px rgba(139, 92, 246, 0.4) !important; /* subtle purple glow */
-        display: flex !important;
-        align-items: center !important;
-      }
-      /* Remove the mic icon or any right pin container */
-      .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--pin-right {
-        display: none !important;
-      }
-      /* The text input: no border, light text */
-      .mapboxgl-ctrl-geocoder input[type="text"] {
-        background-color: transparent !important;
-        color: #f4f4f5 !important;
-        border: none !important;
-        box-shadow: none !important;
-      }
-      /* The suggestions dropdown: also slightly transparent dark + glow */
-      .mapboxgl-ctrl-geocoder .suggestions {
-        background-color: rgba(31, 31, 60, 0.5) !important;
-        border-radius: 8px !important;
-        border: 1px solid #64748b !important;
-        box-shadow: 0 0 6px rgba(139, 92, 246, 0.3) !important;
-      }
-      .mapboxgl-ctrl-geocoder .suggestion-title,
-      .mapboxgl-ctrl-geocoder .suggestion-address {
-        color: #f4f4f5 !important;
-      }
-    `;
-    const styleNode = document.createElement('style');
-    styleNode.innerHTML = customStyle;
-    document.head.appendChild(styleNode);
+      // Optional custom CSS
+      const customStyle = `
+        #drawerGeocoder .mapboxgl-ctrl-geocoder {
+          background-color: rgba(31,31,60,0.3) !important;
+          border-radius: 8px !important;
+          border: 1px solid #64748b !important;
+          box-shadow: 0 0 6px rgba(139,92,246,0.4) !important;
+          width: 100% !important;
+        }
+        #drawerGeocoder .mapboxgl-ctrl-geocoder input[type="text"] {
+          background-color: transparent !important;
+          color: #f4f4f5 !important;
+          border: none !important;
+        }
+        #drawerGeocoder .suggestions {
+          background-color: rgba(31,31,60,0.5) !important;
+          border-radius: 8px !important;
+        }
+        .mapboxgl-ctrl-geocoder--pin-right { display: none !important; }
+      `;
+      const styleNode = document.createElement('style');
+      styleNode.innerHTML = customStyle;
+      document.head.appendChild(styleNode);
+    }
   }, []);
 
   // --------------------------------------
-  // Drawer & Button Styles
+  // Drawer & Hamburger Styles
   // --------------------------------------
+  // White lines, transparent background
+  // Half opacity if closed, full if open
+  const hamburgerClosed = {
+    position: 'absolute',
+    top: '50%',
+    left: '-48px',
+    transform: 'translateY(-50%)',
+    width: '42px',
+    height: '42px',
+    background: 'transparent',
+    border: 'none',
+    opacity: 0.5,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer'
+  };
+  const hamburgerOpen = {
+    ...hamburgerClosed,
+    opacity: 1
+  };
+
+  // The drawer container
   const drawerContainerStyle = {
     position: 'absolute',
     top: 0,
@@ -290,6 +299,7 @@ export default function MapPage() {
     flexDirection: 'column'
   };
 
+  // The header with the hamburger + search container or "Menu"
   const drawerHeaderStyle = {
     position: 'relative',
     display: 'flex',
@@ -299,39 +309,26 @@ export default function MapPage() {
     borderBottom: '1px solid #64748b'
   };
 
-  // Style for the hamburger
-  const hamburgerButtonClosed = {
-    position: 'absolute',
-    top: '50%',
-    left: '-48px',
-    transform: 'translateY(-50%)',
-    width: '42px',
-    height: '42px',
-    borderRadius: '8px',
-    background: '#1e1e2f',
-    border: '2px solid #64748b',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease'
-  };
-  const hamburgerButtonOpen = {
-    ...hamburgerButtonClosed,
-    background: 'transparent',
-    border: 'none',
-    opacity: 0.5
+  const headerInnerStyle = {
+    flexGrow: 1,
+    marginLeft: '1rem'
   };
 
   const menuTitleStyle = {
     margin: 0,
-    marginLeft: '2rem',
-    color: '#cbd5e1',
+    color: '#fff',
     fontSize: '1.1rem',
-    fontWeight: 600,
-    cursor: 'pointer'
+    fontWeight: 600
   };
 
+  // We'll always render #drawerGeocoder but hide it if the drawer is closed
+  // so the geocoder remains mounted.
+  const geocoderContainerStyle = {
+    width: '100%',
+    display: menuOpen ? 'block' : 'none'
+  };
+
+  // The nav area
   const navContainerStyle = {
     display: 'flex',
     flexDirection: 'column',
@@ -376,7 +373,7 @@ export default function MapPage() {
         maxPitch={0}
       >
         {/*
-          Geolocate arrow near bottom (10% from bottom)
+          geolocate arrow near bottom
         */}
         <button
           onClick={() => geoControlRef.current?.trigger()}
@@ -397,26 +394,35 @@ export default function MapPage() {
             zIndex: 5
           }}
         >
-          <Navigation size={26} strokeWidth={2.2} color="#cbd5e1" />
+          <Navigation size={26} strokeWidth={2.2} color="#fff" />
         </button>
 
-        {/* Hidden Drawer (slides in/out) */}
+        {/* Drawer on the right */}
         <div style={drawerContainerStyle}>
           <div style={drawerHeaderStyle}>
+            {/* hamburger icon with white lines, transparent BG */}
             <button
               onClick={() => setMenuOpen(o => !o)}
-              style={menuOpen ? hamburgerButtonOpen : hamburgerButtonClosed}
+              style={menuOpen ? hamburgerOpen : hamburgerClosed}
             >
-              <Menu size={24} strokeWidth={2} color="#cbd5e1" />
+              <Menu size={24} strokeWidth={2.4} color="#fff" />
             </button>
-            <h2
-              style={menuTitleStyle}
-              onClick={() => setMenuOpen(o => !o)}
-            >
-              Menu
-            </h2>
+
+            <div style={headerInnerStyle}>
+              {/* If drawer is closed -> show "Menu" text
+                  If open -> show the geocoder container */}
+              {menuOpen ? (
+                <div
+                  id="drawerGeocoder"
+                  style={geocoderContainerStyle}
+                />
+              ) : (
+                <h2 style={menuTitleStyle}>Menu</h2>
+              )}
+            </div>
           </div>
 
+          {/* Nav links below */}
           <nav style={navContainerStyle}>
             <Link
               to="/leaderboard"
