@@ -72,7 +72,7 @@ export default function MapPage() {
   });
   const [bounds, setBounds] = useState(null);
 
-  // Drawer open + custom clear
+  // Drawer & custom "X"
   const [menuOpen,  setMenuOpen]  = useState(false);
   const [showClear, setShowClear] = useState(false);
 
@@ -81,7 +81,7 @@ export default function MapPage() {
   const geoControlRef = useRef(null);
   const geocoderRef   = useRef(null);
 
-  /* ───────────── Fetch Data from Sanity ───────────── */
+  /* ───────────────── Fetch data (Sanity) ───────────────── */
   useEffect(() => {
     sanityClient.fetch(`*[_type=="chapel"]{
       _id, name, nickname, city, googleMapsLink,
@@ -95,12 +95,15 @@ export default function MapPage() {
     .catch(console.error);
   }, []);
 
-  /* ───────────── Setup supercluster ───────────── */
-  const points = useMemo(() => chapels.map((c) => ({
-    type: 'Feature',
-    properties: { cluster: false, chapelId: c._id },
-    geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
-  })), [chapels]);
+  /* ───────────────── Setup supercluster ───────────────── */
+  const points = useMemo(
+    () => chapels.map((c) => ({
+      type: 'Feature',
+      properties: { cluster: false, chapelId: c._id },
+      geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
+    })),
+    [chapels]
+  );
 
   const clusterIndex = useMemo(
     () => new supercluster({ radius: 50, maxZoom: 14 }).load(points),
@@ -112,7 +115,7 @@ export default function MapPage() {
     return clusterIndex.getClusters(bounds, Math.floor(viewState.zoom));
   }, [clusterIndex, bounds, viewState.zoom]);
 
-  /* ───────────── Map move handlers ───────────── */
+  /* ───────────────── Map move handlers ───────────────── */
   const handleMove = (e) => setViewState(e.viewState);
 
   const handleMoveEnd = useCallback(() => {
@@ -120,14 +123,15 @@ export default function MapPage() {
     if (!m) return;
     const b = m.getBounds();
     setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
-    // reset rotation/pitch
+
+    // reset rotation
     if (m.getBearing() !== 0 || m.getPitch() !== 0) {
       m.setBearing(0);
       m.setPitch(0);
     }
   }, []);
 
-  /* ───────────── Marker click ───────────── */
+  /* ───────────────── Marker click ───────────────── */
   const handleMarkerClick = (feature, e) => {
     e.originalEvent.stopPropagation();
     if (feature.properties.cluster) {
@@ -154,12 +158,12 @@ export default function MapPage() {
     }
   };
 
-  /* ───────────── onLoad: Setup geolocate + geocoder ───────────── */
+  /* ───────────────── onLoad: geolocate + geocoder ───────────────── */
   const handleMapLoad = useCallback(() => {
     const m = mapRef.current?.getMap();
     if (!m) return;
 
-    // lock out rotation
+    // Lock out rotation/pitch
     m.setMinPitch(0);
     m.setMaxPitch(0);
     m.touchPitch.disable();
@@ -187,7 +191,7 @@ export default function MapPage() {
       document.head.appendChild(styleEl);
     }
 
-    // create geocoder
+    // geocoder
     if (!geocoderRef.current) {
       const geocoder = new MapboxGeocoder({
         accessToken: MAPBOX_TOKEN,
@@ -196,7 +200,6 @@ export default function MapPage() {
         placeholder: 'Search location...'
       });
 
-      // On final result
       geocoder.on('result', (e) => {
         setShowClear(true);
         // Move map to coords
@@ -214,39 +217,55 @@ export default function MapPage() {
     }
   }, []);
 
-  /* ───────────── Add/Remove geocoder on drawer open ───────────── */
+  /* ───────────────── Drawer open/close (add geocoder) ───────────────── */
   useEffect(() => {
     const geocoder = geocoderRef.current;
     const container = document.getElementById('drawerGeocoder');
     if (!geocoder || !container) return;
 
     if (menuOpen) {
-      // Add geocoder UI
+      // Add geocoder UI to container
       geocoder.addTo(container);
       container.style.display  = 'block';
       container.style.height   = '50px';
       container.style.position = 'relative';
 
-      // Inject some custom dark CSS
+      /*
+        Inject custom dark + modern style
+        - More curvature: border-radius: 12px
+        - Subtle glow on focus
+        - Darker interior for the input
+      */
       const darkCSS = `
         .mapboxgl-ctrl-geocoder {
           background: #1e1e2f !important;
           border: 1px solid #64748b !important;
-          border-radius: 6px !important;
+          border-radius: 12px !important; /* <--- more curved edges */
           color: #fff !important;
         }
         .mapboxgl-ctrl-geocoder .suggestions {
           background: rgba(0,0,0,0.9) !important;
-          border-radius: 6px !important;
+          border-radius: 10px !important;
         }
         .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon-search {
           fill: #fff !important;
         }
         .mapboxgl-ctrl-geocoder input[type="text"] {
-          background: transparent !important;
+          background: #141421 !important; /* darker inside */
           color: #fff !important;
           border: none !important;
+          outline: none !important;
+          border-radius: 10px !important;
         }
+        .mapboxgl-ctrl-geocoder input[type="text"]:focus {
+          outline: none !important;
+          box-shadow: none !important;
+        }
+        /* Subtle glow on entire box on focus: */
+        .mapboxgl-ctrl-geocoder:focus-within {
+          box-shadow: 0 0 4.3px rgba(139, 92, 246, 0.4) !important;
+        }
+        /* Hide default Mapbox clear/pin icon if you rely on custom X */
         .mapboxgl-ctrl-geocoder--pin-right {
           display: none !important;
         }
@@ -255,13 +274,11 @@ export default function MapPage() {
       styleNode.innerHTML = darkCSS;
       document.head.appendChild(styleNode);
 
-      // Cleanup
       return () => {
-        // Fallback if remove() is missing:
+        // If remove() is missing, fallback
         if (typeof geocoder.remove === 'function') {
           geocoder.remove();
         } else {
-          // Hide & clear container manually
           container.style.display = 'none';
           container.innerHTML = '';
         }
@@ -269,9 +286,7 @@ export default function MapPage() {
         styleNode.remove();
       };
     } else {
-      // Drawer closed:
-      // Ensure geocoder UI is hidden
-      // If remove() doesn't exist, clear container
+      // Drawer closed => remove geocoder UI
       if (typeof geocoder.remove === 'function') {
         geocoder.remove();
       } else {
@@ -282,14 +297,14 @@ export default function MapPage() {
     }
   }, [menuOpen]);
 
-  /* ───────────── Clear geocoder ───────────── */
+  /* ───────────────── Clear geocoder ───────────────── */
   const handleClear = (e) => {
     e.stopPropagation();
     geocoderRef.current?.clear();
     setShowClear(false);
   };
 
-  /* ───────────── Drawer + style ───────────── */
+  /* ───────────── Drawer & UI Styles ───────────── */
   const hamburgerClosed = {
     position: 'absolute',
     top: '50%',
@@ -306,67 +321,69 @@ export default function MapPage() {
   const hamburgerOpen = { ...hamburgerClosed, opacity: 1 };
 
   const drawerContainerStyle = {
-    position:'absolute',
-    top:0,
-    right:0,
-    width:'240px',
-    height:'100%',
-    background:'#1e1e2f',
-    borderLeft:'2px solid #64748b',
-    transition:'transform 0.3s ease-in-out',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: '240px',
+    height: '100%',
+    background: '#1e1e2f',
+    borderLeft: '2px solid #64748b',
+    transition: 'transform 0.3s ease-in-out',
     transform: menuOpen ? 'translateX(0%)' : 'translateX(100%)',
-    zIndex:999,
-    display:'flex',
-    flexDirection:'column'
+    zIndex: 999,
+    display: 'flex',
+    flexDirection: 'column'
   };
 
   const drawerHeaderStyle = {
-    position:'relative',
-    display:'flex',
-    alignItems:'center',
-    height:'64px',
-    padding:'0 1rem',
-    borderBottom:'1px solid #64748b'
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    height: '64px',
+    padding: '0 1rem',
+    borderBottom: '1px solid #64748b'
   };
 
   const geocoderContainerStyle = {
-    display:'none',
-    width:'100%',
-    height:'0px',
-    position:'relative'
+    display: 'none',
+    width: '100%',
+    height: '0px',
+    position: 'relative'
   };
 
   const navContainerStyle = {
-    display:'flex',
-    flexDirection:'column',
-    padding:'1rem',
-    gap:'0.5rem'
+    display: 'flex',
+    flexDirection: 'column',
+    padding: '1rem',
+    gap: '0.5rem'
   };
   const linkStyle = {
-    display:'flex',
-    alignItems:'center',
-    gap:'8px',
-    color:'#cbd5e1',
-    textDecoration:'none',
-    fontWeight:'500',
-    padding:'8px',
-    borderRadius:'6px',
-    transition:'background 0.2s'
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: '#cbd5e1',
+    textDecoration: 'none',
+    fontWeight: '500',
+    padding: '8px',
+    borderRadius: '6px',
+    transition: 'background 0.2s'
   };
-  const linkHoverStyle = { background:'#2e2e44' };
+  const linkHoverStyle = {
+    background: '#2e2e44'
+  };
 
   const xButtonStyle = {
-    position:'absolute',
-    top:'44%',
-    right:'8px',
-    transform:'translateY(-50%)',
-    background:'transparent',
-    borderRadius:'50%',
-    padding:'2px 4px',
-    border:'none',
-    cursor:'pointer',
-    pointerEvents:'auto',
-    zIndex:9999
+    position: 'absolute',
+    top: '43%',
+    right: '8px',
+    transform: 'translateY(-50%)',
+    background: 'transparent',
+    borderRadius: '50%',
+    padding: '2px 4px',
+    border: 'none',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
+    zIndex: 9999
   };
 
   return (
