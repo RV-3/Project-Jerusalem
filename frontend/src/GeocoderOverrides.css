@@ -1,0 +1,53 @@
+/* --------------------------------------------------------------------
+   GeocoderOverrides.css
+   This file overrides the default Mapbox Geocoder CSS to enable
+   text truncation (ellipsis) and theming in a dark UI.
+   -------------------------------------------------------------------- */
+
+/* Force a fixed width on the Geocoder container */
+.mapboxgl-ctrl-geocoder {
+  width: 240px !important;
+  display: inline-block !important;
+  position: relative !important;
+  /* If you need a dark background, you can set it here:
+     background: rgba(0,0,0,0.85) !important;
+     color: #fff !important;
+  */
+}
+
+/* Add right padding to make room for a custom clear "X" button
+   and use text-overflow to ellipsize long input text.
+*/
+.mapboxgl-ctrl-geocoder--input {
+  padding-right: 80px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* (Optional) Hide Mapbox's built-in pin-right (clear) icon
+   so we can use a custom X button instead.
+*/
+.mapboxgl-ctrl-geocoder--pin-right {
+  display: none !important;
+}
+
+
+
+
+
+/* Customize the suggestions dropdown for dark mode
+   (optional -- you can also do it inline in your React code).
+.mapboxgl-ctrl-geocoder .suggestions {
+  background: rgba(0,0,0,0.88) !important;
+  border-radius: 8px !important;
+}
+*/
+
+/* Debug: if you want a visible red border to confirm it's working:
+.mapboxgl-ctrl-geocoder--input {
+  border: 2px solid red !important;
+}
+*/

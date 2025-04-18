@@ -41,4 +41,18 @@
     height: 40px !important;
     line-height: 40px !important;
   }
+  .mapboxgl-ctrl-geocoder {
+  width: 240px !important;
+  display: inline-block !important;
+  position: relative !important;
+}
+
+.mapboxgl-ctrl-geocoder--input {
+  border: 2px solid red !important;     /* to see it clearly */
+  padding-right: 60px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+  width: 100% !important;
+}
 }
