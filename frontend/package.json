@@ -15,6 +15,7 @@
     "@fullcalendar/react": "^6.1.15",
     "@fullcalendar/scrollgrid": "^6.1.15",
     "@fullcalendar/timegrid": "^6.1.15",
+    "@mapbox/mapbox-gl-geocoder": "^5.0.3",
     "@sanity/client": "^6.28.3",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",

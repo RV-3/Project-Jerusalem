@@ -12,6 +12,10 @@ import mapboxgl from 'mapbox-gl';
 import { Map, Marker, Popup } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
+/*  1) Install & import Mapbox Geocoder */
+import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
+import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
+
 import { createClient } from '@sanity/client';
 import supercluster from 'supercluster';
 
@@ -46,7 +50,6 @@ function parseDescription(blocks) {
     .map((b) => (b.children ? b.children.map((s) => s.text).join('') : ''))
     .join('\n\n');
 }
-
 function getWhatsappLink(num) {
   if (!num?.trim()) return 'https://wa.me/0000000000';
   return `https://wa.me/${num.replace(/\D+/g, '')}`;
@@ -65,7 +68,7 @@ export default function MapPage() {
     latitude:  20,
     zoom:      2.5
   });
-  const [bounds,   setBounds]   = useState(null);
+  const [bounds, setBounds] = useState(null);
 
   // Toggle hidden drawer
   const [menuOpen, setMenuOpen] = useState(false);
@@ -73,6 +76,7 @@ export default function MapPage() {
   // Refs
   const mapRef        = useRef(null);
   const geoControlRef = useRef(null);
+  const geocoderRef   = useRef(null);
 
   // --------------------------------------
   // 1) fetch chapels from Sanity
@@ -169,13 +173,13 @@ export default function MapPage() {
   };
 
   // --------------------------------------
-  // onLoad: Lock rotation/pitch; add geolocate but hide default icon
+  // onLoad: Lock rotation/pitch; geolocate; geocoder; custom style
   // --------------------------------------
   const handleMapLoad = useCallback(() => {
     const m = mapRef.current?.getMap();
     if (!m) return;
 
-    // Lock out rotation/pitch
+    /* Lock out rotation/pitch */
     m.setMinPitch(0);
     m.setMaxPitch(0);
     m.touchPitch.disable();
@@ -187,21 +191,85 @@ export default function MapPage() {
       m.setPitch(0);
     });
 
-    // Add hidden GeolocateControl once
+    /* Add hidden GeolocateControl once */
     if (!geoControlRef.current) {
-      const ctrl = new mapboxgl.GeolocateControl({
+      const geoCtrl = new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
         trackUserLocation: false,
         showAccuracyCircle: false
       });
-      geoControlRef.current = ctrl;
-      m.addControl(ctrl);
+      geoControlRef.current = geoCtrl;
+      m.addControl(geoCtrl);
 
-      // Hide its default "crosshair" button with CSS
+      // Hide default crosshair
       const styleEl = document.createElement('style');
       styleEl.innerHTML = '.mapboxgl-ctrl-geolocate { display: none !important; }';
       document.head.appendChild(styleEl);
     }
+
+    /* Add Mapbox Geocoder once */
+    if (!geocoderRef.current) {
+      const geocoder = new MapboxGeocoder({
+        accessToken: MAPBOX_TOKEN,
+        mapboxgl: mapboxgl,
+        placeholder: 'Search...',
+        marker: false
+      });
+
+      // Move map to selection
+      geocoder.on('result', (e) => {
+        const coords = e.result?.geometry?.coordinates || [-40, 20];
+        setViewState((prev) => ({
+          ...prev,
+          longitude: coords[0],
+          latitude:  coords[1],
+          zoom:      12,
+          transitionDuration: 600
+        }));
+      });
+
+      m.addControl(geocoder, 'top-left');
+      geocoderRef.current = geocoder;
+    }
+
+    /* Inject custom style for a transparent dark geocoder with slight glow */
+    const customStyle = `
+      .mapboxgl-ctrl-geocoder {
+        background-color: rgba(31, 31, 60, 0.15) !important; /* transparent dark */
+        border-radius: 8px !important;
+        border: none !important;
+        width: 280px !important;
+        padding: 0 5px !important;
+        box-shadow: 0 0 1px rgba(139, 92, 246, 0.4) !important; /* subtle purple glow */
+        display: flex !important;
+        align-items: center !important;
+      }
+      /* Remove the mic icon or any right pin container */
+      .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--pin-right {
+        display: none !important;
+      }
+      /* The text input: no border, light text */
+      .mapboxgl-ctrl-geocoder input[type="text"] {
+        background-color: transparent !important;
+        color: #f4f4f5 !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+      /* The suggestions dropdown: also slightly transparent dark + glow */
+      .mapboxgl-ctrl-geocoder .suggestions {
+        background-color: rgba(31, 31, 60, 0.5) !important;
+        border-radius: 8px !important;
+        border: 1px solid #64748b !important;
+        box-shadow: 0 0 6px rgba(139, 92, 246, 0.3) !important;
+      }
+      .mapboxgl-ctrl-geocoder .suggestion-title,
+      .mapboxgl-ctrl-geocoder .suggestion-address {
+        color: #f4f4f5 !important;
+      }
+    `;
+    const styleNode = document.createElement('style');
+    styleNode.innerHTML = customStyle;
+    document.head.appendChild(styleNode);
   }, []);
 
   // --------------------------------------
@@ -231,7 +299,7 @@ export default function MapPage() {
     borderBottom: '1px solid #64748b'
   };
 
-  // Two style objects for the hamburger
+  // Style for the hamburger
   const hamburgerButtonClosed = {
     position: 'absolute',
     top: '50%',
@@ -248,8 +316,6 @@ export default function MapPage() {
     cursor: 'pointer',
     transition: 'all 0.3s ease'
   };
-
-  // When open, fade it out
   const hamburgerButtonOpen = {
     ...hamburgerButtonClosed,
     background: 'transparent',
@@ -310,16 +376,13 @@ export default function MapPage() {
         maxPitch={0}
       >
         {/*
-          Bottom-right arrow button for geolocation,
-          but placing it at top: 50% and shifting up by half its height
-          to center vertically.
+          Geolocate arrow near bottom (10% from bottom)
         */}
         <button
           onClick={() => geoControlRef.current?.trigger()}
           style={{
             position: 'absolute',
-            top: '50%',
-            transform: 'translateY(-50%)',
+            bottom: '10%',
             right: '16px',
             width: '48px',
             height: '48px',
@@ -329,7 +392,7 @@ export default function MapPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 6px rgba(0,0,0,0.4)',
+            boxShadow: '0 0 6px rgba(139,92,246,0.4)',
             cursor: 'pointer',
             zIndex: 5
           }}
@@ -339,7 +402,6 @@ export default function MapPage() {
 
         {/* Hidden Drawer (slides in/out) */}
         <div style={drawerContainerStyle}>
-          {/* Header with hamburger + "Menu" horizontally aligned */}
           <div style={drawerHeaderStyle}>
             <button
               onClick={() => setMenuOpen(o => !o)}
@@ -355,7 +417,6 @@ export default function MapPage() {
             </h2>
           </div>
 
-          {/* Nav Links */}
           <nav style={navContainerStyle}>
             <Link
               to="/leaderboard"
@@ -369,7 +430,7 @@ export default function MapPage() {
             </Link>
 
             <Link
-              to="/leaderboard"
+              to="/manager"
               style={linkStyle}
               onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
