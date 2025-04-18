@@ -19,6 +19,7 @@ import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
 import { createClient } from '@sanity/client';
 import supercluster from 'supercluster';
 
+// We'll make the Menu icon bigger with size={48}
 import {
   MapPin,
   Calendar,
@@ -215,7 +216,7 @@ export default function MapPage() {
         mapboxgl: mapboxgl,
         marker: false,
         placeholder: 'Search ...',
-        container: 'drawerGeocoder' // We'll keep this container hidden if the drawer is closed
+        container: 'drawerGeocoder'
       });
 
       geocoder.on('result', (e) => {
@@ -232,7 +233,7 @@ export default function MapPage() {
       geocoderRef.current = geocoder;
       geocoder.onAdd(m);
 
-      // Optional custom CSS
+      // Additional custom style to ensure it's visible
       const customStyle = `
         #drawerGeocoder .mapboxgl-ctrl-geocoder {
           background-color: rgba(31,31,60,0.3) !important;
@@ -240,10 +241,11 @@ export default function MapPage() {
           border: 1px solid #64748b !important;
           box-shadow: 0 0 6px rgba(139,92,246,0.4) !important;
           width: 100% !important;
+          min-height: 44px !important; /* ensure we see an input box */
         }
         #drawerGeocoder .mapboxgl-ctrl-geocoder input[type="text"] {
           background-color: transparent !important;
-          color: #f4f4f5 !important;
+          color: #fff !important; /* pure white text for clarity */
           border: none !important;
         }
         #drawerGeocoder .suggestions {
@@ -262,17 +264,16 @@ export default function MapPage() {
   // Drawer & Hamburger Styles
   // --------------------------------------
   // White lines, transparent background
-  // Half opacity if closed, full if open
+  // "2X size" = size={48}
+  // More transparent when closed, fully visible when open
   const hamburgerClosed = {
     position: 'absolute',
     top: '50%',
-    left: '-48px',
+    left: '-56px', // move it out a bit more if you like
     transform: 'translateY(-50%)',
-    width: '42px',
-    height: '42px',
     background: 'transparent',
     border: 'none',
-    opacity: 0.5,
+    opacity: 0.4,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -309,26 +310,19 @@ export default function MapPage() {
     borderBottom: '1px solid #64748b'
   };
 
-  const headerInnerStyle = {
-    flexGrow: 1,
-    marginLeft: '1rem'
-  };
-
-  const menuTitleStyle = {
-    margin: 0,
-    color: '#fff',
-    fontSize: '1.1rem',
-    fontWeight: 600
-  };
-
-  // We'll always render #drawerGeocoder but hide it if the drawer is closed
-  // so the geocoder remains mounted.
+  // We'll always mount #drawerGeocoder but hide it if drawer is closed
   const geocoderContainerStyle = {
     width: '100%',
     display: menuOpen ? 'block' : 'none'
   };
 
-  // The nav area
+  const menuTitleStyle = {
+    margin: 0,
+    color: '#fff',
+    fontSize: '1.2rem',
+    fontWeight: 600
+  };
+
   const navContainerStyle = {
     display: 'flex',
     flexDirection: 'column',
@@ -400,29 +394,28 @@ export default function MapPage() {
         {/* Drawer on the right */}
         <div style={drawerContainerStyle}>
           <div style={drawerHeaderStyle}>
-            {/* hamburger icon with white lines, transparent BG */}
+            {/* Big hamburger icon with white lines, transparent BG */}
             <button
               onClick={() => setMenuOpen(o => !o)}
               style={menuOpen ? hamburgerOpen : hamburgerClosed}
             >
-              <Menu size={24} strokeWidth={2.4} color="#fff" />
+              <Menu size={37} strokeWidth={2.4} color="#fff" />
             </button>
 
-            <div style={headerInnerStyle}>
-              {/* If drawer is closed -> show "Menu" text
-                  If open -> show the geocoder container */}
+            {/*
+              If drawer is open -> show geocoder
+              Else -> show "Menu" text
+            */}
+            <div style={{ marginLeft: '1rem', width: '100%' }}>
               {menuOpen ? (
-                <div
-                  id="drawerGeocoder"
-                  style={geocoderContainerStyle}
-                />
+                <div id="drawerGeocoder" style={geocoderContainerStyle} />
               ) : (
                 <h2 style={menuTitleStyle}>Menu</h2>
               )}
             </div>
           </div>
 
-          {/* Nav links below */}
+          {/* Nav links */}
           <nav style={navContainerStyle}>
             <Link
               to="/leaderboard"
