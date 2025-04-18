@@ -45,6 +45,7 @@
   width: 240px !important;
   display: inline-block !important;
   position: relative !important;
+  height: 25px !important;
 }
 
 .mapboxgl-ctrl-geocoder--input {
