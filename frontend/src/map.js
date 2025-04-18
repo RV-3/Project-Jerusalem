@@ -399,7 +399,7 @@ export default function MapPage() {
               onClick={() => setMenuOpen(o => !o)}
               style={menuOpen ? hamburgerOpen : hamburgerClosed}
             >
-              <Menu size={37} strokeWidth={2.4} color="#fff" />
+              <Menu size={32} strokeWidth={2.4} color="#fff" />
             </button>
 
             {/*
