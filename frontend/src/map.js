@@ -82,7 +82,7 @@ export default function MapPage() {
   const geocoderRef   = useRef(null);
 
   // --------------------------------------
-  // 1) fetch chapels
+  // 1) fetch chapels from Sanity
   // --------------------------------------
   useEffect(() => {
     sanityClient
@@ -127,7 +127,7 @@ export default function MapPage() {
   }, [clusterIndex, bounds, viewState.zoom]);
 
   // --------------------------------------
-  // Map move/zoom
+  // Map movement
   // --------------------------------------
   const handleMove = (e) => setViewState(e.viewState);
 
@@ -138,7 +138,7 @@ export default function MapPage() {
     const b = m.getBounds();
     setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
 
-    // lock out rotation
+    // Lock out rotation
     if (m.getBearing() !== 0 || m.getPitch() !== 0) {
       m.setBearing(0);
       m.setPitch(0);
@@ -146,7 +146,7 @@ export default function MapPage() {
   }, []);
 
   // --------------------------------------
-  // Marker click
+  // Marker clicks
   // --------------------------------------
   const handleMarkerClick = (feature, e) => {
     e.originalEvent.stopPropagation();
@@ -218,6 +218,7 @@ export default function MapPage() {
         marker: false,
         placeholder: 'Search location...'
       });
+
       // On place selected
       geocoder.on('result', (e) => {
         const coords = e.result?.geometry?.coordinates || [-40, 20];
@@ -230,6 +231,7 @@ export default function MapPage() {
         }));
         setShowClear(true);
       });
+
       geocoderRef.current = geocoder;
     }
   }, []);
@@ -249,11 +251,10 @@ export default function MapPage() {
       container.style.height  = '50px';
       container.style.position = 'relative';
 
-      // Even darker background for the geocoder
-      // Suggestions also darker for high contrast
+      // Very dark background, plus extra right padding for the input
       const customStyle = `
         .mapboxgl-ctrl-geocoder {
-          background: rgba(10,10,30,0.8) !important;
+          background: rgba(0,0,0,0.85) !important;
           border: 1px solid #64748b !important;
           border-radius: 8px !important;
           box-shadow: 0 0 6px rgba(139,92,246,0.4) !important;
@@ -261,15 +262,25 @@ export default function MapPage() {
           color: #fff !important;
           position: relative !important;
         }
+
+        /*
+          Extra right padding & text-overflow so text does not extend
+          behind the X icon
+        */
         .mapboxgl-ctrl-geocoder input[type="text"] {
           background: transparent !important;
           color: #fff !important;
           border: none !important;
           font-size: 1rem !important;
           line-height: 1.6 !important;
+          padding-right: 40px !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
         }
+
         .mapboxgl-ctrl-geocoder .suggestions {
-          background: rgba(10,10,30,0.85) !important;
+          background: rgba(0,0,0,0.88) !important;
           border-radius: 8px !important;
         }
         .mapboxgl-ctrl-geocoder--pin-right { display: none !important; }
@@ -373,9 +384,9 @@ export default function MapPage() {
   const xButtonStyle = {
     position: 'absolute',
     top: '50%',
-    transform: 'translateY(-60%)', // nudged up from -50% to -60%
+    transform: 'translateY(-60%)',
     right: '8px',
-    background: '	rgba(0,0,0,0.85)',
+    background: 'rgba(0,0,0,0.85)', // user specified
     borderRadius: '50%',
     padding: '2px',
     border: 'none',
@@ -435,7 +446,7 @@ export default function MapPage() {
           <div style={drawerHeaderStyle}>
             {/* 32 sized hamburger, white lines */}
             <button
-              onClick={() => setMenuOpen((o) => !o)}
+              onClick={() => setMenuOpen(o => !o)}
               style={menuOpen ? hamburgerOpen : hamburgerClosed}
             >
               <Menu size={32} strokeWidth={2} color="#fff" />
@@ -445,8 +456,9 @@ export default function MapPage() {
               {menuOpen ? (
                 <div id="drawerGeocoder" style={geocoderContainerStyle}>
                   {/*
-                    Our custom "X" button if user typed something
-                    Nudged up by transform: translateY(-60%)
+                    Our custom "X" button
+                    with background: 'rgba(0,0,0,0.85)'
+                    and transform to nudge it up a bit
                   */}
                   {showClear && (
                     <button
@@ -467,8 +479,8 @@ export default function MapPage() {
             <Link
               to="/leaderboard"
               style={linkStyle}
-              onMouseEnter={(e) => Object.assign(e.currentTarget.style, linkHoverStyle)}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => setMenuOpen(false)}
             >
               <Award size={22} strokeWidth={2} color="#cbd5e1" />
@@ -478,8 +490,8 @@ export default function MapPage() {
             <Link
               to="/manager"
               style={linkStyle}
-              onMouseEnter={(e) => Object.assign(e.currentTarget.style, linkHoverStyle)}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => setMenuOpen(false)}
             >
               <Settings size={22} strokeWidth={2} color="#cbd5e1" />
@@ -655,7 +667,7 @@ function PopupContent({ chapel }) {
         </Link>
 
         <a
-          href={getWhatsappLink(chapel.whatsappNumber)}
+          href={whatsappLink}
           target="_blank"
           rel="noopener noreferrer"
           style={{ color:'#fff', textDecoration:'none', display:'flex', flexDirection:'column', alignItems:'center' }}
