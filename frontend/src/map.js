@@ -222,7 +222,6 @@ export default function MapPage() {
     flexDirection: 'column'
   };
 
-  // Drawer header with hamburger + "Menu" on the same row
   const drawerHeaderStyle = {
     position: 'relative',
     display: 'flex',
@@ -258,14 +257,13 @@ export default function MapPage() {
     opacity: 0.5
   };
 
-  // "Menu" text: clickable
   const menuTitleStyle = {
     margin: 0,
     marginLeft: '2rem',
     color: '#cbd5e1',
     fontSize: '1.1rem',
     fontWeight: 600,
-    cursor: 'pointer' // so user sees it's clickable
+    cursor: 'pointer'
   };
 
   const navContainerStyle = {
@@ -311,13 +309,18 @@ export default function MapPage() {
         minPitch={0}
         maxPitch={0}
       >
-        {/* Bottom-right arrow button for geolocation */}
+        {/*
+          Bottom-right arrow button for geolocation,
+          but placing it at top: 50% and shifting up by half its height
+          to center vertically.
+        */}
         <button
           onClick={() => geoControlRef.current?.trigger()}
           style={{
             position: 'absolute',
+            top: '50%',
+            transform: 'translateY(-50%)',
             right: '16px',
-            bottom: '25%',
             width: '48px',
             height: '48px',
             borderRadius: '50%',
@@ -344,8 +347,6 @@ export default function MapPage() {
             >
               <Menu size={24} strokeWidth={2} color="#cbd5e1" />
             </button>
-
-            {/* Clicking the text toggles the drawer, too */}
             <h2
               style={menuTitleStyle}
               onClick={() => setMenuOpen(o => !o)}
@@ -368,7 +369,7 @@ export default function MapPage() {
             </Link>
 
             <Link
-              to="/manager"
+              to="/leaderboard"
               style={linkStyle}
               onMouseEnter={e => Object.assign(e.currentTarget.style, linkHoverStyle)}
               onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
