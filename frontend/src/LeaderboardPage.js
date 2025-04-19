@@ -11,26 +11,41 @@ export default function LeaderboardPage() {
 
     const fetchLeaderboard = async () => {
       try {
+        // 1) Fetch all chapels
         const chapels = await client.fetch(
           `*[_type == "chapel"]{ _id, name, "slug": slug.current }`
         )
 
-        const reservations = await client.fetch(
-          `*[_type == "reservation"]{ _id, chapel }`
-        )
-
-        const totals = chapels.map((chapel) => {
-          const count = reservations.filter(
-            (res) => res.chapel?._ref === chapel._id
-          ).length
-
-          return {
-            ...chapel,
-            totalHours: count
+        // 2) Fetch only "past" reservations: end < now()
+        //    (Removing 'deleted' check since your schema doesn't have that field.)
+        const reservations = await client.fetch(`
+          *[_type == "reservation" && end < now()]{
+            _id,
+            chapel,
+            start,
+            end
           }
+        `)
+
+        // 3) Calculate total hours for each chapel
+        const totals = chapels.map((chapel) => {
+          // Filter reservations for this chapel
+          const chapelReservations = reservations.filter(
+            (res) => res.chapel?._ref === chapel._id
+          )
+
+          // Sum total hours from 'start' to 'end'
+          const totalHours = chapelReservations.reduce((sum, res) => {
+            const startTime = new Date(res.start)
+            const endTime = new Date(res.end)
+            const diffInHours = (endTime - startTime) / (1000 * 60 * 60)
+            return sum + diffInHours
+          }, 0)
+
+          return { ...chapel, totalHours }
         })
 
-        // Sort descending by hours
+        // 4) Sort descending by totalHours
         totals.sort((a, b) => b.totalHours - a.totalHours)
         setRanking(totals)
       } catch (err) {
@@ -46,7 +61,6 @@ export default function LeaderboardPage() {
   return (
     <div
       style={{
-        // Full-screen gradient background
         position: 'absolute',
         top: 0,
         left: 0,
@@ -63,7 +77,7 @@ export default function LeaderboardPage() {
         padding: '2rem'
       }}
     >
-      {/* "Main" Button (top-left corner) */}
+      {/* MAP Button (with arrow icon) */}
       <div
         style={{
           position: 'absolute',
@@ -74,21 +88,44 @@ export default function LeaderboardPage() {
         <Link
           to="/"
           style={{
-            display: 'inline-block',
-            background: 'linear-gradient(90deg, #6b21a8 0%, #8b5cf6 100%)',
-            color: '#fff',
-            fontWeight: '600',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            backgroundColor: 'transparent',
+            color: '#9ca3af',
             fontSize: '1rem',
-            padding: '0.6rem 1.2rem',
-            borderRadius: '8px',
+            fontWeight: 500,
+            padding: '0.5rem 1rem',
+            border: '1px solid #6b7280',
+            borderRadius: '6px',
             textDecoration: 'none',
-            boxShadow: '0 0 8px rgba(139, 92, 246, 0.5)',
-            transition: 'transform 0.2s ease'
+            transition: 'background-color 0.2s ease, color 0.2s ease'
           }}
-          onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
-          onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1.0)')}
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = '#6b7280'
+            e.currentTarget.style.color = '#fff'
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent'
+            e.currentTarget.style.color = '#9ca3af'
+          }}
         >
-          ⬅ Main
+          {/* Arrow Icon */}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            style={{ width: '1em', height: '1em' }}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M10.5 19.5l-7.5-7.5m0 0l7.5-7.5m-7.5 7.5h18"
+            />
+          </svg>
+          MAP
         </Link>
       </div>
 
@@ -138,7 +175,7 @@ export default function LeaderboardPage() {
             background: 'rgba(31, 31, 60, 0.3)',
             borderRadius: '8px',
             padding: '1rem',
-            overflowX: 'auto' // Just in case
+            overflowX: 'auto'
           }}
         >
           <table
@@ -158,8 +195,10 @@ export default function LeaderboardPage() {
             </thead>
             <tbody>
               {ranking.map((chapel, index) => {
-                const days = chapel.totalHours / 24
+                const totalHours = chapel.totalHours
+                const days = totalHours / 24
                 const daysFormatted = days.toFixed(1)
+
                 return (
                   <tr
                     key={chapel._id}
@@ -171,7 +210,9 @@ export default function LeaderboardPage() {
                       {index + 1}
                     </td>
                     <td style={{ padding: '0.8rem' }}>{chapel.name}</td>
-                    <td style={{ padding: '0.8rem' }}>{chapel.totalHours}</td>
+                    <td style={{ padding: '0.8rem' }}>
+                      {totalHours.toFixed(1)}
+                    </td>
                     <td style={{ padding: '0.8rem' }}>{daysFormatted}</td>
                   </tr>
                 )
