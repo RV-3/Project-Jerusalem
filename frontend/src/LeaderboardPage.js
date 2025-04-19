@@ -48,7 +48,10 @@ export default function LeaderboardPage() {
       style={{
         // Full-screen gradient background
         position: 'absolute',
-        top: 0, left: 0, right: 0, bottom: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         background: 'linear-gradient(135deg, #0f0f23 0%, #1b1b2f 100%)',
         display: 'flex',
         flexDirection: 'column',
@@ -130,39 +133,51 @@ export default function LeaderboardPage() {
         <div
           style={{
             width: '100%',
-            maxWidth: '500px',
+            maxWidth: '700px',
             marginTop: '1rem',
             background: 'rgba(31, 31, 60, 0.3)',
             borderRadius: '8px',
-            padding: '1rem'
+            padding: '1rem',
+            overflowX: 'auto' // Just in case
           }}
         >
-          <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {ranking.map((chapel, index) => {
-              const days = chapel.totalHours / 24
-              const daysFormatted = days.toFixed(1)
-
-              return (
-                <li
-                  key={chapel._id}
-                  style={{
-                    padding: '0.8rem 0',
-                    borderBottom: '1px solid rgba(255,255,255,0.2)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    color: '#f4f4f5'
-                  }}
-                >
-                  <span style={{ fontWeight: '600' }}>
-                    {index + 1}. {chapel.name}
-                  </span>
-                  <span>
-                    {chapel.totalHours} hrs ({daysFormatted} days)
-                  </span>
-                </li>
-              )
-            })}
-          </ol>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              textAlign: 'left'
+            }}
+          >
+            <thead>
+              <tr>
+                <th style={{ padding: '0.8rem', color: '#9ca3af' }}>Rank</th>
+                <th style={{ padding: '0.8rem', color: '#9ca3af' }}>Chapel</th>
+                <th style={{ padding: '0.8rem', color: '#9ca3af' }}>Hours</th>
+                <th style={{ padding: '0.8rem', color: '#9ca3af' }}>Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranking.map((chapel, index) => {
+                const days = chapel.totalHours / 24
+                const daysFormatted = days.toFixed(1)
+                return (
+                  <tr
+                    key={chapel._id}
+                    style={{
+                      borderBottom: '1px solid rgba(255,255,255,0.1)'
+                    }}
+                  >
+                    <td style={{ padding: '0.8rem', fontWeight: '600' }}>
+                      {index + 1}
+                    </td>
+                    <td style={{ padding: '0.8rem' }}>{chapel.name}</td>
+                    <td style={{ padding: '0.8rem' }}>{chapel.totalHours}</td>
+                    <td style={{ padding: '0.8rem' }}>{daysFormatted}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
