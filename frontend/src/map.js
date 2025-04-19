@@ -385,8 +385,8 @@ export default function MapPage() {
       <div
         style={{
           position: 'absolute',
-          top: '15px',
-          left: '50%',
+          top: '9px',
+          left: '7.5%',
           transform: 'translateX(-50%)',
           fontFamily: "'Orbitron', sans-serif",
           fontSize: '16px',
