@@ -1,0 +1,46 @@
+require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+
+platform :ios, '14.0'
+use_frameworks!
+
+# ————————————————————————————————————————————————————————————————
+#  CocoaPods ‑ Capacitor basic setup
+# ————————————————————————————————————————————————————————————————
+install! 'cocoapods', :disable_input_output_paths => true
+
+def capacitor_pods
+  # Pure‑Capacitor pod (Capacitor 7 automatically brings in CapacitorCordova)
+  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+end
+
+target 'App' do
+  capacitor_pods
+  # …add more native pods here if you ever need them…
+end
+
+# ————————————————————————————————————————————————————————————————
+#  Post‑install hook
+#   • Turn “warnings → errors” OFF
+#   • Disable Xcode‑15 user‑script sandbox (cause of ‘deny file‑read‑data’)
+#   • Append the same flag to every generated .xcconfig so it survives
+#     the next `pod install`
+# ————————————————————————————————————————————————————————————————
+post_install do |installer|
+  # ➊ Tweak build settings for *all* native targets (App + every Pod target)
+  (installer.generated_projects + [installer.pods_project]).each do |proj|
+    proj.targets.each do |t|
+      t.build_configurations.each do |cfg|
+        cfg.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+        cfg.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS']                 = 'NO'
+        cfg.build_settings['CLANG_TREAT_WARNINGS_AS_ERRORS']               = 'NO'
+        cfg.build_settings['ENABLE_USER_SCRIPT_SANDBOXING']                = 'NO'
+      end
+    end
+  end
+
+  # ➋ Also patch every .xcconfig CocoaPods writes, so the flag persists
+  Dir.glob('Pods/Target Support Files/**/*.xcconfig').each do |path|
+    next if File.read(path).include?('ENABLE_USER_SCRIPT_SANDBOXING')
+    File.open(path, 'a') { |f| f.puts "\nENABLE_USER_SCRIPT_SANDBOXING = NO" }
+  end
+end

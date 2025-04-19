@@ -1,0 +1,6 @@
+{
+  "appId": "org.legiofidelis.app",
+  "appName": "Project Jerusalem",
+  "webDir": "frontend/build",
+  "bundledWebRuntime": false
+}
