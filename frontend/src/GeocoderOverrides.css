@@ -19,7 +19,7 @@
    and use text-overflow to ellipsize long input text.
 */
 .mapboxgl-ctrl-geocoder--input {
-  padding-right: 70px !important;
+  padding-right: 76px !important;
   overflow: hidden !important;
   white-space: nowrap !important;
   text-overflow: ellipsis !important;
