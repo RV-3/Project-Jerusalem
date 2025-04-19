@@ -57,59 +57,33 @@ export default function MapPage() {
     zoom: 2.5
   });
   const [bounds, setBounds] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOpen,  setMenuOpen]  = useState(false);
   const [showClear, setShowClear] = useState(false);
 
-  const mapRef = useRef(null);
+  const mapRef        = useRef(null);
   const geoControlRef = useRef(null);
-  const geocoderRef = useRef(null);
-
-  /**
-   * Inject CSS keyframes for our pulsing glow
-   * (runs once on mount, cleans up on unmount).
-   */
-  useEffect(() => {
-    const glowKeyframes = `
-      @keyframes pulseGlow {
-        0%, 100% {
-          text-shadow: 0 0 2.5px rgba(89,249,186,0.7);
-        }
-        50% {
-          text-shadow: 0 0 6px rgba(89,249,186,1);
-        }
-      }
-    `;
-    const styleEl = document.createElement('style');
-    styleEl.innerHTML = glowKeyframes;
-    document.head.appendChild(styleEl);
-    return () => {
-      styleEl.remove();
-    };
-  }, []);
+  const geocoderRef   = useRef(null);
 
   useEffect(() => {
-    sanityClient
-      .fetch(`*[_type=="chapel"]{
-        _id, name, nickname, city, googleMapsLink,
-        "slug": slug.current,
-        description, whatsappNumber,
-        chapelImage{asset->{_id,url}},
-        "lat": coalesce(location.lat,0),
-        "lng": coalesce(location.lng,0)
-      }`)
-      .then(setChapels)
-      .catch(console.error);
+    sanityClient.fetch(`*[_type=="chapel"]{
+      _id, name, nickname, city, googleMapsLink,
+      "slug": slug.current,
+      description, whatsappNumber,
+      chapelImage{asset->{_id,url}},
+      "lat": coalesce(location.lat,0),
+      "lng": coalesce(location.lng,0)
+    }`)
+    .then(setChapels)
+    .catch(console.error);
   }, []);
 
-  const points = useMemo(
-    () =>
-      chapels.map((c) => ({
-        type: 'Feature',
-        properties: { cluster: false, chapelId: c._id },
-        geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
-      })),
-    [chapels]
-  );
+  const points = useMemo(() => (
+    chapels.map((c) => ({
+      type: 'Feature',
+      properties: { cluster: false, chapelId: c._id },
+      geometry: { type: 'Point', coordinates: [c.lng, c.lat] }
+    }))
+  ), [chapels]);
 
   const clusterIndex = useMemo(
     () => new supercluster({ radius: 50, maxZoom: 14 }).load(points),
@@ -128,7 +102,6 @@ export default function MapPage() {
     if (!m) return;
     const b = m.getBounds();
     setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
-    // Reset rotation if it somehow changes
     if (m.getBearing() !== 0 || m.getPitch() !== 0) {
       m.setBearing(0);
       m.setPitch(0);
@@ -138,13 +111,11 @@ export default function MapPage() {
   const handleMarkerClick = (feature, e) => {
     e.originalEvent.stopPropagation();
     if (feature.properties.cluster) {
-      const zoom = clusterIndex.getClusterExpansionZoom(
-        feature.properties.cluster_id
-      );
+      const zoom = clusterIndex.getClusterExpansionZoom(feature.properties.cluster_id);
       setViewState((v) => ({
         ...v,
         longitude: feature.geometry.coordinates[0],
-        latitude: feature.geometry.coordinates[1],
+        latitude:  feature.geometry.coordinates[1],
         zoom,
         transitionDuration: 500
       }));
@@ -189,7 +160,6 @@ export default function MapPage() {
       geoControlRef.current = geoCtrl;
       m.addControl(geoCtrl);
 
-      // Hide the default geolocate icon
       const styleEl = document.createElement('style');
       styleEl.innerHTML = '.mapboxgl-ctrl-geolocate { display: none !important; }';
       document.head.appendChild(styleEl);
@@ -210,7 +180,7 @@ export default function MapPage() {
         setViewState((v) => ({
           ...v,
           longitude: coords[0],
-          latitude: coords[1],
+          latitude:  coords[1],
           zoom: 12,
           transitionDuration: 600
         }));
@@ -380,24 +350,21 @@ export default function MapPage() {
   };
 
   return (
-    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
-      {/* Centered title with pulsing glow */}
+    <div style={{ width:'100vw', height:'100vh', position:'relative' }}>
+      {/* Subtle title with higher zIndex */}
       <div
         style={{
           position: 'absolute',
-          top: '9px',
-          left: '7.5%',
-          transform: 'translateX(-50%)',
-          fontFamily: "'Orbitron', sans-serif",
+          top: '15px',
+          left: '20px',
+          fontFamily: "'Orbitron', sans-serif", // something futuristic
           fontSize: '16px',
           color: 'rgba(255,255,255,0.55)',
-          textShadow: '0 0 1px rgba(89,249,186,0.7)',
+          textShadow: '0 0 2.5px rgba(89,249,186,0.7)',
           fontWeight: 600,
           letterSpacing: '1.25px',
-          opacity: .92,
           pointerEvents: 'none',
-          zIndex: 9999,
-          animation: 'pulseGlow 20s infinite ease-in-out' // references our injected @keyframes
+          zIndex: 9999 // ensures it's above the map
         }}
       >
         Adoration Finder
@@ -412,10 +379,10 @@ export default function MapPage() {
         onClick={() => setSelectedChapel(null)}
         mapStyle="mapbox://styles/mapbox/dark-v10"
         mapboxAccessToken={MAPBOX_TOKEN}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width:'100%', height:'100%' }}
         dragRotate={false}
         pitchWithRotate={false}
-        touchZoomRotate={{ pinchToZoom: true, rotate: false }}
+        touchZoomRotate={{ pinchToZoom:true, rotate:false }}
         minPitch={0}
         maxPitch={0}
       >
@@ -423,20 +390,20 @@ export default function MapPage() {
         <button
           onClick={() => geoControlRef.current?.trigger()}
           style={{
-            position: 'absolute',
-            bottom: '10%',
-            right: '16px',
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: '#1e1e2f',
-            border: '2px solid #64748b',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 6px rgba(139,92,246,0.4)',
-            cursor: 'pointer',
-            zIndex: 5
+            position:'absolute',
+            bottom:'10%',
+            right:'16px',
+            width:'48px',
+            height:'48px',
+            borderRadius:'50%',
+            background:'#1e1e2f',
+            border:'2px solid #64748b',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            boxShadow:'0 0 6px rgba(139,92,246,0.4)',
+            cursor:'pointer',
+            zIndex:5
           }}
         >
           <Navigation size={26} strokeWidth={2.2} color="#fff" />
@@ -446,13 +413,13 @@ export default function MapPage() {
         <div style={drawerContainerStyle}>
           <div style={drawerHeaderStyle}>
             <button
-              onClick={() => setMenuOpen((o) => !o)}
+              onClick={() => setMenuOpen(o => !o)}
               style={menuOpen ? hamburgerOpen : hamburgerClosed}
             >
               <Menu size={32} strokeWidth={2} color="#fff" />
             </button>
 
-            <div style={{ marginLeft: '1rem', width: '100%', position: 'relative' }}>
+            <div style={{ marginLeft:'1rem', width:'100%', position:'relative' }}>
               {menuOpen ? (
                 <div id="drawerGeocoder" style={geocoderContainerStyle}>
                   {showClear && (
@@ -462,7 +429,7 @@ export default function MapPage() {
                   )}
                 </div>
               ) : (
-                <h2 style={{ margin: 0, color: '#fff' }}>Menu</h2>
+                <h2 style={{ margin:0, color:'#fff' }}>Menu</h2>
               )}
             </div>
           </div>
@@ -472,9 +439,7 @@ export default function MapPage() {
               to="/leaderboard"
               style={linkStyle}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, linkHoverStyle)}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => setMenuOpen(false)}
             >
               <Award size={22} strokeWidth={2} color="#cbd5e1" />
@@ -485,9 +450,7 @@ export default function MapPage() {
               to="/leaderboard"
               style={linkStyle}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, linkHoverStyle)}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => setMenuOpen(false)}
             >
               <Settings size={22} strokeWidth={2} color="#cbd5e1" />
@@ -510,23 +473,23 @@ export default function MapPage() {
                 anchor="bottom"
                 onClick={(e) => handleMarkerClick(feature, e)}
               >
-                <div style={{ position: 'relative', cursor: 'pointer' }}>
+                <div style={{ position:'relative', cursor:'pointer' }}>
                   <MapPin size={38} strokeWidth={2.8} color="#c084fc" />
                   <div
                     style={{
-                      position: 'absolute',
-                      top: '-8px',
-                      right: '-4px',
-                      background: '#6b21a8',
-                      borderRadius: '50%',
-                      width: '20px',
-                      height: '20px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#fff',
-                      fontSize: '0.8rem',
-                      fontWeight: 'bold'
+                      position:'absolute',
+                      top:'-8px',
+                      right:'-4px',
+                      background:'#6b21a8',
+                      borderRadius:'50%',
+                      width:'20px',
+                      height:'20px',
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center',
+                      color:'#fff',
+                      fontSize:'0.8rem',
+                      fontWeight:'bold'
                     }}
                   >
                     {pointCount}
@@ -548,7 +511,7 @@ export default function MapPage() {
                 size={28}
                 strokeWidth={2.5}
                 color="#c084fc"
-                style={{ cursor: 'pointer' }}
+                style={{ cursor:'pointer' }}
               />
             </Marker>
           );
@@ -567,12 +530,12 @@ export default function MapPage() {
           >
             <div
               style={{
-                borderRadius: '12px',
-                padding: '20px',
-                background: '#1f1f3c',
-                color: '#f4f4f5',
-                textAlign: 'center',
-                boxShadow: '0 0 8px rgba(139,92,246,0.4)'
+                borderRadius:'12px',
+                padding:'20px',
+                background:'#1f1f3c',
+                color:'#f4f4f5',
+                textAlign:'center',
+                boxShadow:'0 0 8px rgba(139,92,246,0.4)'
               }}
             >
               <PopupContent chapel={selectedChapel} />
@@ -586,13 +549,13 @@ export default function MapPage() {
 
 function PopupContent({ chapel }) {
   const displayedDesc = parseDescription(chapel.description);
-  const whatsappLink = getWhatsappLink(chapel.whatsappNumber);
-  const imgUrl = chapel.chapelImage?.asset?.url || '';
+  const whatsappLink  = getWhatsappLink(chapel.whatsappNumber);
+  const imgUrl        = chapel.chapelImage?.asset?.url || '';
 
   return (
     <div style={{ fontFamily: "'Inter',sans-serif" }}>
       {chapel.nickname && (
-        <h3 style={{ margin: '0 0 0.5rem', fontSize: '1.2rem', fontFamily: "'Cinzel',serif" }}>
+        <h3 style={{ margin:'0 0 0.5rem', fontSize:'1.2rem', fontFamily:"'Cinzel',serif" }}>
           {chapel.nickname}
         </h3>
       )}
@@ -600,10 +563,10 @@ function PopupContent({ chapel }) {
       {chapel.city && (
         <div
           style={{
-            margin: '0 0 0.75rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            margin:'0 0 0.75rem',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center'
           }}
         >
           {chapel.googleMapsLink ? (
@@ -612,12 +575,12 @@ function PopupContent({ chapel }) {
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontWeight: 'bold',
-                color: 'inherit',
-                textDecoration: 'none'
+                display:'inline-flex',
+                alignItems:'center',
+                gap:'6px',
+                fontWeight:'bold',
+                color:'inherit',
+                textDecoration:'none'
               }}
             >
               <MapPin size={18} strokeWidth={2} />
@@ -632,60 +595,60 @@ function PopupContent({ chapel }) {
       {imgUrl ? (
         <div
           style={{
-            width: '100%',
-            height: '180px',
-            overflow: 'hidden',
-            borderRadius: '8px',
-            marginBottom: '0.75rem'
+            width:'100%',
+            height:'180px',
+            overflow:'hidden',
+            borderRadius:'8px',
+            marginBottom:'0.75rem'
           }}
         >
           <img
             src={imgUrl}
             alt={chapel.nickname || 'Chapel'}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width:'100%', height:'100%', objectFit:'cover' }}
           />
         </div>
       ) : (
         <div
           style={{
-            width: '100%',
-            height: '180px',
-            borderRadius: '8px',
-            marginBottom: '0.75rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: '#3a3a5d'
+            width:'100%',
+            height:'180px',
+            borderRadius:'8px',
+            marginBottom:'0.75rem',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            background:'#3a3a5d'
           }}
         >
-          <span style={{ color: '#aaa' }}>No Image</span>
+          <span style={{ color:'#aaa' }}>No Image</span>
         </div>
       )}
 
       <p
         style={{
-          fontSize: '0.95rem',
-          marginBottom: '1rem',
-          color: '#cbd5e1',
-          whiteSpace: 'pre-wrap'
+          fontSize:'0.95rem',
+          marginBottom:'1rem',
+          color:'#cbd5e1',
+          whiteSpace:'pre-wrap'
         }}
       >
         {displayedDesc.trim() ? displayedDesc : 'No description yet.'}
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '1.5rem' }}>
+      <div style={{ display:'flex', justifyContent:'center', gap:'1.5rem' }}>
         <Link
           to={`/${chapel.slug}`}
           style={{
-            color: '#fff',
-            textDecoration: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
+            color:'#fff',
+            textDecoration:'none',
+            display:'flex',
+            flexDirection:'column',
+            alignItems:'center'
           }}
         >
           <Calendar size={28} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Calendar</span>
+          <span style={{ fontSize:'0.85rem', marginTop:'4px' }}>Calendar</span>
         </Link>
 
         <a
@@ -693,15 +656,15 @@ function PopupContent({ chapel }) {
           target="_blank"
           rel="noopener noreferrer"
           style={{
-            color: '#fff',
-            textDecoration: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center'
+            color:'#fff',
+            textDecoration:'none',
+            display:'flex',
+            flexDirection:'column',
+            alignItems:'center'
           }}
         >
           <MessageCircle size={28} strokeWidth={1.8} />
-          <span style={{ fontSize: '0.85rem', marginTop: '4px' }}>Contact</span>
+          <span style={{ fontSize:'0.85rem', marginTop:'4px' }}>Contact</span>
         </a>
       </div>
     </div>
