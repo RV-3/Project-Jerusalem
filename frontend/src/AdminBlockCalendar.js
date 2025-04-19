@@ -196,7 +196,8 @@ export default function AdminBlockCalendar({ chapelSlug }) {
           name,
           phone,
           start,
-          end
+          end,
+          chapel-> { _id, name }
         }`,
         { chapelId: chapelDoc._id }
       )

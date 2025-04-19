@@ -16,8 +16,10 @@ export default function LeaderboardPage() {
           `*[_type == "chapel"]{ _id, name, "slug": slug.current }`
         )
 
-        // 2) Fetch only "past" reservations: end < now()
-        //    (Removing 'deleted' check since your schema doesn't have that field.)
+        // 2) Fetch only reservations that have ended (past)
+        //    If you have a "deleted" or "canceled" field, add:
+        //       && deleted != true
+        //    or similar to exclude canceled reservations.
         const reservations = await client.fetch(`
           *[_type == "reservation" && end < now()]{
             _id,
@@ -28,16 +30,17 @@ export default function LeaderboardPage() {
         `)
 
         // 3) Calculate total hours for each chapel
-        const totals = chapels.map((chapel) => {
+        const totals = chapels.map(chapel => {
           // Filter reservations for this chapel
           const chapelReservations = reservations.filter(
-            (res) => res.chapel?._ref === chapel._id
+            res => res.chapel?._ref === chapel._id
           )
 
           // Sum total hours from 'start' to 'end'
           const totalHours = chapelReservations.reduce((sum, res) => {
             const startTime = new Date(res.start)
             const endTime = new Date(res.end)
+            // Convert ms difference to hours
             const diffInHours = (endTime - startTime) / (1000 * 60 * 60)
             return sum + diffInHours
           }, 0)
