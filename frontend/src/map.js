@@ -1,5 +1,3 @@
-// File: MapPage.jsx
-
 import React, {
   useState,
   useEffect,
@@ -8,22 +6,14 @@ import React, {
   useCallback
 } from 'react';
 import { Link } from 'react-router-dom';
-
-/* 1) Mapbox + React-Map-GL + Geocoder imports */
 import mapboxgl from 'mapbox-gl';
 import { Map, Marker, Popup } from 'react-map-gl/mapbox';
 import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
 import supercluster from 'supercluster';
-
-/* 2) Import the default Mapbox + Geocoder CSS FIRST */
 import 'mapbox-gl/dist/mapbox-gl.css';
 import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
-
-/* 3) Then import your own styles, including overrides LAST */
 import './map.css';
 import './GeocoderOverrides.css';
-
-/* 4) Lucide icons, etc. */
 import {
   MapPin,
   Calendar,
@@ -34,9 +24,8 @@ import {
   Settings,
   XCircle
 } from 'lucide-react';
-
-/* 5) Sanity client */
 import { createClient } from '@sanity/client';
+
 const sanityClient = createClient({
   projectId: 'gt19q25e',
   dataset: 'production',
@@ -44,11 +33,9 @@ const sanityClient = createClient({
   useCdn: true
 });
 
-/* ────────────────────────── Mapbox Token ─────────────────────────── */
 const MAPBOX_TOKEN =
   'pk.eyJ1Ijoic2VudGluZWwxMiIsImEiOiJjbTlpZXA5YnAwMTdyMmpzY3NpdG11d2l6In0.TGPH36urzsXnF9N3mlN_Og';
 
-/* ────────────────────────── Helpers ──────────────────────────────── */
 function parseDescription(blocks) {
   if (!Array.isArray(blocks)) return '';
   return blocks
@@ -61,7 +48,6 @@ function getWhatsappLink(num) {
   return `https://wa.me/${num.replace(/\D+/g, '')}`;
 }
 
-/* ═════════════════════════════ COMPONENT ═════════════════════════════ */
 export default function MapPage() {
   const [chapels, setChapels] = useState([]);
   const [selectedChapel, setSelectedChapel] = useState(null);
@@ -71,17 +57,13 @@ export default function MapPage() {
     zoom: 2.5
   });
   const [bounds, setBounds] = useState(null);
-
-  // Drawer open + custom clear
   const [menuOpen,  setMenuOpen]  = useState(false);
   const [showClear, setShowClear] = useState(false);
 
-  // Refs
   const mapRef        = useRef(null);
   const geoControlRef = useRef(null);
   const geocoderRef   = useRef(null);
 
-  /* ───────────────── Fetch data (Sanity) ───────────────── */
   useEffect(() => {
     sanityClient.fetch(`*[_type=="chapel"]{
       _id, name, nickname, city, googleMapsLink,
@@ -95,7 +77,6 @@ export default function MapPage() {
     .catch(console.error);
   }, []);
 
-  /* ───────────────── Setup supercluster ───────────────── */
   const points = useMemo(() => (
     chapels.map((c) => ({
       type: 'Feature',
@@ -114,7 +95,6 @@ export default function MapPage() {
     return clusterIndex.getClusters(bounds, Math.floor(viewState.zoom));
   }, [clusterIndex, bounds, viewState.zoom]);
 
-  /* ───────────────── Map move handlers ───────────────── */
   const handleMove = (e) => setViewState(e.viewState);
 
   const handleMoveEnd = useCallback(() => {
@@ -122,15 +102,12 @@ export default function MapPage() {
     if (!m) return;
     const b = m.getBounds();
     setBounds([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
-
-    // reset rotation
     if (m.getBearing() !== 0 || m.getPitch() !== 0) {
       m.setBearing(0);
       m.setPitch(0);
     }
   }, []);
 
-  /* ───────────────── Marker click ───────────────── */
   const handleMarkerClick = (feature, e) => {
     e.originalEvent.stopPropagation();
     if (feature.properties.cluster) {
@@ -157,12 +134,11 @@ export default function MapPage() {
     }
   };
 
-  /* ───────────────── onLoad: geolocate + geocoder ───────────────── */
   const handleMapLoad = useCallback(() => {
     const m = mapRef.current?.getMap();
     if (!m) return;
 
-    // lock out rotation/pitch
+    // Disable map rotation/pitch
     m.setMinPitch(0);
     m.setMaxPitch(0);
     m.touchPitch.disable();
@@ -174,7 +150,7 @@ export default function MapPage() {
       m.setPitch(0);
     });
 
-    // geolocate
+    // Add hidden geolocate button (we show a custom one instead)
     if (!geoControlRef.current) {
       const geoCtrl = new mapboxgl.GeolocateControl({
         positionOptions: { enableHighAccuracy: true },
@@ -184,13 +160,12 @@ export default function MapPage() {
       geoControlRef.current = geoCtrl;
       m.addControl(geoCtrl);
 
-      // Hide default crosshair
       const styleEl = document.createElement('style');
       styleEl.innerHTML = '.mapboxgl-ctrl-geolocate { display: none !important; }';
       document.head.appendChild(styleEl);
     }
 
-    // geocoder
+    // Create geocoder
     if (!geocoderRef.current) {
       const geocoder = new MapboxGeocoder({
         accessToken: MAPBOX_TOKEN,
@@ -201,7 +176,6 @@ export default function MapPage() {
 
       geocoder.on('result', (e) => {
         setShowClear(true);
-        // Pan map
         const coords = e.result?.geometry?.coordinates || [-40, 20];
         setViewState((v) => ({
           ...v,
@@ -216,40 +190,31 @@ export default function MapPage() {
     }
   }, []);
 
-  /* ───────────────── Add/Remove geocoder on drawer open ───────────────── */
+  // Conditionally mount/unmount Geocoder
   useEffect(() => {
     const geocoder = geocoderRef.current;
     const container = document.getElementById('drawerGeocoder');
     if (!geocoder || !container) return;
 
     if (menuOpen) {
-      // Show geocoder UI
       geocoder.addTo(container);
-      // flex center to position it nicely
       container.style.display = 'flex';
       container.style.alignItems = 'center';
       container.style.justifyContent = 'center';
       container.style.height = '30px';
       container.style.position = 'relative';
 
-      /*
-        Subtle always-on glow around .mapboxgl-ctrl-geocoder,
-        plus curved edges, darker interior
-      */
       const darkCSS = `
         .mapboxgl-ctrl-geocoder {
           background: #1e1e2f !important;
           border: 1px solid #64748b !important;
           border-radius: 10px !important;
           color: #fff !important;
-          /* small, constant glow even when not focused: */
           box-shadow: 0 0 4px rgba(139,92,246,0.2) !important;
         }
-          /* If you also want a bigger glow on focus, uncomment: */
         .mapboxgl-ctrl-geocoder:focus-within {
           box-shadow: 0 0 5.9px rgba(139,92,246,0.38) !important;
         }
-        */
         .mapboxgl-ctrl-geocoder .suggestions {
           background: rgba(0,0,0,0.9) !important;
           border-radius: 10px !important;
@@ -258,7 +223,7 @@ export default function MapPage() {
           fill: #fff !important;
         }
         .mapboxgl-ctrl-geocoder input[type="text"] {
-          background: #141421 !important; /* darker inside */
+          background: #141421 !important;
           color: #fff !important;
           border: none !important;
           outline: none !important;
@@ -267,7 +232,6 @@ export default function MapPage() {
         .mapboxgl-ctrl-geocoder--pin-right {
           display: none !important;
         }
-        /* fix a certain width so it's not full container */
         .mapboxgl-ctrl-geocoder {
           width: 240px !important;
         }
@@ -277,7 +241,6 @@ export default function MapPage() {
       document.head.appendChild(styleNode);
 
       return () => {
-        // if .remove() doesn't exist, manually hide
         if (typeof geocoder.remove === 'function') {
           geocoder.remove();
         } else {
@@ -288,7 +251,6 @@ export default function MapPage() {
         styleNode.remove();
       };
     } else {
-      // Drawer closed
       if (typeof geocoder.remove === 'function') {
         geocoder.remove();
       } else {
@@ -299,14 +261,13 @@ export default function MapPage() {
     }
   }, [menuOpen]);
 
-  /* ───────────────── Clear geocoder ───────────────── */
   const handleClear = (e) => {
     e.stopPropagation();
     geocoderRef.current?.clear();
     setShowClear(false);
   };
 
-  /* ───────────── Drawer & UI Styles ───────────── */
+  // Drawer + UI Styles
   const hamburgerClosed = {
     position: 'absolute',
     top: '50%',
@@ -390,6 +351,23 @@ export default function MapPage() {
 
   return (
     <div style={{ width:'100vw', height:'100vh', position:'relative' }}>
+      {/* Subtle title with higher zIndex */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '12px',
+          left: '16px',
+          fontSize: '18px',
+          color: 'rgba(255,255,255,0.7)',
+          fontWeight: 600,
+          pointerEvents: 'none',
+          textShadow: '0 2px 4px rgba(0,0,0,0.4)',
+          zIndex: 9999 // ensures it's above the map
+        }}
+      >
+        Adoration Finder
+      </div>
+
       <Map
         ref={mapRef}
         {...viewState}
@@ -406,7 +384,7 @@ export default function MapPage() {
         minPitch={0}
         maxPitch={0}
       >
-        {/* Geolocate arrow near bottom-right */}
+        {/* Geolocate button */}
         <button
           onClick={() => geoControlRef.current?.trigger()}
           style={{
@@ -519,7 +497,6 @@ export default function MapPage() {
             );
           }
 
-          // Single chapel
           return (
             <Marker
               key={feature.properties.chapelId}
@@ -568,7 +545,6 @@ export default function MapPage() {
   );
 }
 
-/* ═════════════════════ POPUP CONTENT ═════════════════════ */
 function PopupContent({ chapel }) {
   const displayedDesc = parseDescription(chapel.description);
   const whatsappLink  = getWhatsappLink(chapel.whatsappNumber);
