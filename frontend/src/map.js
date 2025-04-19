@@ -376,7 +376,7 @@ export default function MapPage() {
 
   const xButtonStyle = {
     position: 'absolute',
-    top: '50%',
+    top: '57%',
     right: '8px',
     transform: 'translateY(-50%)',
     background: 'transparent',
@@ -467,7 +467,7 @@ export default function MapPage() {
             </Link>
 
             <Link
-              to="/manager"
+              to="/leaderboard"
               style={linkStyle}
               onMouseEnter={(e) => Object.assign(e.currentTarget.style, linkHoverStyle)}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}

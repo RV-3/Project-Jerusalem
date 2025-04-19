@@ -1,3 +1,7 @@
+/* ─────────────────────────────────────────────────────────────────
+   POPUP STYLES (unchanged)
+   ───────────────────────────────────────────────────────────────── */
+
 .dark-popup .mapboxgl-popup-content {
   box-shadow: none !important;
   background: transparent !important;
@@ -41,18 +45,51 @@
     height: 40px !important;
     line-height: 40px !important;
   }
-  .mapboxgl-ctrl-geocoder {
-  width: 240px !important;
-  display: inline-block !important;
-  position: relative !important;
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   GEOCODER STYLES – apply at all screen sizes
+   ───────────────────────────────────────────────────────────────── */
+
+/* Make the geocoder container ~20% slimmer overall (default ~40px => ~32px). */
+.mapboxgl-ctrl-geocoder {
+  width: 240px !important;        /* If you want a fixed width. */
+  display: inline-block !important;
+  position: relative !important;
+
+  height: 32px !important;        /* ~20% reduction from ~40px */
+  min-height: 32px !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Position the magnifying-glass icon so it doesn't overlap the text */
+.mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon-search {
+  position: absolute !important;
+  left: 8px !important;  /* Move it horizontally from the left edge */
+  top: 6px !important;   /* Vertically center in a 32px bar */
+  width: 18px !important;
+  height: 18px !important;
+}
+
+/* Slim the input field + leave left padding for the icon */
 .mapboxgl-ctrl-geocoder--input {
-  border: 2px solid red !important;     /* to see it clearly */
+  border: 2px solid red !important;  /* Debug border - remove if undesired */
+  /* reduce vertical padding => thinner bar */
+  padding: 6px 10px !important;
+  /* Enough left padding so text won't overlap the icon
+     (icon ~18px wide + 8px offset => ~26px, plus a few px of buffer) */
+  padding-left: 36px !important;
   padding-right: 60px !important;
+
   overflow: hidden !important;
   white-space: nowrap !important;
   text-overflow: ellipsis !important;
+
+  line-height: 1.2 !important;
+  min-height: 28px !important;
+  height: 100% !important;           /* fill the parent container's 32px */
+
   width: 100% !important;
-}
+  box-sizing: border-box !important;
 }
