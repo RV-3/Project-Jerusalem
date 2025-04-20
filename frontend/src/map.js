@@ -363,6 +363,8 @@ export default function MapPage() {
           textShadow: '0 0 2.5px rgba(89,249,186,0.7)',
           fontWeight: 600,
           letterSpacing: '1.25px',
+          opacity: 0.65,
+          WebkitTextStroke: '0.5px #111', // subtle outline
           pointerEvents: 'none',
           zIndex: 9999 // ensures it's above the map
         }}
