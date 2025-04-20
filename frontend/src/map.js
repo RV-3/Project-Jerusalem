@@ -360,11 +360,11 @@ export default function MapPage() {
           fontFamily: "'Orbitron', sans-serif", // something futuristic
           fontSize: '12px',
           color: 'rgba(255,255,255,0.55)',
-          textShadow: '0 0 2.5px rgba(89,249,186,0.7)',
+          textShadow: '0 0 1.7px rgba(89,249,186,0.7)',
           fontWeight: 600,
           letterSpacing: '1.25px',
           opacity: 0.65,
-          WebkitTextStroke: '0.5px #111', // subtle outline
+          WebkitTextStroke: '0.45px #111', // subtle outline
           pointerEvents: 'none',
           zIndex: 9999 // ensures it's above the map
         }}
