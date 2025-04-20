@@ -358,7 +358,7 @@ export default function MapPage() {
           top: '15px',
           left: '20px',
           fontFamily: "'Orbitron', sans-serif", // something futuristic
-          fontSize: '16px',
+          fontSize: '10px',
           color: 'rgba(255,255,255,0.55)',
           textShadow: '0 0 2.5px rgba(89,249,186,0.7)',
           fontWeight: 600,
