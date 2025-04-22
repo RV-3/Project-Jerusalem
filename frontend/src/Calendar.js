@@ -1,3 +1,5 @@
+// File: Calendar.jsx
+
 import React, {
   useEffect,
   useState,
@@ -18,18 +20,12 @@ import client from './utils/sanityClient.js';
 import Modal from 'react-modal';
 import './Calendar.css';
 
-// Make sure this matches where you've actually placed "calendarUtils.js"
+// Import only what's actually used
 import {
   debugLog,
   isHourExcepted,
   doesHourRuleCover,
-  mergeSlices,
-  getDayCoverageSlices,
-  isFullyBlockedViaSlices,
-  getHourRuleSlices,
-  getDayBlockSlices,
   buildAutoBlockAllEvents,
-  isDayFullyBlocked,
   scrollDayColumnIntoView,
   findEarliestRelevantDay
 } from './calendar/calendarUtils';
@@ -67,17 +63,17 @@ export default function Calendar({ chapelSlug }) {
 
   // Avoid repeated gotoDate calls
   const avoidNextEventsSetRef = useRef(false);
-  // Keep track of last earliest relevant day in a ref
+  // Keep track of last earliest relevant day
   const lastRelevantDateRef = useRef(null);
 
   // We'll allow exactly 1 re-try if ref is null the first time
   const [triedRefOnce, setTriedRefOnce] = useState(false);
 
   /* ──────────────────────────────────────────────────────────────
-     Fetch if unlocked
+     Fetch data if unlocked
   ────────────────────────────────────────────────────────────── */
   const fetchUnlockedData = useCallback(async (chapelId) => {
-    debugLog('fetchUnlockedData => chapelId=', chapelId);
+    debugLog('Fetching unlocked data for chapel:', chapelId);
     try {
       const [resData, blocksData, hourRules, daysDocs] = await Promise.all([
         client.fetch(
@@ -107,8 +103,6 @@ export default function Calendar({ chapelSlug }) {
         )
       ]);
 
-      debugLog('Unlocked data => reservations:', resData.length, 'blocks:', blocksData.length);
-
       setEvents(
         resData.map((r) => ({
           id: r._id,
@@ -137,15 +131,13 @@ export default function Calendar({ chapelSlug }) {
      Load chapel doc
   ────────────────────────────────────────────────────────────── */
   const fetchChapelDoc = useCallback(async () => {
-    debugLog('fetchChapelDoc => chapelSlug=', chapelSlug);
-    try {
-      setLoading(true);
-      if (!chapelSlug) {
-        debugLog('No chapelSlug => skip');
-        setLoading(false);
-        return;
-      }
+    if (!chapelSlug) {
+      setLoading(false);
+      return;
+    }
 
+    setLoading(true);
+    try {
       const doc = await client.fetch(
         `*[_type=="chapel" && slug.current == $slug][0]{
           _id,
@@ -157,11 +149,9 @@ export default function Calendar({ chapelSlug }) {
         { slug: chapelSlug }
       );
       if (!doc) {
-        debugLog('No chapel doc found for slug:', chapelSlug);
         setLoading(false);
         return;
       }
-      debugLog('Chapel doc =>', doc);
       setChapel(doc);
 
       if (doc.language) {
@@ -174,7 +164,7 @@ export default function Calendar({ chapelSlug }) {
         { chapelId: doc._id }
       );
       const pw = pwDoc?.password || '';
-      debugLog('Chapel password =>', pw);
+
       setCalendarPassword(pw);
 
       let unlocked = false;
@@ -186,11 +176,10 @@ export default function Calendar({ chapelSlug }) {
           unlocked = true;
         }
       }
-      debugLog('Initially unlocked =>', unlocked);
       setIsUnlocked(unlocked);
 
       if (unlocked) {
-        debugLog('Already unlocked => fetchUnlockedData');
+        debugLog('Calendar already unlocked => fetching data');
         await fetchUnlockedData(doc._id);
       }
     } catch (err) {
@@ -198,7 +187,7 @@ export default function Calendar({ chapelSlug }) {
     } finally {
       setLoading(false);
     }
-  }, [chapelSlug, setLanguage, fetchUnlockedData]);
+  }, [chapelSlug, fetchUnlockedData, setLanguage]);
 
   useEffect(() => {
     fetchChapelDoc();
@@ -206,7 +195,6 @@ export default function Calendar({ chapelSlug }) {
 
   // 3) password check
   async function handleCheckPassword() {
-    debugLog('handleCheckPassword => enteredPw=', enteredPw);
     if (enteredPw === calendarPassword) {
       setIsUnlocked(true);
       if (chapel?._id) {
@@ -229,7 +217,6 @@ export default function Calendar({ chapelSlug }) {
   // 4) Past-block overlay
   useEffect(() => {
     if (!isUnlocked) return;
-    debugLog('Setting pastBlockEvent once');
     const now = moment.tz(activeTZ);
     const startOfRange = now.clone().subtract(7, 'days').startOf('day');
     setPastBlockEvent({
@@ -285,37 +272,18 @@ export default function Calendar({ chapelSlug }) {
 
   // 6) handleSelect => open reservation modal if slot is free
   function handleSelect(info) {
-    debugLog('handleSelect => info:', info);
-    if (!isUnlocked) return;
-
     const { startStr, endStr } = info;
     const now = moment.tz(activeTZ);
     const slotStart = moment.tz(startStr, activeTZ);
     const slotEnd = moment.tz(endStr, activeTZ);
 
     const duration = slotEnd.diff(slotStart, 'minutes');
-    if (duration !== 60) {
-      debugLog('Slot is not 1 hour => skip');
-      return;
-    }
-    if (slotStart.isBefore(now)) {
-      debugLog('Slot in the past => skip');
-      return;
-    }
-    if (isTimeBlockedByManual(startStr, endStr)) {
-      debugLog('Slot is manually blocked => skip');
-      return;
-    }
-    if (isTimeBlockedByAuto(startStr, endStr)) {
-      debugLog('Slot is auto blocked => skip');
-      return;
-    }
-    if (isSlotReserved(startStr, endStr)) {
-      debugLog('Slot is already reserved => skip');
-      return;
-    }
+    if (duration !== 60) return;
+    if (slotStart.isBefore(now)) return;
+    if (isTimeBlockedByManual(startStr, endStr)) return;
+    if (isTimeBlockedByAuto(startStr, endStr)) return;
+    if (isSlotReserved(startStr, endStr)) return;
 
-    debugLog('Slot is free => open modal');
     setSelectedInfo({ start: startStr, end: endStr });
     setModalIsOpen(true);
   }
@@ -341,7 +309,6 @@ export default function Calendar({ chapelSlug }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    debugLog('handleSubmit => formData=', formData, 'selectedInfo=', selectedInfo);
     if (!formData.name || !formData.phone || !selectedInfo) return;
 
     try {
@@ -358,9 +325,7 @@ export default function Calendar({ chapelSlug }) {
       }
 
       const created = await client.create(reservationDoc);
-      debugLog('Reservation created =>', created);
-
-      // update local events
+      // Update local events
       setEvents((prev) => [
         ...prev,
         {
@@ -391,7 +356,6 @@ export default function Calendar({ chapelSlug }) {
 
   // 7) loadEvents => feed events into FullCalendar
   function loadEvents(fetchInfo, successCallback) {
-    debugLog('loadEvents => unlocked?', isUnlocked, 'start=', fetchInfo.start, 'end=', fetchInfo.end);
     if (!isUnlocked) {
       successCallback([]);
       return;
@@ -436,7 +400,6 @@ export default function Calendar({ chapelSlug }) {
       loaded.push(pastBlockEvent);
     }
 
-    debugLog('loadEvents => loaded total=', loaded.length);
     successCallback(loaded);
   }
 
@@ -455,25 +418,14 @@ export default function Calendar({ chapelSlug }) {
     return true;
   }
 
-  // eslint-disable-next-line no-unused-vars
   const now = moment.tz(activeTZ);
-  // eslint-disable-next-line no-unused-vars
   const validRangeStart = now.clone().subtract(7, 'days').startOf('day');
-  // eslint-disable-next-line no-unused-vars
   const validRangeEnd = now.clone().add(30, 'days').endOf('day');
 
   // 8) after events load => auto scroll
   const handleEventsSet = useCallback(
     (allEvents) => {
-      debugLog(
-        'handleEventsSet => triggered, avoidNext?',
-        avoidNextEventsSetRef.current
-      );
-
-      if (!isUnlocked) {
-        debugLog('Not unlocked => skip handleEventsSet');
-        return;
-      }
+      if (!isUnlocked) return;
 
       // If we just did gotoDate => skip once
       if (avoidNextEventsSetRef.current) {
@@ -491,8 +443,7 @@ export default function Calendar({ chapelSlug }) {
       }
 
       // find earliest relevant day (res or free day)
-      const foundDate =
-        findEarliestRelevantDay(allEvents, activeTZ) || new Date();
+      const foundDate = findEarliestRelevantDay(allEvents, activeTZ) || new Date();
 
       // compare with lastRelevantDateRef
       const oldDateStr = lastRelevantDateRef.current
@@ -501,7 +452,6 @@ export default function Calendar({ chapelSlug }) {
       const newDateStr = foundDate.toDateString();
 
       if (oldDateStr !== newDateStr) {
-        debugLog('Earliest relevant day changed => scrolling to', newDateStr);
         lastRelevantDateRef.current = foundDate;
 
         const dateStr = moment(foundDate).format('YYYY-MM-DD');
@@ -513,8 +463,6 @@ export default function Calendar({ chapelSlug }) {
         calendarApi.scrollToTime(timeStr);
 
         scrollDayColumnIntoView(dateStr);
-      } else {
-        debugLog('Earliest relevant day is unchanged => no scroll');
       }
     },
     [isUnlocked, triedRefOnce, activeTZ]
@@ -700,8 +648,8 @@ export default function Calendar({ chapelSlug }) {
             selectAllow={selectAllow}
             select={handleSelect}
             validRange={{
-              start: now.clone().subtract(7, 'days').startOf('day').format(),
-              end: now.clone().add(30, 'days').endOf('day').format()
+              start: validRangeStart.format(),
+              end: validRangeEnd.format()
             }}
             events={loadEvents}
             allDaySlot={false}

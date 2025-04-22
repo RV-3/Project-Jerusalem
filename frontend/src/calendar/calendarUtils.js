@@ -1,8 +1,8 @@
 import moment from 'moment-timezone';
 
-/** Simple labeled console.log for debugging (optional). */
+/** Simple labeled console.log for minimal debugging. */
 export function debugLog(...args) {
-  console.log('%c[CAL DEBUG]', 'color:blue;font-weight:bold;', ...args);
+  console.log('[CAL DEBUG]', ...args);
 }
 
 /** Check if an hour is excepted based on exceptions. */
@@ -15,12 +15,12 @@ export function isHourExcepted(exceptions = [], hStart, hEnd, tz) {
     if (ex.date.slice(0, 10) !== dateStr) return false;
     const exDay   = start.clone().startOf('day');
     const exStart = exDay.clone().hour(parseInt(ex.startHour || '0', 10));
-    const exEnd   = exDay.clone().hour(parseInt(ex.endHour   || '0', 10));
+    const exEnd   = exDay.clone().hour(parseInt(ex.endHour || '0', 10));
     return start.isBefore(exEnd) && end.isAfter(exStart);
   });
 }
 
-/** Check if the given hour range is covered by an auto-block hour rule. */
+/** Check if a time range is covered by an auto-block hour rule. */
 export function doesHourRuleCover(rule, hStart, hEnd, tz) {
   const s = moment.tz(hStart, tz);
   const e = moment.tz(hEnd, tz);
@@ -34,7 +34,7 @@ export function doesHourRuleCover(rule, hStart, hEnd, tz) {
 }
 
 /** Merge contiguous or adjacent slices [[start,end],[start,end]] into bigger slices. */
-export function mergeSlices(slices) {
+function mergeSlices(slices) {
   if (!slices.length) return [];
   slices.sort((a, b) => a[0] - b[0]);
   const merged = [slices[0]];
@@ -51,8 +51,8 @@ export function mergeSlices(slices) {
   return merged;
 }
 
-/** Convert a set of background events that overlap a day into merged coverage slices. */
-export function getDayCoverageSlices(backgroundEvents, dayStart, dayEnd) {
+/** For day coverage slices. */
+function getDayCoverageSlices(backgroundEvents, dayStart, dayEnd) {
   const slices = [];
   backgroundEvents.forEach((evt) => {
     const s = new Date(Math.max(evt.start.getTime(), dayStart.getTime()));
@@ -64,26 +64,22 @@ export function getDayCoverageSlices(backgroundEvents, dayStart, dayEnd) {
   return mergeSlices(slices);
 }
 
-/** Check if coverage slices for a day span the entire day from dayStart..dayEnd. */
-export function isFullyBlockedViaSlices(dayCoverage, dayStart, dayEnd) {
+/** Check if coverage slices fill the entire day. */
+function isFullyBlockedViaSlices(dayCoverage, dayStart, dayEnd) {
   if (!dayCoverage.length) return false;
   const [firstSlice] = dayCoverage;
   const lastSlice = dayCoverage[dayCoverage.length - 1];
 
-  if (firstSlice[0].getTime() > dayStart.getTime()) {
-    return false;
-  }
-  if (lastSlice[1].getTime() < dayEnd.getTime()) {
-    return false;
-  }
-  // If there's more than 1 slice after merging => gap => not fully blocked
-  if (dayCoverage.length > 1) {
-    return false;
-  }
+  if (firstSlice[0].getTime() > dayStart.getTime()) return false;
+  if (lastSlice[1].getTime() < dayEnd.getTime()) return false;
+  // If there's more than 1 slice => gap => not fully blocked
+  if (dayCoverage.length > 1) return false;
+
   return true;
 }
 
-export function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
+/** Build hour slices for an autoBlockedHours rule. */
+function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   const slices = [];
   let dayCursor = moment.tz(viewStart, tz).startOf('day');
   const dayEnd  = moment.tz(viewEnd, tz).endOf('day');
@@ -106,8 +102,8 @@ export function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   return mergeSlices(slices);
 }
 
-/** For day-based block docs that list daysOfWeek. */
-export function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
+/** Build day slices for an autoBlockedDays doc that lists daysOfWeek. */
+function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
   if (!dayDoc?.daysOfWeek?.length) return [];
   const slices = [];
   let current = moment.tz(viewStart, tz).startOf('day');
@@ -167,7 +163,7 @@ export function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewSt
   return events;
 }
 
-/** Check if the day is "fully blocked" by merging coverage from all background events. */
+/** Check if the day is "fully blocked" by merging partial coverage. */
 export function isDayFullyBlocked(dayEvents, dayStart, dayEnd) {
   const backgroundEvents = dayEvents.filter((e) => e.display === 'background');
   const coverageSlices = getDayCoverageSlices(backgroundEvents, dayStart, dayEnd);
@@ -177,28 +173,23 @@ export function isDayFullyBlocked(dayEvents, dayStart, dayEnd) {
 
 /** Scroll horizontally so the day column for dateStr is visible. */
 export function scrollDayColumnIntoView(dateStr) {
-  debugLog('scrollDayColumnIntoView => dateStr=', dateStr);
+  debugLog('Scrolling to date column:', dateStr);
   requestAnimationFrame(() => {
     let scroller = document.querySelector('.fc-timegrid-body .fc-timegrid-slots .fc-scroller');
     if (!scroller) {
       scroller = document.querySelector('.fc-timegrid-body .fc-scroller');
     }
     if (!scroller) {
-      debugLog('No suitable scroller found => skip horizontal scroll');
       return;
     }
-
     const col = scroller.querySelector(`[data-date="${dateStr}"]`);
     if (!col) {
-      debugLog('No column found for data-date=', dateStr);
       return;
     }
-
     const colRect      = col.getBoundingClientRect();
     const scrollerRect = scroller.getBoundingClientRect();
     const offset = (colRect.left - scrollerRect.left) + scroller.scrollLeft - 20;
 
-    debugLog('Scrolling horizontally => offset=', offset);
     scroller.scrollTo({
       left: offset,
       behavior: 'smooth'
@@ -222,6 +213,7 @@ export function findEarliestRelevantDay(allEvents, tz) {
     const dayStart = day.clone().startOf('day').toDate();
     const dayEnd   = day.clone().endOf('day').toDate();
 
+    // Collect day events
     const dayEvents = allEvents.filter((evt) => {
       const evtStart = evt.start instanceof Date ? evt.start : new Date(evt.start);
       const evtEnd   = evt.end   instanceof Date ? evt.end   : new Date(evt.end);
