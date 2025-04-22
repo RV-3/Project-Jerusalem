@@ -840,9 +840,10 @@ export default function Calendar({ chapelSlug }) {
               style={{
                 fontSize: '0.96rem',
                 display: 'flex',
-                justifyContent: 'center',
+                justifyContent: 'flex-start', // changed from 'center'
                 alignItems: 'center',
-                gap: '0.4rem'
+                gap: '0.4rem',
+                paddingLeft: '10rem' // adjust this value as needed
               }}
             >
               <span>
