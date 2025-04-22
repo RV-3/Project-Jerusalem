@@ -835,15 +835,15 @@ export default function Calendar({ chapelSlug }) {
             />
           </div>
 
-          <div className="sticky-connect" style={{ width: '95%' }}>
+          <div className="sticky-connect" style={{ width: '100%' }}>
             <div
               style={{
                 fontSize: '0.96rem',
                 display: 'flex',
-                justifyContent: 'flex-start', // changed from 'center'
+                justifyContent: 'center', // changed from 'center'
                 alignItems: 'center',
                 gap: '0.4rem',
-                paddingLeft: '10rem' // adjust this value as needed
+                paddingLeft: '-20rem' // adjust this value as needed
               }}
             >
               <span>
