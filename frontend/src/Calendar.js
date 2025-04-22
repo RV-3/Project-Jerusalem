@@ -843,7 +843,7 @@ export default function Calendar({ chapelSlug }) {
                 justifyContent: 'center', // changed from 'center'
                 alignItems: 'center',
                 gap: '0.4rem',
-                paddingLeft: '-20rem' // adjust this value as needed
+                transform: 'translateX(-3.4%)', // shift slightly left
               }}
             >
               <span>
