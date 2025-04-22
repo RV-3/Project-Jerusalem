@@ -27,7 +27,7 @@ Modal.setAppElement('#root');
 
 const platformDelay = isIOS ? 100 : 46;
 
-/** Simple labeled console.log. Remove if not needed. */
+/** Simple labeled console.log. */
 function debugLog(...args) {
   console.log('%c[CAL DEBUG]', 'color:blue;font-weight:bold;', ...args);
 }
@@ -59,6 +59,7 @@ function doesHourRuleCover(rule, hStart, hEnd, tz) {
   return true;
 }
 
+/** Merge contiguous or adjacent slices [[start,end],[start,end]] into bigger slices. */
 function mergeSlices(slices) {
   if (!slices.length) return [];
   slices.sort((a, b) => a[0] - b[0]);
@@ -66,14 +67,51 @@ function mergeSlices(slices) {
   for (let i = 1; i < slices.length; i++) {
     const prev = merged[merged.length - 1];
     const curr = slices[i];
-    // If the end of prev equals start of curr, merge them into one slice
-    if (prev[1].getTime() === curr[0].getTime()) {
-      prev[1] = curr[1];
+    if (prev[1].getTime() >= curr[0].getTime()) {
+      // Overlapping or adjacent => merge
+      prev[1] = new Date(Math.max(prev[1].getTime(), curr[1].getTime()));
     } else {
       merged.push(curr);
     }
   }
   return merged;
+}
+
+/** Convert a set of background events that overlap a day into merged coverage slices. */
+function getDayCoverageSlices(backgroundEvents, dayStart, dayEnd) {
+  // For all background events, collect only the portion that overlaps [dayStart, dayEnd]
+  const slices = [];
+  backgroundEvents.forEach((evt) => {
+    const s = new Date(Math.max(evt.start.getTime(), dayStart.getTime()));
+    const e = new Date(Math.min(evt.end.getTime(),   dayEnd.getTime()));
+    if (s < e) {
+      slices.push([s, e]);
+    }
+  });
+  return mergeSlices(slices);
+}
+
+/** Check if coverage slices for a day span the entire day from dayStart..dayEnd. */
+function isFullyBlockedViaSlices(dayCoverage, dayStart, dayEnd) {
+  if (!dayCoverage.length) return false;
+  // After merging, we only need to check if the first slice starts <= dayStart
+  // and the last slice ends >= dayEnd, *and* there's effectively no gap
+  // in the coverage. If the merge results in exactly one slice covering the entire day, perfect.
+  const [firstSlice] = dayCoverage;
+  const lastSlice = dayCoverage[dayCoverage.length - 1];
+  if (firstSlice[0].getTime() > dayStart.getTime()) {
+    return false;
+  }
+  if (lastSlice[1].getTime() < dayEnd.getTime()) {
+    return false;
+  }
+  // But we must ensure there's no gap in the middle. If dayCoverage has multiple slices,
+  // that means there's a gap. So let's see if dayCoverage actually merges to one slice.
+  // If more than 1 slice => a gap => not fully blocked
+  if (dayCoverage.length > 1) {
+    return false;
+  }
+  return true;
 }
 
 function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
@@ -99,6 +137,7 @@ function getHourRuleSlices(rule, viewStart, viewEnd, tz) {
   return mergeSlices(slices);
 }
 
+/** For day-based block docs that list daysOfWeek. */
 function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
   if (!dayDoc?.daysOfWeek?.length) return [];
   const slices = [];
@@ -125,6 +164,7 @@ function getDayBlockSlices(dayDoc, viewStart, viewEnd, tz) {
   return mergeSlices(slices);
 }
 
+/** Build background events from auto-block rules/hours and days. */
 function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, viewEnd, tz) {
   const events = [];
 
@@ -158,10 +198,17 @@ function buildAutoBlockAllEvents(autoBlockHours, autoBlockDaysDoc, viewStart, vi
   return events;
 }
 
-/**
- * Scroll horizontally so the day column for dateStr is visible.
- * We try two typical selectors because class names can differ by FC version.
- */
+/** Check if the day is "fully blocked" by merging the coverage from all background events. */
+function isDayFullyBlocked(dayEvents, dayStart, dayEnd) {
+  // Filter background events
+  const backgroundEvents = dayEvents.filter(e => e.display === 'background');
+  // Convert them into slices that overlap this day
+  const coverageSlices = getDayCoverageSlices(backgroundEvents, dayStart, dayEnd);
+  const merged = mergeSlices(coverageSlices);
+  return isFullyBlockedViaSlices(merged, dayStart, dayEnd);
+}
+
+/** Scroll horizontally so the day column for dateStr is visible. */
 function scrollDayColumnIntoView(dateStr) {
   debugLog('scrollDayColumnIntoView => dateStr=', dateStr);
   requestAnimationFrame(() => {
@@ -169,7 +216,6 @@ function scrollDayColumnIntoView(dateStr) {
     if (!scroller) {
       scroller = document.querySelector('.fc-timegrid-body .fc-scroller');
     }
-
     if (!scroller) {
       debugLog('No suitable scroller found => skip horizontal scroll');
       return;
@@ -193,9 +239,8 @@ function scrollDayColumnIntoView(dateStr) {
   });
 }
 
-/** Identify the first day (within 14 days) that either has an upcoming reservation
- *  or is not fully blocked. Returns a JS Date at midnight local time, or null if none found.
- */
+/** Identify the first day (within 14 days) that has an upcoming reservation or
+ *  is not fully blocked (by merging partial blocks). */
 function findEarliestRelevantDay(allEvents, tz) {
   const nowMidnight = moment.tz(tz).startOf('day');
   const lookaheadEnd = nowMidnight.clone().add(14, 'days').endOf('day');
@@ -209,21 +254,19 @@ function findEarliestRelevantDay(allEvents, tz) {
     const dayEnd   = day.clone().endOf('day').toDate();
 
     const dayEvents = allEvents.filter(evt => {
-      const evtStart = (evt.start instanceof Date) ? evt.start : new Date(evt.start);
-      const evtEnd   = (evt.end   instanceof Date) ? evt.end   : new Date(evt.end);
+      const evtStart = evt.start instanceof Date ? evt.start : new Date(evt.start);
+      const evtEnd   = evt.end   instanceof Date ? evt.end   : new Date(evt.end);
       return evtStart < dayEnd && evtEnd > dayStart;
     });
 
     // If any event is not a background event => there's a real reservation
     const hasRealReservation = dayEvents.some(e => e.display !== 'background');
 
-    // "fully blocked" means a background event covering the entire day
-    const fullyBlocked = dayEvents.some(e =>
-      e.display === 'background' &&
-      new Date(e.start) <= dayStart &&
-      new Date(e.end)   >= dayEnd
-    );
+    // Now we do a thorough check for "fully blocked" by merging partial coverage
+    const fullyBlocked = isDayFullyBlocked(dayEvents, dayStart, dayEnd);
 
+    // If there's a real reservation, that day is relevant,
+    // or if it's not fully blocked => day is relevant
     if (hasRealReservation || !fullyBlocked) {
       return dayStart;
     }
@@ -255,17 +298,16 @@ export default function Calendar({ chapelSlug }) {
 
   const activeTZ = chapel?.timezone || TIMEZONE;
 
-  // use a ref to prevent repeated gotoDate calls in same update cycle
+  // Avoid repeated gotoDate calls
   const avoidNextEventsSetRef = useRef(false);
-
-  // Store the last earliest relevant day in a ref to prevent re-render loops
+  // Keep track of last earliest relevant day in a ref
   const lastRelevantDateRef = useRef(null);
 
   // We'll allow exactly 1 re-try if ref is null the first time
   const [triedRefOnce, setTriedRefOnce] = useState(false);
 
   /* ──────────────────────────────────────────────────────────────
-     1) fetch if unlocked
+     Fetch if unlocked
   ────────────────────────────────────────────────────────────── */
   const fetchUnlockedData = useCallback(async (chapelId) => {
     debugLog('fetchUnlockedData => chapelId=', chapelId);
@@ -298,7 +340,7 @@ export default function Calendar({ chapelSlug }) {
         )
       ]);
 
-      debugLog('Unlocked data => resData:', resData.length, 'blocks:', blocksData.length, 'hourRules:', hourRules.length, 'daysDocs:', daysDocs.length);
+      debugLog('Unlocked data => reservations:', resData.length, 'blocks:', blocksData.length);
 
       setEvents(
         resData.map((r) => ({
@@ -316,7 +358,6 @@ export default function Calendar({ chapelSlug }) {
         }))
       );
       setAutoBlockHours(hourRules);
-
       if (daysDocs.length) {
         setAutoBlockDays(daysDocs[0]);
       }
@@ -326,7 +367,7 @@ export default function Calendar({ chapelSlug }) {
   }, []);
 
   /* ──────────────────────────────────────────────────────────────
-     2) load chapel doc
+     Load chapel doc
   ────────────────────────────────────────────────────────────── */
   const fetchChapelDoc = useCallback(async () => {
     debugLog('fetchChapelDoc => chapelSlug=', chapelSlug);
@@ -418,7 +459,7 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
-  // 4) Past-block overlay, once
+  // 4) Past-block overlay
   useEffect(() => {
     if (!isUnlocked) return;
     debugLog('Setting pastBlockEvent once');
@@ -433,7 +474,7 @@ export default function Calendar({ chapelSlug }) {
     });
   }, [activeTZ, isUnlocked]);
 
-  // 5) block checks
+  // 5) block checks (manual vs auto)
   function isTimeBlockedByManual(start, end) {
     const s = moment.tz(start, activeTZ);
     const e = moment.tz(end,   activeTZ);
@@ -462,11 +503,7 @@ export default function Calendar({ chapelSlug }) {
     const s = moment.tz(slotStart, activeTZ);
     const e = moment.tz(slotEnd,   activeTZ);
     return events.some((evt) => {
-      if (
-        evt.id.startsWith('auto-') ||
-        evt.id.startsWith('blocked-') ||
-        evt.id === 'past-block'
-      ) {
+      if (evt.id.startsWith('auto-') || evt.id.startsWith('blocked-') || evt.id === 'past-block') {
         return false;
       }
       const evtStart = moment.tz(evt.start, activeTZ);
@@ -475,7 +512,7 @@ export default function Calendar({ chapelSlug }) {
     });
   }
 
-  // 6) handleSelect
+  // 6) handleSelect => open reservation modal if slot is free
   function handleSelect(info) {
     debugLog('handleSelect => info:', info);
     if (!isUnlocked) return;
@@ -581,7 +618,7 @@ export default function Calendar({ chapelSlug }) {
     }
   }
 
-  // 7) loadEvents
+  // 7) loadEvents => feed events into FullCalendar
   function loadEvents(fetchInfo, successCallback) {
     debugLog('loadEvents => unlocked?', isUnlocked, 'start=', fetchInfo.start, 'end=', fetchInfo.end);
     if (!isUnlocked) {
@@ -613,7 +650,7 @@ export default function Calendar({ chapelSlug }) {
       });
     });
 
-    // Auto block
+    // Auto blocks
     const autoEvts = buildAutoBlockAllEvents(
       autoBlockHours,
       autoBlockDays,
@@ -632,6 +669,7 @@ export default function Calendar({ chapelSlug }) {
     successCallback(loaded);
   }
 
+  // Prevent selecting partial blocks or the past
   function selectAllow(selectInfo) {
     const now = moment.tz(activeTZ);
     const start = moment.tz(selectInfo.startStr, activeTZ);
@@ -662,7 +700,7 @@ export default function Calendar({ chapelSlug }) {
       return;
     }
 
-    // If we just did gotoDate => skip
+    // If we just did gotoDate => skip once
     if (avoidNextEventsSetRef.current) {
       avoidNextEventsSetRef.current = false;
       return;
@@ -677,10 +715,10 @@ export default function Calendar({ chapelSlug }) {
       return;
     }
 
-    // find earliest relevant day
+    // find earliest relevant day (res or free day)
     const foundDate = findEarliestRelevantDay(allEvents, activeTZ) || new Date();
 
-    // get toDateString to compare
+    // compare with lastRelevantDateRef
     const oldDateStr = lastRelevantDateRef.current
       ? lastRelevantDateRef.current.toDateString()
       : '';
@@ -749,11 +787,7 @@ export default function Calendar({ chapelSlug }) {
           zIndex: 9999
         }}
       >
-        <img
-          src="/assets/legioBanner.png"
-          alt="Legio Fidelis"
-          style={{ maxWidth: '150px' }}
-        />
+
       </div>
 
       {!isUnlocked ? (
@@ -801,10 +835,10 @@ export default function Calendar({ chapelSlug }) {
             />
           </div>
 
-          <div className="sticky-connect">
+          <div className="sticky-connect" style={{ width: '95%' }}>
             <div
               style={{
-                fontSize: '1.15rem',
+                fontSize: '0.9rem',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
@@ -866,15 +900,15 @@ export default function Calendar({ chapelSlug }) {
             initialView="timeGrid30Day"
             views={{
               timeGrid30Day: {
-                type:'timeGrid',
-                duration:{ days:30 },
-                dayCount:30,
-                buttonText:'30 days',
-                // Increased dayMinWidth so horizontal scrolling is more likely
-                dayMinWidth:400
+                type: 'timeGrid',
+                duration: { days: 30 },
+                dayCount: 30,
+                buttonText: '30 days',
+                // columns ~30% thinner than 400
+                dayMinWidth: 280
               }
             }}
-            dayMinWidth={400}
+            dayMinWidth={280}
             dayHeaderFormat={{
               weekday:'short',
               month:'numeric',
@@ -910,7 +944,7 @@ export default function Calendar({ chapelSlug }) {
               return [];
             }}
             eventContent={(arg) => {
-              // Hide text for blocked/auto/past-block events
+              // Hide text for blocked/past-block events
               if (
                 arg.event.id.startsWith('blocked-') ||
                 arg.event.id.startsWith('auto-') ||
