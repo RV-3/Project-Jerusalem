@@ -25,7 +25,7 @@ import { useLanguage } from './LanguageContext';
 
 Modal.setAppElement('#root');
 
-const platformDelay = isIOS ? 100 : 46;
+const platformDelay = isIOS ? 100 : 40;
 
 /** Simple labeled console.log. */
 function debugLog(...args) {
