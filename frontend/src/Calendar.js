@@ -838,7 +838,7 @@ export default function Calendar({ chapelSlug }) {
           <div className="sticky-connect" style={{ width: '95%' }}>
             <div
               style={{
-                fontSize: '0.9rem',
+                fontSize: '0.96rem',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
@@ -871,7 +871,7 @@ export default function Calendar({ chapelSlug }) {
                     verticalAlign: 'middle'
                   }}
                 />
-                <span style={{ fontSize: '1rem' }}>@Legio.Fidelis</span>
+                <span style={{ fontSize: '0.94rem' }}>@Legio.Fidelis</span>
               </a>
             </div>
           </div>
